@@ -57,6 +57,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState('login'); // 'login' ou 'register'
   const [loginPassword, setLoginPassword] = useState('');
   const [registerRole, setRegisterRole] = useState('cliente');
+  const [secretCode, setSecretCode] = useState(''); // NOVO: Estado para a senha secreta da equipe
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -164,6 +165,15 @@ export default function App() {
     e.preventDefault();
     if(!loginName || !loginEmail || !loginPassword || !loginWhatsapp) return showToast('Preencha todos os campos.', 'error');
     if(loginPassword.length < 6) return showToast('A senha deve ter pelo menos 6 caracteres.', 'error');
+    
+    // --- NOVA TRAVA DE SEGURANÇA ---
+    if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') {
+      return showToast('Código de Gestor inválido!', 'error');
+    }
+    if (registerRole === 'representante' && secretCode !== 'REP2024') {
+      return showToast('Código de Representante inválido!', 'error');
+    }
+    // -------------------------------
     
     setAuthLoading(true);
     try {
@@ -411,6 +421,16 @@ export default function App() {
                 <option value="consolidador">⭐ Gestor Geral (Admin)</option>
               </select>
             </div>
+
+            {/* --- NOVO CAMPO DE CÓDIGO SECRETO --- */}
+            {registerRole !== 'cliente' && (
+              <div className="bg-red-50/50 border border-red-100 p-3 rounded-xl">
+                <label className="block text-xs font-bold text-red-700 mb-1 uppercase tracking-wider">Código de Autorização da Equipe</label>
+                <input type="password" value={secretCode} onChange={(e) => setSecretCode(e.target.value)} required placeholder="Chave secreta..." className="w-full border-b-2 border-red-200 bg-white rounded-t-lg p-3 focus:border-red-500 outline-none font-bold text-red-700" />
+              </div>
+            )}
+            {/* ------------------------------------ */}
+
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Seu Nome Completo</label>
               <input type="text" value={loginName} onChange={(e) => setLoginName(e.target.value)} required placeholder="Ex: João Silva" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
@@ -439,7 +459,7 @@ export default function App() {
             <button type="submit" className="w-full flex items-center justify-center bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition shadow-lg mt-6">
               Criar Conta e Acessar
             </button>
-            <button type="button" onClick={() => {setAuthMode('login'); setLoginPassword('');}} className="w-full mt-4 text-gray-500 font-bold hover:text-gray-800 text-sm">
+            <button type="button" onClick={() => {setAuthMode('login'); setLoginPassword(''); setSecretCode('');}} className="w-full mt-4 text-gray-500 font-bold hover:text-gray-800 text-sm">
               Voltar para o Login
             </button>
           </form>
