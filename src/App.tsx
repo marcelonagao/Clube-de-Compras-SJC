@@ -1039,7 +1039,7 @@ export default function App() {
             <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
                <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Solicitar Estorno PIX</h3>
                <p className="text-sm text-gray-500 mb-6 font-medium">Iremos transferir R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')} para a sua conta.</p>
-               <form onSubmit={confirmPixRefundRequest}>
+               <form onSubmit={requestPixRefund}>
                  <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Sua Chave PIX</label>
                  <input autoFocus required value={pixRefundModal.key} onChange={(e) => setPixRefundModal({...pixRefundModal, key: e.target.value})} placeholder="CPF, E-mail, Celular ou Aleatória" className="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-emerald-500 outline-none mb-6 font-bold text-slate-700 bg-slate-50" />
                  <div className="flex gap-3">
