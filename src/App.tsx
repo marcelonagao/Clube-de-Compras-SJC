@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -59,8 +59,8 @@ export default function App() {
   const [registerRole, setRegisterRole] = useState('cliente');
   const [secretCode, setSecretCode] = useState('');
   
-  // --- ESTADOS DE PAGAMENTO (NOVOS) ---
-  const [pendingOrder, setPendingOrder] = useState(null); // Guarda o pedido que está a aguardar pagamento
+  // --- ESTADOS DE PAGAMENTO ---
+  const [pendingOrder, setPendingOrder] = useState(null); // Guarda a encomenda que está a aguardar pagamento
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -154,7 +154,7 @@ export default function App() {
       showToast('Sessão iniciada com sucesso!', 'success');
     } catch (error) {
       setAuthLoading(false);
-      if(error.code === 'auth/invalid-credential') showToast('Email ou palavra-passe incorretos.', 'error');
+      if(error.code === 'auth/invalid-credential') showToast('E-mail ou palavra-passe incorretos.', 'error');
       else showToast('Erro ao iniciar sessão.', 'error');
     }
   };
@@ -233,7 +233,6 @@ export default function App() {
     }
   };
 
-  // --- NOVA LÓGICA DE GATEWAY DE PAGAMENTO ---
   const processGatewayPayment = async () => {
     setIsProcessingPayment(true);
     const hasFee = paymentMethod === 'credit';
@@ -247,21 +246,19 @@ export default function App() {
         polo: user.polo,
         total: finalTotal,
         method: paymentMethod,
-        status: 'aguardando_pagamento', // Começa como "A Aguardar" até o banco confirmar!
+        status: 'aguardando_pagamento',
         date: new Date().toISOString(),
         items: cart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd }))
       };
       
-      // Guarda o pedido na base de dados
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
       const savedOrder = { id: orderRef.id, ...newOrderData };
       
       setOrders([...orders, savedOrder]);
-      setPendingOrder(savedOrder); // Guarda o pedido atual para mostrar no Gateway
+      setPendingOrder(savedOrder);
       setCart([]);
       setIsProcessingPayment(false);
       
-      // Direciona para o Gateway correspondente
       if (paymentMethod === 'pix') setCurrentScreen('gateway_pix');
       else setCurrentScreen('gateway_credit');
       
@@ -271,20 +268,50 @@ export default function App() {
     }
   };
 
-  // Simula o "Webhook" (O aviso que o banco manda de volta a dizer que o cliente pagou)
   const simulateBankWebhook = async () => {
     if (!pendingOrder) return;
     try {
-      // Atualiza o estado na base de dados para "pago"
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' });
-      
-      // Atualiza o estado localmente
       setOrders(orders.map(o => o.id === pendingOrder.id ? { ...o, status: 'pago' } : o));
-      
       setCurrentScreen('success');
     } catch (err) {
       showToast('Erro ao simular webhook.', 'error');
     }
+  };
+
+  // --- FUNÇÕES DE INTEGRAÇÃO COM WHATSAPP ---
+  const handleSendWhatsApp = (order) => {
+    if (!order.whatsapp) {
+      showToast('O cliente não tem WhatsApp registado.', 'error');
+      return;
+    }
+    
+    // Limpa o número de telefone (remove parênteses, espaços, traços)
+    let phone = order.whatsapp.replace(/\D/g, '');
+    
+    // Adiciona código do país se necessário (assumindo Brasil +55 para o formato, mas aplicável a PT se configurado)
+    if (phone.length === 10 || phone.length === 11) {
+      phone = '55' + phone; 
+    }
+
+    const itemsList = order.items.map(i => `▫️ ${i.qtd}x ${i.name}`).join('\n');
+    const total = `R$ ${order.total.toFixed(2).replace('.', ',')}`;
+
+    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${order.id.slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! 💚`;
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleSendCRMWhatsApp = (customer) => {
+    if (!customer.whatsapp) {
+      showToast('O cliente não tem WhatsApp registado.', 'error');
+      return;
+    }
+    let phone = customer.whatsapp.replace(/\D/g, '');
+    if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
+    
+    const text = `Olá, ${customer.name}! 🌿 Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
   // ------------------------------------------
 
@@ -595,7 +622,6 @@ export default function App() {
     );
   };
 
-  // --- ECRÃ DO GATEWAY PIX (NOVO) ---
   const renderPixGateway = () => {
     if (!pendingOrder) return null;
     const pixCode = `00020126580014br.gov.bcb.pix0136${pendingOrder.id}-teste-simulado-sjc5204000053039865405${pendingOrder.total.toFixed(2)}5802BR5913MARCELO SILVA6009SAO PAULO62070503***6304${pendingOrder.id.slice(0,4)}6804A92B`;
@@ -610,7 +636,6 @@ export default function App() {
           <p className="text-gray-500 font-medium mb-8">A sua encomenda está guardada! Abra a aplicação do seu banco e leia o QR Code ou cole o código abaixo.</p>
           
           <div className="bg-gray-50 p-6 rounded-3xl border-2 border-dashed border-gray-200 mb-8 inline-block">
-             {/* Simulação visual de um QR Code */}
              <div className="w-48 h-48 bg-white border border-gray-100 rounded-2xl mx-auto p-2 shadow-sm grid grid-cols-4 grid-rows-4 gap-1">
                {Array.from({length: 16}).map((_, i) => (
                  <div key={i} className={`rounded-sm ${Math.random() > 0.3 ? 'bg-slate-800' : 'bg-transparent'}`}></div>
@@ -630,7 +655,6 @@ export default function App() {
             <Clock className="w-4 h-4 mr-2" animate-spin /> Aguardar confirmação do banco...
           </div>
 
-          {/* BOTÃO PARA SIMULAR O WEBHOOK */}
           <div className="border-t border-gray-100 pt-8 mt-4">
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Área de Teste do Programador</p>
             <button onClick={simulateBankWebhook} className="w-full bg-slate-800 text-emerald-400 font-black py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg flex items-center justify-center">
@@ -672,7 +696,6 @@ export default function App() {
       </div>
     );
   };
-  // ------------------------------------------
 
   const renderMyOrders = () => {
     const myOrders = orders.filter(o => o.customer === user.name && o.email === user.email);
@@ -730,7 +753,6 @@ export default function App() {
   };
 
   const renderRepDashboard = () => {
-    // Gestor Logístico só vê pedidos PAGOS e confirmados!
     const myPoloOrders = orders.filter(o => o.polo === user.polo && o.status === 'pago');
     const appOrders = myPoloOrders.filter(o => o.method !== 'dinheiro/pix direto');
     const manualOrders = myPoloOrders.filter(o => o.method === 'dinheiro/pix direto');
@@ -802,9 +824,14 @@ export default function App() {
                             </div>
                           </div>
                           <div className="mt-4 md:mt-0 flex flex-col items-end">
-                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest mb-3 ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
                               {order.method === 'dinheiro/pix direto' ? 'S/ CAIXA' : 'APP'}
                             </span>
+                            
+                            {/* --- BOTÃO WHATSAPP --- */}
+                            <button onClick={() => handleSendWhatsApp(order)} className="flex items-center text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
+                              <MessageCircle className="w-3 h-3 mr-1.5" /> Enviar Recibo
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -875,7 +902,6 @@ export default function App() {
   };
 
   const renderAdminDashboard = () => {
-    // Gestor Administrativo só calcula para envio de fornecedor pedidos PAGOS!
     const paidOrders = orders.filter(o => o.status === 'pago');
     const consolidatedItems = {};
     
@@ -905,7 +931,7 @@ export default function App() {
         }
       });
 
-      if (!hasItemsToBuy) return showToast('Estoque ok. Nenhuma compra necessária.', 'success');
+      if (!hasItemsToBuy) return showToast('Stock ok. Nenhuma compra necessária.', 'success');
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -929,10 +955,10 @@ export default function App() {
         {adminTab === 'pedidos' && (
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
             <div className="bg-slate-800 p-6 font-bold text-white flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b-4 border-emerald-600">
-              <span className="flex items-center text-xl font-black tracking-tight"><Package className="w-6 h-6 mr-3 text-emerald-400" /> Inteligência de Estoque</span>
+              <span className="flex items-center text-xl font-black tracking-tight"><Package className="w-6 h-6 mr-3 text-emerald-400" /> Inteligência de Stock</span>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="bg-slate-900/50 px-4 py-2 rounded-xl text-sm text-emerald-400 font-black border border-slate-700">Faturação Paga: R$ {paidOrders.reduce((sum, o) => sum + o.total, 0).toFixed(2).replace('.', ',')}</span>
-                <button onClick={downloadPurchaseOrderCSV} className="flex items-center bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-500 transition shadow-lg"><Download className="w-4 h-4 mr-2"/> Gerar Planilha Fornecedor</button>
+                <button onClick={downloadPurchaseOrderCSV} className="flex items-center bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-500 transition shadow-lg"><Download className="w-4 h-4 mr-2"/> Gerar Folha Fornecedor</button>
                 <button onClick={() => setCurrentScreen('print_admin')} className="flex items-center bg-white text-slate-800 px-4 py-2 rounded-xl font-black hover:bg-gray-100 transition shadow-lg"><Printer className="w-4 h-4 mr-2"/> Carga & Despacho</button>
               </div>
             </div>
@@ -1005,14 +1031,25 @@ export default function App() {
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
              <div className="bg-emerald-700 p-6 font-bold text-white flex justify-between items-center border-b-4 border-emerald-800">
               <span className="flex items-center text-xl font-black tracking-tight"><Users className="w-6 h-6 mr-3 text-emerald-200" /> Diretório de Clientes</span>
-              <span className="bg-emerald-900/40 px-4 py-1.5 rounded-xl text-sm font-black border border-emerald-600/50 shadow-inner">{customers.length} Registros</span>
+              <span className="bg-emerald-900/40 px-4 py-1.5 rounded-xl text-sm font-black border border-emerald-600/50 shadow-inner">{customers.length} Registos</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead><tr className="bg-slate-50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100"><th className="p-5">Nome Registado</th><th className="p-5">Polo / Unidade</th><th className="p-5">Contacto</th><th className="p-5">E-mail</th></tr></thead>
+                <thead><tr className="bg-slate-50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100"><th className="p-5">Nome Registado</th><th className="p-5">Polo / Unidade</th><th className="p-5">Contacto</th><th className="p-5">E-mail</th><th className="p-5 text-right">Ações</th></tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {customers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(c => (
-                    <tr key={c.id} className="hover:bg-slate-50 transition-colors"><td className="p-5 font-black text-slate-800 text-lg">{c.name}</td><td className="p-5 text-sm font-bold text-gray-500"><span className="bg-white border border-gray-200 px-3 py-1 rounded-lg">{c.polo}</span></td><td className="p-5 text-sm font-black text-emerald-600">{c.whatsapp || '---'}</td><td className="p-5 text-sm font-medium text-gray-400">{c.email || '---'}</td></tr>
+                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5 font-black text-slate-800 text-lg">{c.name}</td>
+                      <td className="p-5 text-sm font-bold text-gray-500"><span className="bg-white border border-gray-200 px-3 py-1 rounded-lg">{c.polo}</span></td>
+                      <td className="p-5 text-sm font-black text-emerald-600">{c.whatsapp || '---'}</td>
+                      <td className="p-5 text-sm font-medium text-gray-400">{c.email || '---'}</td>
+                      <td className="p-5 text-right">
+                        {/* --- BOTÃO WHATSAPP CRM --- */}
+                        <button onClick={() => handleSendCRMWhatsApp(c)} className="inline-flex items-center text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm border border-emerald-200">
+                          <MessageCircle className="w-4 h-4 mr-2" /> Falar
+                        </button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
@@ -1180,7 +1217,7 @@ export default function App() {
             </div>
             <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Pagamento Confirmado!</h2>
             <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">Tudo certo com a sua compra. O seu pedido acabou de ser libertado para a equipa de logística.</p>
-            <button onClick={() => setCurrentScreen('my_orders')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Ver Os Meus Pedidos</button>
+            <button onClick={() => setCurrentScreen('my_orders')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Ver As Minhas Encomendas</button>
           </div>
         )}
       </main>
