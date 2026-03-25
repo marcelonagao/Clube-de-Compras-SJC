@@ -77,7 +77,8 @@ export default function App() {
   const [pendingOrder, setPendingOrder] = useState(null);
   const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [] });
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
-  const [financeTab, setFinanceTab] = useState('credito'); // NOVO: Aba ativa no Financeiro (credito ou pix)
+  const [financeTab, setFinanceTab] = useState('credito');
+  const [pixRefundModal, setPixRefundModal] = useState({ open: false, key: '' }); // NOVO: Estado para a Modal de Pedido de PIX do Cliente
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -117,6 +118,7 @@ export default function App() {
             email: firebaseUser.email, 
             walletBalance: userData.walletBalance || 0, 
             pendingPixRefund: userData.pendingPixRefund || 0,
+            pixKey: userData.pixKey || '',
             ...userData 
           });
           
@@ -192,7 +194,7 @@ export default function App() {
     setAuthLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
-      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0, pendingPixRefund: 0 };
+      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0, pendingPixRefund: 0, pixKey: '' };
       await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
       await addDoc(collection(db, "customers"), newUserProfile);
       showToast('Conta criada com sucesso!', 'success');
@@ -335,7 +337,7 @@ export default function App() {
             total: Math.max(0, newTotal),
             refundStatus: 'credito_gerado',
             refundAmount: missingTotal,
-            missingItems: missingItemsToSave // Guardamos o que faltou para o Gestor ver depois
+            missingItems: missingItemsToSave
         });
 
         const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
@@ -362,16 +364,20 @@ export default function App() {
     }
   }
 
-  // --- SOLICITAR ESTORNO PIX (CLIENTE) ---
-  const requestPixRefund = async () => {
+  // --- CONFIRMAR PEDIDO DE ESTORNO PIX (CLIENTE) ---
+  const confirmPixRefundRequest = async (e) => {
+    e.preventDefault();
     if (!user || (user.walletBalance || 0) <= 0) return;
+    if (!pixRefundModal.key.trim()) return showToast("Informe a chave PIX.", "error");
+
     try {
       const amountToRefund = user.walletBalance;
       const currentPending = user.pendingPixRefund || 0;
       
       await updateDoc(doc(db, "users", user.uid), {
         walletBalance: 0,
-        pendingPixRefund: currentPending + amountToRefund
+        pendingPixRefund: currentPending + amountToRefund,
+        pixKey: pixRefundModal.key // Guarda a chave que o cliente informou
       });
       
       // Atualizar os pedidos para "pendente_estorno" para o Gestor saber de onde veio
@@ -380,12 +386,13 @@ export default function App() {
          await updateDoc(doc(db, "orders", o.id), { refundStatus: 'pendente_estorno' });
       }
       
-      setUser({ ...user, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund });
-      setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund } : u));
+      setUser({ ...user, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund, pixKey: pixRefundModal.key });
+      setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund, pixKey: pixRefundModal.key } : u));
       setOrders(orders.map(o => o.email === user.email && o.refundStatus === 'credito_gerado' ? { ...o, refundStatus: 'pendente_estorno' } : o));
       
-      showToast("Solicitação de PIX enviada à equipa financeira!", "success");
-    } catch(e) {
+      setPixRefundModal({ open: false, key: '' });
+      showToast("Solicitação de PIX enviada à equipe financeira!", "success");
+    } catch(err) {
       showToast("Erro ao solicitar PIX", "error");
     }
   };
@@ -426,13 +433,13 @@ export default function App() {
 
     const itemsList = (order.items || []).map(i => `▫️ ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
     const total = `R$ ${(order.total || 0).toFixed(2).replace('.', ',')}`;
-    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! 💚`;
+    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para retirada. Obrigado! 💚`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendCRMWhatsApp = (customer) => {
     if (!customer.whatsapp) {
-      showToast('O cliente não tem WhatsApp registado.', 'error');
+      showToast('O cliente não tem WhatsApp registrado.', 'error');
       return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
@@ -443,12 +450,14 @@ export default function App() {
 
   const handleSendPixWhatsApp = (customer, amount) => {
     if (!customer.whatsapp) {
-        showToast('O cliente não tem WhatsApp registado.', 'error');
+        showToast('O cliente não tem WhatsApp registrado.', 'error');
         return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
-    const text = `Olá, ${customer.name}! 🌿\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contacto para realizar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nPor favor, confirme a sua chave PIX para realizarmos a transferência. Obrigado! 💚`;
+    
+    const chaveInfor = customer.pixKey ? customer.pixKey : customer.whatsapp;
+    const text = `Olá, ${customer.name}! 🌿\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contato para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado! 💚`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -662,7 +671,7 @@ export default function App() {
 
             {registerRole !== 'cliente' && (
               <div className="bg-red-50/50 border border-red-100 p-3 rounded-xl">
-                <label className="block text-xs font-bold text-red-700 mb-1 uppercase tracking-wider">Código de Autorização da Equipa</label>
+                <label className="block text-xs font-bold text-red-700 mb-1 uppercase tracking-wider">Código de Autorização da Equipe</label>
                 <input type="password" value={secretCode} onChange={(e) => setSecretCode(e.target.value)} required placeholder="Chave secreta..." className="w-full border-b-2 border-red-200 bg-white rounded-t-lg p-3 focus:border-red-500 outline-none font-bold text-red-700" />
               </div>
             )}
@@ -710,7 +719,7 @@ export default function App() {
       <div className="pb-24 pt-6 px-4 max-w-5xl mx-auto">
         <div className="bg-white border border-emerald-100 text-emerald-900 p-4 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
           <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Polo de Retirada: <strong className="font-black text-emerald-800">{user?.polo || 'Sede'}</strong></span></div>
-          {/* --- NOVO: EXIBIÇÃO DE CRÉDITO DIRETO NA LOJA --- */}
+          {/* --- EXIBIÇÃO DE CRÉDITO DIRETO NA LOJA --- */}
           {(user?.walletBalance || 0) > 0 && (
             <div className="flex items-center bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 w-full sm:w-auto">
               <Wallet className="w-5 h-5 text-emerald-600 mr-2"/>
@@ -950,7 +959,7 @@ export default function App() {
                 <p className="text-sm font-medium text-emerald-700">Adicionamos <strong>R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')} de crédito</strong> na sua Carteira para abater automaticamente na próxima compra!</p>
               </div>
             </div>
-            <button onClick={requestPixRefund} className="whitespace-nowrap w-full md:w-auto bg-white text-emerald-700 border-2 border-emerald-200 px-6 py-3 rounded-xl font-black hover:bg-emerald-100 transition-all shadow-sm">
+            <button onClick={() => setPixRefundModal({ open: true, key: user.whatsapp || '' })} className="whitespace-nowrap w-full md:w-auto bg-white text-emerald-700 border-2 border-emerald-200 px-6 py-3 rounded-xl font-black hover:bg-emerald-100 transition-all shadow-sm">
               Prefere receber via PIX?
             </button>
           </div>
@@ -962,7 +971,7 @@ export default function App() {
             <div className="bg-white p-3 rounded-full shadow-sm"><Clock className="w-8 h-8 text-orange-600"/></div>
             <div>
               <h3 className="font-black text-orange-800 text-lg">Estorno PIX em Andamento</h3>
-              <p className="text-sm font-medium text-orange-700">O nosso setor financeiro fará a transferência de <strong>R$ {(user.pendingPixRefund || 0).toFixed(2).replace('.', ',')}</strong> para a chave (Telemóvel: {user.whatsapp}) em breve.</p>
+              <p className="text-sm font-medium text-orange-700">A nossa equipa financeira fará a transferência de <strong>R$ {(user.pendingPixRefund || 0).toFixed(2).replace('.', ',')}</strong> para a chave PIX <strong>{user.pixKey || user.whatsapp}</strong> em breve.</p>
             </div>
           </div>
         )}
@@ -1023,6 +1032,25 @@ export default function App() {
             ))}
           </div>
         )}
+
+        {/* MODAL DE SOLICITAÇÃO DE PIX */}
+        {pixRefundModal.open && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+            <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+               <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Solicitar Estorno PIX</h3>
+               <p className="text-sm text-gray-500 mb-6 font-medium">Iremos transferir R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')} para a sua conta.</p>
+               <form onSubmit={confirmPixRefundRequest}>
+                 <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Sua Chave PIX</label>
+                 <input autoFocus required value={pixRefundModal.key} onChange={(e) => setPixRefundModal({...pixRefundModal, key: e.target.value})} placeholder="CPF, E-mail, Celular ou Aleatória" className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm focus:border-emerald-500 outline-none mb-6 font-bold text-slate-700" />
+                 <div className="flex gap-3">
+                    <button type="button" onClick={() => setPixRefundModal({ open: false, key: '' })} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
+                    <button type="submit" className="flex-[2] py-4 bg-emerald-700 text-white font-black rounded-xl shadow-lg transition-all hover:bg-emerald-800 hover:-translate-y-1">Confirmar Pedido</button>
+                 </div>
+               </form>
+            </div>
+          </div>
+        )}
+
       </div>
     );
   };
@@ -1287,8 +1315,8 @@ export default function App() {
                         <div key={u.id} className="p-6 flex flex-col md:flex-row justify-between gap-4 hover:bg-slate-50 transition-colors">
                            <div>
                               <p className="font-black text-slate-800 text-xl mb-1">{u.name}</p>
-                              <p className="text-sm font-medium text-gray-500">Chave Telefone/WhatsApp: <strong className="text-slate-700">{u.whatsapp}</strong></p>
-                              <p className="text-xs text-gray-400 mt-1">Email: {u.email}</p>
+                              <p className="text-sm font-medium text-gray-500">Chave PIX Informada: <strong className="text-slate-800 bg-gray-200 px-2 py-1 rounded">{u.pixKey || u.whatsapp}</strong></p>
+                              <p className="text-xs text-gray-400 mt-2">Email: {u.email}</p>
 
                               {uOrders.length > 0 && (
                                 <div className="mt-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm max-w-sm">
@@ -1764,6 +1792,24 @@ export default function App() {
                  </>
                )
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DE SOLICITAÇÃO DE PIX (CLIENTE) --- */}
+      {pixRefundModal.open && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+             <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Solicitar Estorno PIX</h3>
+             <p className="text-sm text-gray-500 mb-6 font-medium">A nossa equipe financeira irá transferir <strong className="text-slate-800">R$ {(user?.walletBalance || 0).toFixed(2).replace('.', ',')}</strong> para a sua conta bancária.</p>
+             <form onSubmit={confirmPixRefundRequest}>
+               <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Sua Chave PIX</label>
+               <input autoFocus required value={pixRefundModal.key} onChange={(e) => setPixRefundModal({...pixRefundModal, key: e.target.value})} placeholder="CPF, E-mail, Celular ou Aleatória" className="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-emerald-500 outline-none mb-6 font-bold text-slate-700 bg-slate-50" />
+               <div className="flex gap-3">
+                  <button type="button" onClick={() => setPixRefundModal({ open: false, key: '' })} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
+                  <button type="submit" className="flex-[2] py-4 bg-emerald-700 text-white font-black rounded-xl shadow-lg transition-all hover:bg-emerald-800 hover:-translate-y-1">Confirmar Pedido</button>
+               </div>
+             </form>
           </div>
         </div>
       )}
