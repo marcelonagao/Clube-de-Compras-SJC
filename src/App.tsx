@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet, Landmark } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -37,12 +37,28 @@ const categorias = ['Todos', 'Carnes & Aves', 'Peixes', 'Grãos & Cereais', 'Mer
 const initialProducts = [
   { sku: '1423', category: 'Carnes & Aves', name: 'Coxa NGMO Cong Pct 1kg', description: 'Coxa de frango sem antibióticos.', price: 11.50, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
   { sku: '1563', category: 'Carnes & Aves', name: 'Coxinha Asa NGMO Cong Pct 1kg', description: 'Coxinha da asa sem antibióticos.', price: 14.04, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
+  { sku: '1438', category: 'Carnes & Aves', name: 'Sobrecoxa NGMO Cong Pct 1kg', description: 'Sobrecoxa de frango sem transgênicos.', price: 22.27, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
+  { sku: '1420', category: 'Carnes & Aves', name: 'Pé NGMO Cong Pct 1kg', description: 'Pé de frango sem transgênicos.', price: 6.66, minOrderQuantity: 10, stockLocal: 0, image: '🍗' },
+  { sku: '1441', category: 'Carnes & Aves', name: 'Pescoço NGMO Cong Pct 1kg', description: 'Pescoço de frango sem transgênicos.', price: 5.93, minOrderQuantity: 10, stockLocal: 0, image: '🍗' },
+  { sku: '1414', category: 'Carnes & Aves', name: 'Fígado BP Cong BD 600g', description: 'Fígado de frango congelado.', price: 4.80, minOrderQuantity: 12, stockLocal: 0, image: '🥩' },
+  { sku: '1407', category: 'Carnes & Aves', name: 'Filé Coxa c/Sbr s/Pé NGMO Cong BD 600g', description: 'Filé de coxa com sobrecoxa.', price: 21.65, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
+  { sku: '1409', category: 'Carnes & Aves', name: 'Meio da Asa NGMO Cong BD 600g', description: 'Meio da asa de frango.', price: 12.05, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
+  { sku: '1445', category: 'Carnes & Aves', name: 'Coxa c/Sbr s/Osso c/Pele NGMO BD 600g', description: 'Coxa e sobrecoxa desossada com pele.', price: 17.16, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
+  { sku: '41013', category: 'Carnes & Aves', name: 'Hambúrguer Bovino Org Cong Pct 340g', description: 'Hambúrguer orgânico bovino de alta qualidade.', price: 34.44, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
+  { sku: '41027', category: 'Carnes & Aves', name: 'Carne Moída de Frango NGMO Pct 400g', description: 'Carne moída de frango.', price: 15.42, minOrderQuantity: 15, stockLocal: 0, image: '🥩' },
+  { sku: '1413', category: 'Carnes & Aves', name: 'Coração NGMO Cong BD 600g', description: 'Coração de frango.', price: 29.38, minOrderQuantity: 12, stockLocal: 0, image: '❤️' },
   { sku: '1408', category: 'Carnes & Aves', name: 'Filé Peito NGMO Cong BD 600g', description: 'Filé de peito de frango Korin.', price: 30.81, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: '41013', category: 'Carnes & Aves', name: 'Hamburguer Bovino Org Cong Pct 340g', description: 'Hambúrguer orgânico de alta qualidade.', price: 34.44, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
-  { sku: '56005', category: 'Peixes', name: 'Filé de Tilápia s/Pele Korin Cong Pct 450g', description: 'Tilápia sustentável Korin.', price: 40.82, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
+  { sku: '41014', category: 'Carnes & Aves', name: 'Carne Moída Bovina Org Cong Pct 400g', description: 'Carne moída bovina orgânica.', price: 45.11, minOrderQuantity: 15, stockLocal: 0, image: '🥩' },
+  { sku: '41116', category: 'Carnes & Aves', name: 'Hambúrguer Frango NGMO Cong 360g', description: 'Hambúrguer de frango.', price: 25.94, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
+  { sku: '56004', category: 'Peixes', name: 'Filé de Truta Korin Cong Pct 500g', description: 'Filé de truta sustentável.', price: 73.45, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
+  { sku: '56005', category: 'Peixes', name: 'Filé de Tilápia s/Pele Korin Cong 450g', description: 'Tilápia sustentável Korin.', price: 40.82, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
   { sku: '57501', category: 'Grãos & Cereais', name: 'Arroz Agulhinha Polido Org Vácuo 1kg', description: 'Arroz branco orgânico tipo 1.', price: 19.50, minOrderQuantity: 20, stockLocal: 0, image: '🍚' },
+  { sku: '57503', category: 'Grãos & Cereais', name: 'Arroz Agulhinha Integral Org Vácuo 1kg', description: 'Arroz integral orgânico.', price: 18.85, minOrderQuantity: 20, stockLocal: 0, image: '🍚' },
   { sku: '58009', category: 'Grãos & Cereais', name: 'Feijão Carioca Org 500g', description: 'Feijão carioca 100% orgânico.', price: 13.65, minOrderQuantity: 20, stockLocal: 0, image: '🫘' },
+  { sku: '58008', category: 'Grãos & Cereais', name: 'Feijão Preto Org 500g', description: 'Feijão preto orgânico.', price: 13.39, minOrderQuantity: 20, stockLocal: 0, image: '🫘' },
   { sku: '57010', category: 'Mercearia', name: 'Extrato de Própolis Verde Org 30ml', description: 'Própolis verde puro.', price: 23.14, minOrderQuantity: 12, stockLocal: 0, image: '🍯' },
+  { sku: '57001', category: 'Mercearia', name: 'Mel Org Bisnaga 300g', description: 'Mel orgânico em bisnaga.', price: 25.09, minOrderQuantity: 12, stockLocal: 0, image: '🍯' },
+  { sku: '57009', category: 'Mercearia', name: 'Mel Org Pt 1kg', description: 'Mel orgânico no pote.', price: 65.65, minOrderQuantity: 10, stockLocal: 0, image: '🍯' },
 ];
 
 export default function App() {
@@ -53,6 +69,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]); // NOVO: Guarda o perfil de todos para o financeiro
   const [isLoadingDB, setIsLoadingDB] = useState(true);
 
   // --- ESTADOS DE AUTENTICAÇÃO ---
@@ -64,7 +81,7 @@ export default function App() {
   
   // --- ESTADOS DE PAGAMENTO E GESTÃO ---
   const [pendingOrder, setPendingOrder] = useState(null);
-  const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [], refundType: 'credit' });
+  const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [] });
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -97,14 +114,19 @@ export default function App() {
         
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          // Garante que o walletBalance é lido do BD
-          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, walletBalance: userData.walletBalance || 0, ...userData });
+          setUser({ 
+            uid: firebaseUser.uid, 
+            email: firebaseUser.email, 
+            walletBalance: userData.walletBalance || 0, 
+            pendingPixRefund: userData.pendingPixRefund || 0,
+            ...userData 
+          });
           
           if (userData.role === 'consolidador') setCurrentScreen('dashboard_admin');
           else if (userData.role === 'representante') setCurrentScreen('dashboard_rep');
           else setCurrentScreen('shop');
         } else {
-          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Utilizador', walletBalance: 0 });
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Utilizador', walletBalance: 0, pendingPixRefund: 0 });
           setCurrentScreen('shop');
         }
       } else {
@@ -135,6 +157,10 @@ export default function App() {
 
         const ordSnapshot = await getDocs(collection(db, "orders"));
         setOrders(ordSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+        // Buscar utilizadores para o painel financeiro do Gestor
+        const usersSnapshot = await getDocs(collection(db, "users"));
+        setAllUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       } catch (error) {
         console.error("Erro ao ligar ao Firebase:", error);
@@ -176,7 +202,7 @@ export default function App() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
       // Cria a estrutura com a carteira digital zerada
-      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0 };
+      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0, pendingPixRefund: 0 };
       await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
       await addDoc(collection(db, "customers"), newUserProfile);
       showToast('Conta criada com sucesso!', 'success');
@@ -263,8 +289,10 @@ export default function App() {
       
       // Se a carteira pagou 100% do pedido, não precisa de banco
       if (finalTotal <= 0 && walletDiscount > 0) {
-          await updateDoc(doc(db, "users", user.uid), { walletBalance: user.walletBalance - walletDiscount });
-          setUser({...user, walletBalance: user.walletBalance - walletDiscount});
+          const newWalletBalance = user.walletBalance - walletDiscount;
+          await updateDoc(doc(db, "users", user.uid), { walletBalance: newWalletBalance });
+          setUser({...user, walletBalance: newWalletBalance});
+          setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: newWalletBalance } : u));
           setIsProcessingPayment(false);
           setCurrentScreen('success');
           return;
@@ -289,8 +317,10 @@ export default function App() {
       
       // Abate o saldo da carteira apenas quando o banco confirma o valor restante
       if (pendingOrder.walletDiscountApplied > 0) {
-         await updateDoc(doc(db, "users", user.uid), { walletBalance: user.walletBalance - pendingOrder.walletDiscountApplied });
-         setUser({...user, walletBalance: user.walletBalance - pendingOrder.walletDiscountApplied});
+         const newWalletBalance = user.walletBalance - pendingOrder.walletDiscountApplied;
+         await updateDoc(doc(db, "users", user.uid), { walletBalance: newWalletBalance });
+         setUser({...user, walletBalance: newWalletBalance});
+         setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: newWalletBalance } : u));
       }
       
       setCurrentScreen('success');
@@ -299,48 +329,78 @@ export default function App() {
     }
   };
 
-  // --- FUNÇÃO PARA PROCESSAR FALTAS / CRÉDITOS ---
+  // --- FUNÇÃO PARA PROCESSAR FALTAS / GERAR CRÉDITO ---
   const handleConfirmFaltas = async (missingTotal) => {
     if (missingTotal <= 0) return;
     
-    // Novo array descontando o que faltou
     const newItems = missingItemsModal.missingItems.map(i => ({...i, qtd: i.qtd - i.removedQtd})).filter(i => i.qtd > 0);
     const newTotal = missingItemsModal.order.total - missingTotal;
-    const refundStatus = missingItemsModal.refundType === 'pix' ? 'pendente_estorno' : 'credito_gerado';
 
     try {
         await updateDoc(doc(db, "orders", missingItemsModal.order.id), {
             items: newItems,
             total: Math.max(0, newTotal),
-            refundStatus: refundStatus,
+            refundStatus: 'credito_gerado',
             refundAmount: missingTotal
         });
 
-        // Se escolheu gerar crédito para a carteira
-        if (missingItemsModal.refundType === 'credit') {
-            const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
-            const querySnapshot = await getDocs(q);
+        // Gera Crédito Automaticamente na Carteira Digital do Cliente
+        const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+            const userDoc = querySnapshot.docs[0];
+            const currentWallet = userDoc.data().walletBalance || 0;
+            await updateDoc(doc(db, "users", userDoc.id), { walletBalance: currentWallet + missingTotal });
             
-            if (!querySnapshot.empty) {
-                const userDoc = querySnapshot.docs[0];
-                const currentWallet = userDoc.data().walletBalance || 0;
-                await updateDoc(doc(db, "users", userDoc.id), { walletBalance: currentWallet + missingTotal });
-                // Se for a conta do gestor simulando falta na própria encomenda:
-                if (user.uid === userDoc.id) setUser({...user, walletBalance: currentWallet + missingTotal});
-            } else {
-                if (missingItemsModal.order.method === 'dinheiro/pix direto') {
-                    showToast("Nota: Para clientes avulsos sem conta, o crédito é simbólico. Registe manualmente.", "success");
-                }
+            // Atualiza localmente e na visão do Gestor
+            setAllUsers(prev => prev.map(u => u.id === userDoc.id ? { ...u, walletBalance: currentWallet + missingTotal } : u));
+            if (user.uid === userDoc.id) setUser({...user, walletBalance: currentWallet + missingTotal});
+        } else {
+            if (missingItemsModal.order.method === 'dinheiro/pix direto') {
+                showToast("Nota: Para clientes avulsos sem conta, o crédito é simbólico. Registe manualmente.", "success");
             }
         }
 
-        setOrders(orders.map(o => o.id === missingItemsModal.order.id ? { ...o, items: newItems, total: Math.max(0, newTotal), refundStatus, refundAmount: missingTotal } : o));
-        setMissingItemsModal({open: false, order: null, missingItems: [], refundType: 'credit'});
-        showToast("Falta registrada e cliente compensado!", "success");
+        setOrders(orders.map(o => o.id === missingItemsModal.order.id ? { ...o, items: newItems, total: Math.max(0, newTotal), refundStatus: 'credito_gerado', refundAmount: missingTotal } : o));
+        setMissingItemsModal({open: false, order: null, missingItems: []});
+        showToast("Falta registada e crédito adicionado à carteira!", "success");
     } catch(e) {
         showToast("Erro ao processar falta e crédito.", "error");
     }
   }
+
+  // --- SOLICITAR ESTORNO PIX (CLIENTE) ---
+  const requestPixRefund = async () => {
+    if (!user || user.walletBalance <= 0) return;
+    try {
+      const amountToRefund = user.walletBalance;
+      const currentPending = user.pendingPixRefund || 0;
+      
+      await updateDoc(doc(db, "users", user.uid), {
+        walletBalance: 0,
+        pendingPixRefund: currentPending + amountToRefund
+      });
+      
+      setUser({ ...user, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund });
+      setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund } : u));
+      
+      showToast("Solicitação de PIX enviada à equipa financeira!", "success");
+    } catch(e) {
+      showToast("Erro ao solicitar PIX", "error");
+    }
+  };
+
+  // --- CONFIRMAR ESTORNO PIX (GESTOR) ---
+  const confirmPixTransfer = async (userId) => {
+    try {
+       await updateDoc(doc(db, "users", userId), { pendingPixRefund: 0 });
+       setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, pendingPixRefund: 0 } : u));
+       showToast("Transferência de estorno confirmada!", "success");
+    } catch(e) { 
+       showToast("Erro ao confirmar transferência.", "error"); 
+    }
+  };
 
   // --- FUNÇÕES DE INTEGRAÇÃO COM WHATSAPP ---
   const handleSendWhatsApp = (order) => {
@@ -351,10 +411,8 @@ export default function App() {
     let phone = order.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
-    // Adiciona informação de crédito se houve falta
     let refundInfo = '';
-    if (order.refundStatus === 'credito_gerado') refundInfo = `\n🎁 *Adicionamos R$ ${order.refundAmount.toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra!`;
-    else if (order.refundStatus === 'pendente_estorno') refundInfo = `\n⚠️ Tivemos a falta de um item. Nossa equipa entrará em contacto para o estorno de R$ ${order.refundAmount.toFixed(2)}.`;
+    if (order.refundStatus === 'credito_gerado') refundInfo = `\n🎁 *Adicionamos R$ ${order.refundAmount.toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX no nosso aplicativo!`;
 
     const itemsList = order.items.map(i => `▫️ ${i.qtd}x ${i.name}`).join('\n');
     const total = `R$ ${order.total.toFixed(2).replace('.', ',')}`;
@@ -624,7 +682,6 @@ export default function App() {
     const feeAmount = hasFee ? cartTotal * 0.05 : 0;
     const subTotalWithFee = cartTotal + feeAmount;
     
-    // Logica da Carteira (Wallet)
     const walletDiscount = (user?.walletBalance || 0) > 0 ? Math.min(user.walletBalance, subTotalWithFee) : 0;
     const finalTotal = subTotalWithFee - walletDiscount;
 
@@ -779,15 +836,36 @@ export default function App() {
             <button onClick={() => setCurrentScreen('shop')} className="mr-4 flex items-center text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition text-sm shadow-sm"><ArrowLeft className="w-4 h-4 mr-2" /> Loja</button>
             <h2 className="text-3xl font-black text-gray-800 tracking-tight">As Minhas Encomendas</h2>
           </div>
-          
-          <div className="bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-lg border border-emerald-800 flex items-center gap-2">
-             <Wallet className="w-5 h-5 text-emerald-300"/>
-             <div>
-               <p className="text-[9px] uppercase tracking-widest font-bold text-emerald-200">Saldo na Carteira</p>
-               <p className="font-black">R$ {(user?.walletBalance || 0).toFixed(2).replace('.',',')}</p>
-             </div>
-          </div>
         </div>
+
+        {/* --- BANNER DE NOTIFICAÇÃO DA CARTEIRA E PIX --- */}
+        {(user?.walletBalance > 0) && (
+          <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-200 mb-8 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-emerald-500"></div>
+            <div className="flex items-center gap-5">
+              <div className="bg-white p-3 rounded-full shadow-sm"><Wallet className="w-8 h-8 text-emerald-600"/></div>
+              <div>
+                <h3 className="font-black text-emerald-800 text-lg">Houve uma falta na sua encomenda recente.</h3>
+                <p className="text-sm font-medium text-emerald-700">Adicionamos <strong>R$ {user.walletBalance.toFixed(2).replace('.', ',')} de crédito</strong> na sua Carteira para abater automaticamente na próxima compra!</p>
+              </div>
+            </div>
+            <button onClick={requestPixRefund} className="whitespace-nowrap w-full md:w-auto bg-white text-emerald-700 border-2 border-emerald-200 px-6 py-3 rounded-xl font-black hover:bg-emerald-100 transition-all shadow-sm">
+              Prefere receber via PIX?
+            </button>
+          </div>
+        )}
+
+        {(user?.pendingPixRefund > 0) && (
+          <div className="bg-orange-50 p-6 rounded-[2rem] border border-orange-200 mb-8 flex items-center gap-5 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-orange-500"></div>
+            <div className="bg-white p-3 rounded-full shadow-sm"><Clock className="w-8 h-8 text-orange-600"/></div>
+            <div>
+              <h3 className="font-black text-orange-800 text-lg">Estorno PIX em Andamento</h3>
+              <p className="text-sm font-medium text-orange-700">O nosso setor financeiro fará a transferência de <strong>R$ {user.pendingPixRefund.toFixed(2).replace('.', ',')}</strong> para a chave (Telemóvel: {user.whatsapp}) em breve.</p>
+            </div>
+          </div>
+        )}
+        {/* ----------------------------------------------- */}
 
         {myOrders.length === 0 ? (
           <div className="bg-white p-12 rounded-[2rem] shadow-sm border border-gray-100 text-center">
@@ -813,18 +891,6 @@ export default function App() {
                   )}
                   
                 </div>
-                
-                {order.refundStatus && (
-                  <div className="mb-4 bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm text-orange-800 flex items-start gap-2">
-                    <span className="text-lg">⚠️</span>
-                    <div>
-                      <p className="font-bold">Atenção ao seu pedido</p>
-                      <p className="text-xs mt-1">
-                        {order.refundStatus === 'credito_gerado' ? `Um item faltou e R$ ${order.refundAmount.toFixed(2)} foram adicionados como crédito à sua carteira!` : `Um item faltou. Entraremos em contacto para realizar o estorno de R$ ${order.refundAmount.toFixed(2)}.`}
-                      </p>
-                    </div>
-                  </div>
-                )}
                 
                 <div className="space-y-3 mb-6">
                   {order.items.map((item, idx) => (<div key={idx} className="flex items-center text-sm text-gray-600"><span className="w-8 h-8 bg-gray-50 text-emerald-700 font-black rounded-lg flex items-center justify-center mr-3 border border-gray-100">{item.qtd}x</span> <span className="font-medium">{item.name}</span></div>))}
@@ -928,11 +994,10 @@ export default function App() {
                             </span>
                             
                             <div className="flex gap-2">
-                                {order.refundStatus === 'pendente_estorno' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 shadow-sm">Estorno Pend.</span>}
                                 {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
                                 
                                 {(!order.refundStatus || order.refundStatus === '') && order.status === 'pago' && (
-                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: order.items.map(i=>({...i, removedQtd:0})), refundType: 'credit'})} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
+                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: order.items.map(i=>({...i, removedQtd:0}))})} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
                                       Faltas
                                    </button>
                                 )}
@@ -1060,7 +1125,52 @@ export default function App() {
           <button onClick={() => setAdminTab('pedidos')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'pedidos' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Painel de Compras</button>
           <button onClick={() => setAdminTab('catalogo')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'catalogo' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Gestão de Catálogo</button>
           <button onClick={() => setAdminTab('crm')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'crm' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>CRM de Clientes</button>
+          {/* NOVO BOTÃO FINANCEIRO */}
+          <button onClick={() => setAdminTab('financeiro')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'financeiro' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Financeiro & Reembolsos</button>
         </div>
+
+        {adminTab === 'financeiro' && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="bg-emerald-700 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute -right-4 -top-4 opacity-10"><Wallet className="w-40 h-40"/></div>
+                  <p className="text-emerald-200 font-black uppercase tracking-widest text-xs mb-2">Crédito Total nas Carteiras (Retido)</p>
+                  <p className="text-5xl font-black tracking-tighter">R$ {allUsers.reduce((sum, u) => sum + (u.walletBalance || 0), 0).toFixed(2).replace('.', ',')}</p>
+               </div>
+               <div className="bg-orange-500 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+                  <div className="absolute -right-4 -top-4 opacity-10"><Landmark className="w-40 h-40"/></div>
+                  <p className="text-orange-200 font-black uppercase tracking-widest text-xs mb-2">Total a Devolver via PIX (Estornos)</p>
+                  <p className="text-5xl font-black tracking-tighter">R$ {allUsers.reduce((sum, u) => sum + (u.pendingPixRefund || 0), 0).toFixed(2).replace('.', ',')}</p>
+               </div>
+            </div>
+
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-6 bg-slate-50 border-b border-gray-100 font-black text-slate-800 text-lg tracking-tight">Solicitações de Estorno (PIX)</div>
+              <div className="divide-y divide-gray-50">
+                {allUsers.filter(u => u.pendingPixRefund > 0).length === 0 ? (
+                  <p className="p-10 text-center text-gray-400 font-medium">Nenhuma solicitação de estorno pendente neste momento.</p>
+                ) : (
+                  allUsers.filter(u => u.pendingPixRefund > 0).map(u => (
+                    <div key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                       <div>
+                          <p className="font-black text-slate-800 text-xl mb-1">{u.name}</p>
+                          <p className="text-sm font-medium text-gray-500">Chave Telefone/WhatsApp: <strong className="text-slate-700">{u.whatsapp}</strong></p>
+                          <p className="text-xs text-gray-400 mt-1">Email: {u.email}</p>
+                       </div>
+                       <div className="flex flex-col sm:flex-row items-center gap-4 bg-orange-50 p-4 rounded-xl border border-orange-100">
+                          <div className="text-right">
+                            <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Valor a Transferir</p>
+                            <p className="text-2xl font-black text-orange-800">R$ {u.pendingPixRefund.toFixed(2).replace('.', ',')}</p>
+                          </div>
+                          <button onClick={() => confirmPixTransfer(u.id)} className="bg-orange-600 text-white font-black px-6 py-3 rounded-xl hover:bg-orange-700 transition shadow-md w-full sm:w-auto">Confirmar Envio</button>
+                       </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {adminTab === 'pedidos' && (
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -1449,7 +1559,7 @@ export default function App() {
       {missingItemsModal.open && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
           <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-            <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Registrar Falta / Compensação</h3>
+            <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Registar Falta (Gerar Crédito)</h3>
             <p className="text-sm text-gray-500 mb-6 font-medium">Pedido #{missingItemsModal.order.id.slice(0,5)} - {missingItemsModal.order.customer}</p>
 
             <div className="space-y-3 mb-6">
@@ -1486,31 +1596,15 @@ export default function App() {
                const missingTotal = missingItemsModal.missingItems.reduce((sum, i) => sum + ((i.price || products.find(p=>p.id === i.id)?.price || 0) * (i.removedQtd || 0)), 0);
                return (
                  <>
-                   <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 mb-6">
-                     <p className="text-xs font-black uppercase tracking-widest text-orange-800 mb-3">Valor a ser compensado ao cliente:</p>
-                     <p className="text-3xl font-black text-orange-600 tracking-tighter mb-5">R$ {missingTotal.toFixed(2).replace('.', ',')}</p>
-                     
-                     <div className="flex flex-col gap-3">
-                       <label className={`flex items-center gap-3 cursor-pointer p-3 border-2 rounded-xl transition-all ${missingItemsModal.refundType === 'credit' ? 'border-emerald-600 bg-white shadow-sm' : 'border-transparent hover:bg-orange-100/50'}`}>
-                          <input type="radio" name="refundType" checked={missingItemsModal.refundType === 'credit'} onChange={() => setMissingItemsModal({...missingItemsModal, refundType: 'credit'})} className="hidden" />
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${missingItemsModal.refundType === 'credit' ? 'border-emerald-600' : 'border-orange-300'}`}>
-                             {missingItemsModal.refundType === 'credit' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full"></div>}
-                          </div>
-                          <span className="text-sm font-black text-slate-800">Gerar Crédito na Carteira (Automático)</span>
-                       </label>
-                       
-                       <label className={`flex items-center gap-3 cursor-pointer p-3 border-2 rounded-xl transition-all ${missingItemsModal.refundType === 'pix' ? 'border-emerald-600 bg-white shadow-sm' : 'border-transparent hover:bg-orange-100/50'}`}>
-                          <input type="radio" name="refundType" checked={missingItemsModal.refundType === 'pix'} onChange={() => setMissingItemsModal({...missingItemsModal, refundType: 'pix'})} className="hidden" />
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${missingItemsModal.refundType === 'pix' ? 'border-emerald-600' : 'border-orange-300'}`}>
-                             {missingItemsModal.refundType === 'pix' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full"></div>}
-                          </div>
-                          <span className="text-sm font-black text-slate-800">Marcar para Estorno (Devolução PIX)</span>
-                       </label>
-                     </div>
+                   <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 mb-6">
+                     <p className="text-xs font-black uppercase tracking-widest text-emerald-800 mb-2">Crédito Automático para o Cliente:</p>
+                     <p className="text-3xl font-black text-emerald-600 tracking-tighter mb-2">R$ {missingTotal.toFixed(2).replace('.', ',')}</p>
+                     <p className="text-xs font-medium text-emerald-700">Este valor será adicionado à Carteira Digital do cliente. Ele poderá solicitar o estorno via PIX posteriormente.</p>
                    </div>
+                   
                    <div className="flex gap-3">
-                      <button onClick={() => setMissingItemsModal({open: false, order: null, missingItems: [], refundType: 'credit'})} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
-                      <button onClick={() => handleConfirmFaltas(missingTotal)} disabled={missingTotal === 0} className={`flex-[2] py-4 text-white font-black rounded-xl shadow-lg transition-all ${missingTotal === 0 ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-800 hover:-translate-y-1'}`}>Confirmar Ação</button>
+                      <button onClick={() => setMissingItemsModal({open: false, order: null, missingItems: []})} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
+                      <button onClick={() => handleConfirmFaltas(missingTotal)} disabled={missingTotal === 0} className={`flex-[2] py-4 text-white font-black rounded-xl shadow-lg transition-all ${missingTotal === 0 ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-800 hover:-translate-y-1'}`}>Confirmar Falta</button>
                    </div>
                  </>
                )
