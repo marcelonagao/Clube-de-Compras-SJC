@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -19,7 +19,7 @@ const firebaseConfig = {
 // Inicializando o Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); // NOVO: Motor de Autenticação
+const auth = getAuth(app); // Motor de Autenticação
 
 // --- INJEÇÃO DO TAILWIND ---
 if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
@@ -52,12 +52,15 @@ export default function App() {
   const [customers, setCustomers] = useState([]);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
 
-  // --- NOVOS ESTADOS DE AUTENTICAÇÃO ---
+  // --- ESTADOS DE AUTENTICAÇÃO ---
   const [authLoading, setAuthLoading] = useState(true);
-  const [authMode, setAuthMode] = useState('login'); // 'login' ou 'register'
+  const [authMode, setAuthMode] = useState('login');
   const [loginPassword, setLoginPassword] = useState('');
   const [registerRole, setRegisterRole] = useState('cliente');
-  const [secretCode, setSecretCode] = useState(''); // NOVO: Estado para a senha secreta da equipe
+  const [secretCode, setSecretCode] = useState('');
+  
+  // --- ESTADOS DE PAGAMENTO (NOVOS) ---
+  const [pendingOrder, setPendingOrder] = useState(null); // Guarda o pedido que está a aguardar pagamento
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -81,11 +84,10 @@ export default function App() {
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
 
-  // --- ESCUTADOR DE AUTENTICAÇÃO (O FÍGADO DE SEGURANÇA) ---
+  // --- ESCUTADOR DE AUTENTICAÇÃO ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // O usuário tem login, vamos buscar os detalhes dele (cargo, polo, nome)
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const userDocSnap = await getDoc(userDocRef);
         
@@ -93,13 +95,11 @@ export default function App() {
           const userData = userDocSnap.data();
           setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
           
-          // Redireciona para a tela correta dependendo do cargo
           if (userData.role === 'consolidador') setCurrentScreen('dashboard_admin');
           else if (userData.role === 'representante') setCurrentScreen('dashboard_rep');
           else setCurrentScreen('shop');
         } else {
-          // Fallback de segurança
-          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Usuário' });
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Utilizador' });
           setCurrentScreen('shop');
         }
       } else {
@@ -132,7 +132,7 @@ export default function App() {
         setOrders(ordSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       } catch (error) {
-        console.error("Erro ao conectar no Firebase:", error);
+        console.error("Erro ao ligar ao Firebase:", error);
       } finally {
         setIsLoadingDB(false);
       }
@@ -146,57 +146,37 @@ export default function App() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // --- FUNÇÕES DE LOGIN, REGISTRO E SAÍDA ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
-      // O onAuthStateChanged vai detectar e fazer o resto automaticamente!
-      showToast('Login com sucesso!', 'success');
+      showToast('Sessão iniciada com sucesso!', 'success');
     } catch (error) {
       setAuthLoading(false);
-      if(error.code === 'auth/invalid-credential') showToast('Email ou senha incorretos.', 'error');
-      else showToast('Erro ao fazer login.', 'error');
+      if(error.code === 'auth/invalid-credential') showToast('Email ou palavra-passe incorretos.', 'error');
+      else showToast('Erro ao iniciar sessão.', 'error');
     }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
     if(!loginName || !loginEmail || !loginPassword || !loginWhatsapp) return showToast('Preencha todos os campos.', 'error');
-    if(loginPassword.length < 6) return showToast('A senha deve ter pelo menos 6 caracteres.', 'error');
+    if(loginPassword.length < 6) return showToast('A palavra-passe deve ter pelo menos 6 caracteres.', 'error');
     
-    // --- NOVA TRAVA DE SEGURANÇA ---
-    if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') {
-      return showToast('Código de Gestor inválido!', 'error');
-    }
-    if (registerRole === 'representante' && secretCode !== 'REP2024') {
-      return showToast('Código de Representante inválido!', 'error');
-    }
-    // -------------------------------
+    if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') return showToast('Código de Gestor inválido!', 'error');
+    if (registerRole === 'representante' && secretCode !== 'REP2024') return showToast('Código de Representante inválido!', 'error');
     
     setAuthLoading(true);
     try {
-      // 1. Cria a conta no cofre de autenticação
       const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
-      
-      // 2. Guarda os dados e o cargo do usuário na coleção 'users'
-      const newUserProfile = {
-        name: loginName,
-        email: loginEmail,
-        whatsapp: loginWhatsapp,
-        polo: selectedPolo,
-        role: registerRole // 'cliente', 'representante' ou 'consolidador'
-      };
+      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole };
       await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
-      
-      // 3. Adiciona também ao CRM geral para representantes poderem ver
       await addDoc(collection(db, "customers"), newUserProfile);
-      
       showToast('Conta criada com sucesso!', 'success');
     } catch (error) {
       setAuthLoading(false);
-      if(error.code === 'auth/email-already-in-use') showToast('Este e-mail já está cadastrado.', 'error');
+      if(error.code === 'auth/email-already-in-use') showToast('Este e-mail já está registado.', 'error');
       else showToast('Erro ao criar conta.', 'error');
     }
   };
@@ -208,7 +188,6 @@ export default function App() {
     setLoginPassword('');
     setAuthLoading(false);
   };
-  // ----------------------------------------
 
   const addToCart = (product) => {
     const existing = cart.find(item => item.id === product.id);
@@ -228,7 +207,7 @@ export default function App() {
 
   const confirmManualOrder = async (e) => {
     e.preventDefault();
-    if(manualCart.length === 0) return showToast('Adicione produtos ao pedido!', 'error');
+    if(manualCart.length === 0) return showToast('Adicione produtos à encomenda!', 'error');
     
     try {
       const newOrderData = {
@@ -248,15 +227,16 @@ export default function App() {
       
       setIsManualOrderModalOpen(false);
       setManualCustomerName(''); setManualCustomerEmail(''); setManualCustomerWhatsapp(''); setManualCart([]);
-      showToast('Pedido salvo na nuvem!', 'success');
+      showToast('Encomenda guardada na nuvem!', 'success');
     } catch(err) {
-      showToast('Erro ao salvar pedido.', 'error');
+      showToast('Erro ao guardar encomenda.', 'error');
     }
   };
 
+  // --- NOVA LÓGICA DE GATEWAY DE PAGAMENTO ---
   const processGatewayPayment = async () => {
     setIsProcessingPayment(true);
-    const hasFee = paymentMethod === 'credit' || paymentMethod === 'debit';
+    const hasFee = paymentMethod === 'credit';
     const finalTotal = hasFee ? cartTotal * 1.05 : cartTotal;
 
     try {
@@ -267,21 +247,46 @@ export default function App() {
         polo: user.polo,
         total: finalTotal,
         method: paymentMethod,
-        status: 'pago',
+        status: 'aguardando_pagamento', // Começa como "A Aguardar" até o banco confirmar!
         date: new Date().toISOString(),
         items: cart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd }))
       };
       
+      // Guarda o pedido na base de dados
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
-      setOrders([...orders, { id: orderRef.id, ...newOrderData }]);
+      const savedOrder = { id: orderRef.id, ...newOrderData };
+      
+      setOrders([...orders, savedOrder]);
+      setPendingOrder(savedOrder); // Guarda o pedido atual para mostrar no Gateway
       setCart([]);
       setIsProcessingPayment(false);
-      setCurrentScreen('success');
+      
+      // Direciona para o Gateway correspondente
+      if (paymentMethod === 'pix') setCurrentScreen('gateway_pix');
+      else setCurrentScreen('gateway_credit');
+      
     } catch(err) {
       setIsProcessingPayment(false);
-      showToast('Erro ao processar pagamento.', 'error');
+      showToast('Erro ao processar integração bancária.', 'error');
     }
   };
+
+  // Simula o "Webhook" (O aviso que o banco manda de volta a dizer que o cliente pagou)
+  const simulateBankWebhook = async () => {
+    if (!pendingOrder) return;
+    try {
+      // Atualiza o estado na base de dados para "pago"
+      await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' });
+      
+      // Atualiza o estado localmente
+      setOrders(orders.map(o => o.id === pendingOrder.id ? { ...o, status: 'pago' } : o));
+      
+      setCurrentScreen('success');
+    } catch (err) {
+      showToast('Erro ao simular webhook.', 'error');
+    }
+  };
+  // ------------------------------------------
 
   const saveProduct = async (e) => {
     e.preventDefault();
@@ -307,19 +312,17 @@ export default function App() {
       }
       setEditingProduct(null);
       setImagePreview('');
-      showToast('Produto sincronizado com a nuvem!', 'success');
-    } catch(err) {
-      showToast('Erro ao salvar produto.', 'error');
-    }
+      showToast('Produto sincronizado!', 'success');
+    } catch(err) { showToast('Erro ao guardar produto.', 'error'); }
   };
 
   const deleteProduct = async (id) => {
-    if(window.confirm('Remover este produto do Firebase?')) {
+    if(window.confirm('Remover este produto permanentemente?')) {
       try {
         await deleteDoc(doc(db, "products", id));
         setProducts(products.filter(p => p.id !== id));
-        showToast('Produto excluído da nuvem.', 'success');
-      } catch(err) { showToast('Erro ao excluir.', 'error'); }
+        showToast('Produto removido.', 'success');
+      } catch(err) { showToast('Erro ao remover.', 'error'); }
     }
   };
 
@@ -337,14 +340,11 @@ export default function App() {
         let width = img.width;
         let height = img.height;
 
-        if (width > height) {
-          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-        } else {
-          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-        }
+        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+        
         canvas.width = width;
         canvas.height = height;
-        
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
@@ -364,23 +364,23 @@ export default function App() {
     const link = document.createElement("a");
     link.href = url; link.download = "modelo_catalogo.csv";
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    showToast('Modelo CSV baixado com sucesso!', 'success');
+    showToast('Modelo descarregado!', 'success');
   };
 
   const handleCSVUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    showToast(`Tabela "${file.name}" carregada! Em breve processaremos no Firebase.`, 'success');
+    showToast(`Tabela "${file.name}" carregada! Em breve processaremos.`, 'success');
     e.target.value = null;
   };
 
-  // --- NOVA TELA DE LOGIN SEGURA ---
+  // --- ECRÃS ---
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Leaf className="w-16 h-16 text-emerald-600 animate-bounce mx-auto mb-4" />
-          <p className="text-emerald-800 font-bold tracking-widest uppercase animate-pulse">Verificando Segurança...</p>
+          <p className="text-emerald-800 font-bold tracking-widest uppercase animate-pulse">A verificar Segurança...</p>
         </div>
       </div>
     );
@@ -391,7 +391,7 @@ export default function App() {
       <div className="bg-white p-8 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-gray-100">
         <Leaf className="text-emerald-700 w-16 h-16 mx-auto mb-4 drop-shadow-sm" />
         <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tight">Clube de Compras</h1>
-        <p className="text-gray-500 mb-8 text-sm font-medium">Alimentos frescos direto para você</p>
+        <p className="text-gray-500 mb-8 text-sm font-medium">Alimentos frescos diretos para si</p>
         
         {authMode === 'login' ? (
           <form onSubmit={handleLogin} className="text-left space-y-4">
@@ -400,12 +400,12 @@ export default function App() {
               <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required placeholder="seu@email.com" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Senha Secreta</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Palavra-passe</label>
               <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required placeholder="••••••••" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" />
             </div>
             
             <button type="submit" className="w-full flex items-center justify-center bg-emerald-700 text-white font-bold py-4 rounded-xl hover:bg-emerald-800 transition shadow-lg shadow-emerald-700/20 mt-6">
-              Entrar com Segurança
+              Iniciar Sessão Segura
             </button>
             <button type="button" onClick={() => {setAuthMode('register'); setLoginPassword('');}} className="w-full mt-4 text-emerald-600 font-bold hover:underline text-sm">
               Não tem conta? Criar agora
@@ -414,25 +414,23 @@ export default function App() {
         ) : (
           <form onSubmit={handleRegister} className="text-left space-y-4 max-h-[60vh] overflow-y-auto px-2 pb-2">
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Como deseja se cadastrar?</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Perfil de Acesso</label>
               <select value={registerRole} onChange={(e) => setRegisterRole(e.target.value)} className="w-full border-2 border-emerald-100 bg-emerald-50/30 text-emerald-800 rounded-xl p-3 focus:border-emerald-600 outline-none font-bold">
-                <option value="cliente">👤 Cliente Padrão</option>
+                <option value="cliente">👤 Cliente Normal</option>
                 <option value="representante">💼 Representante Logístico</option>
                 <option value="consolidador">⭐ Gestor Geral (Admin)</option>
               </select>
             </div>
 
-            {/* --- NOVO CAMPO DE CÓDIGO SECRETO --- */}
             {registerRole !== 'cliente' && (
               <div className="bg-red-50/50 border border-red-100 p-3 rounded-xl">
-                <label className="block text-xs font-bold text-red-700 mb-1 uppercase tracking-wider">Código de Autorização da Equipe</label>
+                <label className="block text-xs font-bold text-red-700 mb-1 uppercase tracking-wider">Código de Autorização da Equipa</label>
                 <input type="password" value={secretCode} onChange={(e) => setSecretCode(e.target.value)} required placeholder="Chave secreta..." className="w-full border-b-2 border-red-200 bg-white rounded-t-lg p-3 focus:border-red-500 outline-none font-bold text-red-700" />
               </div>
             )}
-            {/* ------------------------------------ */}
 
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Seu Nome Completo</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Nome Completo</label>
               <input type="text" value={loginName} onChange={(e) => setLoginName(e.target.value)} required placeholder="Ex: João Silva" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -452,15 +450,15 @@ export default function App() {
               <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required placeholder="seu@email.com" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Criar Senha Segura</label>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Criar Palavra-passe</label>
               <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required placeholder="Mínimo 6 caracteres" minLength="6" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
             </div>
             
             <button type="submit" className="w-full flex items-center justify-center bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition shadow-lg mt-6">
-              Criar Conta e Acessar
+              Criar Conta e Aceder
             </button>
             <button type="button" onClick={() => {setAuthMode('login'); setLoginPassword(''); setSecretCode('');}} className="w-full mt-4 text-gray-500 font-bold hover:text-gray-800 text-sm">
-              Voltar para o Login
+              Voltar ao Login
             </button>
           </form>
         )}
@@ -536,7 +534,7 @@ export default function App() {
   };
 
   const renderCheckout = () => {
-    const hasFee = paymentMethod === 'credit' || paymentMethod === 'debit';
+    const hasFee = paymentMethod === 'credit';
     const feeAmount = hasFee ? cartTotal * 0.05 : 0;
     const finalTotal = cartTotal + feeAmount;
 
@@ -544,11 +542,11 @@ export default function App() {
       <div className="p-4 max-w-2xl mx-auto pb-24 pt-8">
         <div className="flex items-center mb-8">
           <button onClick={() => setCurrentScreen('shop')} className="mr-4 flex items-center text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition text-sm shadow-sm"><ArrowLeft className="w-4 h-4 mr-2" /> Voltar</button>
-          <h2 className="text-3xl font-black text-gray-800 tracking-tight">Finalizar Pedido</h2>
+          <h2 className="text-3xl font-black text-gray-800 tracking-tight">Finalizar Encomenda</h2>
         </div>
         
         <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 mb-8">
-          <h3 className="font-black text-emerald-800 mb-5 text-sm uppercase tracking-widest flex items-center"><ShoppingCart className="w-4 h-4 mr-2"/> Resumo da Cesta</h3>
+          <h3 className="font-black text-emerald-800 mb-5 text-sm uppercase tracking-widest flex items-center"><ShoppingCart className="w-4 h-4 mr-2"/> Resumo do Cesto</h3>
           <div className="space-y-4">
             {cart.map(item => (
               <div key={item.id} className="flex justify-between items-center text-gray-700 border-b border-gray-50 pb-4">
@@ -591,11 +589,90 @@ export default function App() {
         </div>
 
         <button onClick={processGatewayPayment} disabled={isProcessingPayment} className={`w-full text-white font-black text-lg py-5 rounded-2xl shadow-xl flex items-center justify-center transition-all ${isProcessingPayment ? 'bg-emerald-400 cursor-wait' : 'bg-emerald-700 hover:bg-emerald-800 hover:shadow-emerald-700/30 hover:-translate-y-1'}`}>
-          {isProcessingPayment ? <span className="animate-pulse flex items-center">Processando pedido seguro...</span> : `Confirmar Pagamento Seguramente`}
+          {isProcessingPayment ? <span className="animate-pulse flex items-center">A processar o seu pedido...</span> : `Gerar Pagamento Seguro`}
         </button>
       </div>
     );
   };
+
+  // --- ECRÃ DO GATEWAY PIX (NOVO) ---
+  const renderPixGateway = () => {
+    if (!pendingOrder) return null;
+    const pixCode = `00020126580014br.gov.bcb.pix0136${pendingOrder.id}-teste-simulado-sjc5204000053039865405${pendingOrder.total.toFixed(2)}5802BR5913MARCELO SILVA6009SAO PAULO62070503***6304${pendingOrder.id.slice(0,4)}6804A92B`;
+    
+    return (
+      <div className="p-4 max-w-lg mx-auto pt-10 pb-24 text-center">
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-3 bg-emerald-500"></div>
+          
+          <QrCode className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
+          <h2 className="text-3xl font-black text-gray-800 tracking-tight mb-2">Pague com PIX</h2>
+          <p className="text-gray-500 font-medium mb-8">A sua encomenda está guardada! Abra a aplicação do seu banco e leia o QR Code ou cole o código abaixo.</p>
+          
+          <div className="bg-gray-50 p-6 rounded-3xl border-2 border-dashed border-gray-200 mb-8 inline-block">
+             {/* Simulação visual de um QR Code */}
+             <div className="w-48 h-48 bg-white border border-gray-100 rounded-2xl mx-auto p-2 shadow-sm grid grid-cols-4 grid-rows-4 gap-1">
+               {Array.from({length: 16}).map((_, i) => (
+                 <div key={i} className={`rounded-sm ${Math.random() > 0.3 ? 'bg-slate-800' : 'bg-transparent'}`}></div>
+               ))}
+               <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="bg-white p-2 rounded-xl shadow-md"><Leaf className="w-8 h-8 text-emerald-600"/></div></div>
+             </div>
+          </div>
+
+          <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 flex items-center justify-between mb-8 group">
+            <p className="text-xs font-mono text-emerald-800 truncate mr-4">{pixCode}</p>
+            <button onClick={() => { navigator.clipboard.writeText(pixCode); showToast('Código Copiado!', 'success'); }} className="bg-white text-emerald-700 p-2.5 rounded-xl shadow-sm border border-emerald-200 hover:bg-emerald-600 hover:text-white transition-colors flex-shrink-0">
+              <Copy className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-center text-orange-600 font-bold mb-10 text-sm bg-orange-50 py-2 rounded-lg">
+            <Clock className="w-4 h-4 mr-2" animate-spin /> Aguardar confirmação do banco...
+          </div>
+
+          {/* BOTÃO PARA SIMULAR O WEBHOOK */}
+          <div className="border-t border-gray-100 pt-8 mt-4">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Área de Teste do Programador</p>
+            <button onClick={simulateBankWebhook} className="w-full bg-slate-800 text-emerald-400 font-black py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg flex items-center justify-center">
+              Simular Confirmação do Banco
+            </button>
+            <p className="text-xs text-gray-400 mt-3">Na vida real, este ecrã muda de forma automática quando o banco emite o Webhook de pagamento.</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCreditGateway = () => {
+    if (!pendingOrder) return null;
+    return (
+      <div className="p-4 max-w-lg mx-auto pt-10 pb-24">
+        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden text-center">
+          <div className="absolute top-0 left-0 w-full h-3 bg-emerald-500"></div>
+          <CreditCard className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
+          <h2 className="text-3xl font-black text-gray-800 tracking-tight mb-2">Cartão de Crédito</h2>
+          <p className="text-gray-500 font-medium mb-8">Introduza os dados de forma segura (Modo de Simulação).</p>
+          
+          <div className="space-y-4 text-left bg-slate-50 p-6 rounded-2xl border border-gray-100 mb-8">
+             <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Número do Cartão</label><input type="text" placeholder="0000 0000 0000 0000" className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-emerald-500 outline-none" /></div>
+             <div className="grid grid-cols-2 gap-4">
+               <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Validade</label><input type="text" placeholder="MM/AA" className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-emerald-500 outline-none" /></div>
+               <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">CVC</label><input type="text" placeholder="123" className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-emerald-500 outline-none" /></div>
+             </div>
+             <div><label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-widest">Nome Impresso</label><input type="text" placeholder="JOAO SILVA" className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-emerald-500 outline-none uppercase" /></div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-8">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Área de Teste do Programador</p>
+            <button onClick={simulateBankWebhook} className="w-full bg-slate-800 text-emerald-400 font-black py-4 rounded-xl hover:bg-slate-900 transition-colors shadow-lg">
+              Simular Pagamento Aprovado
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  // ------------------------------------------
 
   const renderMyOrders = () => {
     const myOrders = orders.filter(o => o.customer === user.name && o.email === user.email);
@@ -603,36 +680,46 @@ export default function App() {
       <div className="p-4 max-w-4xl mx-auto pt-8 pb-24">
         <div className="flex items-center mb-8">
           <button onClick={() => setCurrentScreen('shop')} className="mr-4 flex items-center text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition text-sm shadow-sm"><ArrowLeft className="w-4 h-4 mr-2" /> Loja</button>
-          <h2 className="text-3xl font-black text-gray-800 tracking-tight">Meus Pedidos</h2>
+          <h2 className="text-3xl font-black text-gray-800 tracking-tight">As Minhas Encomendas</h2>
         </div>
 
         {myOrders.length === 0 ? (
           <div className="bg-white p-12 rounded-[2rem] shadow-sm border border-gray-100 text-center">
             <Package className="w-20 h-20 text-gray-200 mx-auto mb-6" />
-            <p className="text-gray-500 font-medium mb-6">Sua despensa de pedidos ainda está vazia.</p>
+            <p className="text-gray-500 font-medium mb-6">A sua despensa de pedidos ainda está vazia.</p>
             <button onClick={() => setCurrentScreen('shop')} className="bg-emerald-700 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-800 transition shadow-lg">Descobrir Produtos</button>
           </div>
         ) : (
           <div className="space-y-6">
             {myOrders.slice().reverse().map((order) => (
-              <div key={order.id} className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-2 h-full bg-emerald-500"></div>
+              <div key={order.id} className={`bg-white p-6 rounded-[2rem] shadow-sm border relative overflow-hidden ${order.status === 'aguardando_pagamento' ? 'border-orange-200' : 'border-gray-100'}`}>
+                <div className={`absolute top-0 left-0 w-2 h-full ${order.status === 'aguardando_pagamento' ? 'bg-orange-500' : 'bg-emerald-500'}`}></div>
                 <div className="flex justify-between items-start mb-4 border-b border-gray-50 pb-4">
                   <div>
                     <p className="font-bold text-gray-400 text-xs tracking-widest uppercase mb-1">{new Date(order.date).toLocaleDateString('pt-BR')}</p>
                     <p className="font-black text-gray-800 text-lg">Pedido <span className="text-emerald-700">#{order.id.slice(0, 5)}</span></p>
                   </div>
-                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-black shadow-sm flex items-center"> <CheckCircle className="w-3 h-3 mr-1"/> Confirmado </span>
+                  
+                  {order.status === 'aguardando_pagamento' ? (
+                     <span className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-1.5 rounded-full text-xs font-black shadow-sm flex items-center"> <Clock className="w-3 h-3 mr-1 animate-spin"/> A Aguardar PIX </span>
+                  ) : (
+                     <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-black shadow-sm flex items-center"> <CheckCircle className="w-3 h-3 mr-1"/> Confirmado </span>
+                  )}
+                  
                 </div>
                 <div className="space-y-3 mb-6">
                   {order.items.map((item, idx) => (<div key={idx} className="flex items-center text-sm text-gray-600"><span className="w-8 h-8 bg-gray-50 text-emerald-700 font-black rounded-lg flex items-center justify-center mr-3 border border-gray-100">{item.qtd}x</span> <span className="font-medium">{item.name}</span></div>))}
                 </div>
                 <div className="flex justify-between items-end bg-slate-50 p-4 rounded-xl">
                   <div>
-                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Total Pago</span>
+                     <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Total a Pagar</span>
                      <span className="font-black text-2xl text-emerald-800">R$ {order.total.toFixed(2).replace('.', ',')}</span>
                   </div>
-                  <span className="text-xs font-bold text-gray-400 uppercase bg-white px-3 py-1 rounded-md border border-gray-200">{order.method}</span>
+                  {order.status === 'aguardando_pagamento' ? (
+                     <button onClick={() => { setPendingOrder(order); setPaymentMethod(order.method); setCurrentScreen(order.method === 'pix' ? 'gateway_pix' : 'gateway_credit'); }} className="text-xs font-black text-white uppercase bg-orange-500 px-4 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition shadow-sm">Pagar Agora</button>
+                  ) : (
+                     <span className="text-xs font-bold text-gray-400 uppercase bg-white px-3 py-1 rounded-md border border-gray-200">{order.method}</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -643,6 +730,7 @@ export default function App() {
   };
 
   const renderRepDashboard = () => {
+    // Gestor Logístico só vê pedidos PAGOS e confirmados!
     const myPoloOrders = orders.filter(o => o.polo === user.polo && o.status === 'pago');
     const appOrders = myPoloOrders.filter(o => o.method !== 'dinheiro/pix direto');
     const manualOrders = myPoloOrders.filter(o => o.method === 'dinheiro/pix direto');
@@ -667,7 +755,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors">
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Pelo App</span>
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Pelo App (Confirmados)</span>
             <span className="text-4xl font-black text-gray-800 tracking-tighter">{appOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
             <span className="text-sm text-emerald-600 font-black mt-2 bg-emerald-50 self-start px-2 py-1 rounded-md">R$ {sumTotal(appOrders).toFixed(2).replace('.', ',')}</span>
           </div>
@@ -786,87 +874,8 @@ export default function App() {
     );
   };
 
-  const renderPrintView = () => {
-    const myPoloOrders = orders.filter(o => o.polo === user.polo && o.status === 'pago').sort((a, b) => a.customer.localeCompare(b.customer));
-    return (
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-8 font-sans">
-        <div className="max-w-4xl mx-auto mb-8 flex justify-between items-center print:hidden bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-          <button onClick={() => setCurrentScreen('dashboard_rep')} className="flex items-center text-gray-500 hover:text-gray-800 font-bold px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition"><ArrowLeft className="w-5 h-5 mr-2" /> Voltar</button>
-          <button onClick={() => window.print()} className="flex items-center bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl hover:bg-emerald-800 shadow-lg transition"><Printer className="w-5 h-5 mr-2" /> Imprimir Documento</button>
-        </div>
-        <div className="max-w-4xl mx-auto bg-white p-8 sm:p-16 shadow-xl rounded-[2rem] print:shadow-none print:rounded-none print:p-0">
-          <div className="text-center border-b-4 border-slate-800 pb-8 mb-10">
-            <h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Manifesto de Separação</h1>
-            <p className="text-xl text-emerald-700 font-bold mt-2">Unidade Logística: {user.polo}</p>
-          </div>
-          <div className="space-y-10">
-            {myPoloOrders.length === 0 ? (<p className="text-center text-gray-400 font-medium">Não há romaneios abertos para esta unidade.</p>) : (
-              myPoloOrders.map(order => (
-                <div key={order.id} className="break-inside-avoid border-2 border-gray-100 rounded-2xl p-8 bg-slate-50/30 relative">
-                  <div className="absolute top-0 right-8 bg-slate-800 text-white px-4 py-1 rounded-b-lg font-black text-sm">#{order.id.slice(0,5)}</div>
-                  <div className="flex justify-between items-start border-b-2 border-gray-200 pb-5 mb-5">
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-800">{order.customer}</h2>
-                      {order.whatsapp && <p className="text-sm font-bold text-emerald-700 mt-1 flex items-center">Contato: {order.whatsapp}</p>}
-                    </div>
-                  </div>
-                  <table className="w-full text-left">
-                    <thead><tr className="text-xs uppercase font-black text-gray-400 border-b border-gray-200"><th className="pb-3 w-20">Volume</th><th className="pb-3">Descrição do Produto</th><th className="pb-3 text-right">Check</th></tr></thead>
-                    <tbody>
-                      {order.items.map((item, idx) => (
-                        <tr key={idx} className="border-b border-gray-100 last:border-0"><td className="py-4 font-black text-2xl text-slate-800">{item.qtd}x</td><td className="py-4 text-gray-700 font-bold text-lg">{item.name}</td><td className="py-4 text-right"><div className="w-8 h-8 border-4 border-gray-300 rounded-lg inline-block"></div></td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderAdminPrintView = () => {
-    const paidOrders = orders.filter(o => o.status === 'pago');
-    const itemsByPolo = {};
-    paidOrders.forEach(order => {
-      if (!itemsByPolo[order.polo]) itemsByPolo[order.polo] = {};
-      order.items.forEach(item => {
-        if (!itemsByPolo[order.polo][item.id]) itemsByPolo[order.polo][item.id] = { ...products.find(p => p.id === item.id) || item, totalQtd: 0 };
-        itemsByPolo[order.polo][item.id].totalQtd += item.qtd;
-      });
-    });
-
-    return (
-      <div className="min-h-screen bg-slate-50 p-4 sm:p-8 font-sans">
-        <div className="max-w-4xl mx-auto mb-8 flex justify-between items-center print:hidden bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-          <button onClick={() => setCurrentScreen('dashboard_admin')} className="flex items-center text-gray-500 hover:text-gray-800 font-bold px-4 py-2 bg-gray-50 rounded-xl hover:bg-gray-100 transition"><ArrowLeft className="w-5 h-5 mr-2" /> Voltar</button>
-          <button onClick={() => window.print()} className="flex items-center bg-slate-800 text-white font-bold px-6 py-3 rounded-xl hover:bg-slate-900 shadow-lg transition"><Printer className="w-5 h-5 mr-2" /> Imprimir Despacho Master</button>
-        </div>
-        <div className="max-w-4xl mx-auto bg-white p-8 sm:p-16 shadow-xl rounded-[2rem] print:shadow-none print:rounded-none print:p-0">
-          <div className="text-center border-b-4 border-emerald-700 pb-8 mb-10"><h1 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Carga e Despacho</h1><p className="text-gray-500 font-bold mt-2">Relatório Consolidado Master</p></div>
-          <div className="space-y-12">
-            {Object.entries(itemsByPolo).map(([polo, items]) => (
-              <div key={polo} className="break-inside-avoid border-4 border-slate-800 rounded-3xl p-8 relative mt-8 bg-white shadow-sm">
-                <h2 className="absolute -top-6 left-8 px-6 text-2xl font-black tracking-tighter bg-emerald-700 text-white py-2 rounded-xl shadow-md">DESTINO: {polo}</h2>
-                <table className="w-full text-left mt-6">
-                  <thead><tr className="text-xs uppercase font-black text-gray-400 border-b-2 border-gray-100"><th className="pb-3 w-28">Volumes</th><th className="pb-3">Mercadoria</th><th className="pb-3">Ref/SKU</th><th className="pb-3 text-right">Status</th></tr></thead>
-                  <tbody>
-                    {Object.values(items).sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(item => (
-                      <tr key={item.id} className="border-b border-gray-50 last:border-0"><td className="py-4 font-black text-3xl text-emerald-700">{item.totalQtd}</td><td className="py-4 text-gray-800 font-bold text-xl">{item.name}</td><td className="py-4 text-gray-400 font-black text-xs uppercase tracking-widest">{item.sku}</td><td className="py-4 text-right"><div className="w-8 h-8 border-4 border-gray-300 rounded-xl inline-block"></div></td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderAdminDashboard = () => {
+    // Gestor Administrativo só calcula para envio de fornecedor pedidos PAGOS!
     const paidOrders = orders.filter(o => o.status === 'pago');
     const consolidatedItems = {};
     
@@ -922,19 +931,19 @@ export default function App() {
             <div className="bg-slate-800 p-6 font-bold text-white flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b-4 border-emerald-600">
               <span className="flex items-center text-xl font-black tracking-tight"><Package className="w-6 h-6 mr-3 text-emerald-400" /> Inteligência de Estoque</span>
               <div className="flex flex-wrap items-center gap-3">
-                <span className="bg-slate-900/50 px-4 py-2 rounded-xl text-sm text-emerald-400 font-black border border-slate-700">Faturamento: R$ {paidOrders.reduce((sum, o) => sum + o.total, 0).toFixed(2).replace('.', ',')}</span>
+                <span className="bg-slate-900/50 px-4 py-2 rounded-xl text-sm text-emerald-400 font-black border border-slate-700">Faturação Paga: R$ {paidOrders.reduce((sum, o) => sum + o.total, 0).toFixed(2).replace('.', ',')}</span>
                 <button onClick={downloadPurchaseOrderCSV} className="flex items-center bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-500 transition shadow-lg"><Download className="w-4 h-4 mr-2"/> Gerar Planilha Fornecedor</button>
                 <button onClick={() => setCurrentScreen('print_admin')} className="flex items-center bg-white text-slate-800 px-4 py-2 rounded-xl font-black hover:bg-gray-100 transition shadow-lg"><Printer className="w-4 h-4 mr-2"/> Carga & Despacho</button>
               </div>
             </div>
             
             <div className="bg-emerald-50/50 p-6 border-b border-emerald-100 text-sm text-emerald-800">
-              <p className="font-black flex items-center mb-1 text-base tracking-tight"><ClipboardList className="w-5 h-5 mr-2 text-emerald-600"/> Robô de Abastecimento</p>
-              <p className="font-medium text-emerald-700/80">O sistema calcula as sobras do mês passado. Só é sugerida a compra de novas caixas quando a demanda dos clientes ultrapassa o estoque local.</p>
+              <p className="font-black flex items-center mb-1 text-base tracking-tight"><ClipboardList className="w-5 h-5 mr-2 text-emerald-600"/> Robô de Abastecimento (Apenas Pedidos Pagos)</p>
+              <p className="font-medium text-emerald-700/80">O sistema calcula as sobras do mês passado. Só é sugerida a compra de novas caixas quando a procura dos clientes ultrapassa o stock local.</p>
             </div>
 
             <div className="divide-y divide-gray-50">
-              {Object.values(consolidatedItems).length === 0 && <p className="p-12 text-center text-gray-400 font-medium text-lg">Nenhum pedido processado neste ciclo.</p>}
+              {Object.values(consolidatedItems).length === 0 && <p className="p-12 text-center text-gray-400 font-medium text-lg">Nenhum pedido pago processado neste ciclo.</p>}
               {Object.values(consolidatedItems).map(prod => {
                 const moq = prod.minOrderQuantity || 1;
                 const estoqueLocalAtual = prod.stockLocal || 0;
@@ -1000,7 +1009,7 @@ export default function App() {
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
-                <thead><tr className="bg-slate-50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100"><th className="p-5">Nome Registado</th><th className="p-5">Polo / Unidade</th><th className="p-5">Contato</th><th className="p-5">E-mail</th></tr></thead>
+                <thead><tr className="bg-slate-50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100"><th className="p-5">Nome Registado</th><th className="p-5">Polo / Unidade</th><th className="p-5">Contacto</th><th className="p-5">E-mail</th></tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {customers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(c => (
                     <tr key={c.id} className="hover:bg-slate-50 transition-colors"><td className="p-5 font-black text-slate-800 text-lg">{c.name}</td><td className="p-5 text-sm font-bold text-gray-500"><span className="bg-white border border-gray-200 px-3 py-1 rounded-lg">{c.polo}</span></td><td className="p-5 text-sm font-black text-emerald-600">{c.whatsapp || '---'}</td><td className="p-5 text-sm font-medium text-gray-400">{c.email || '---'}</td></tr>
@@ -1016,8 +1025,8 @@ export default function App() {
             <div className="bg-emerald-50/50 border border-emerald-100 p-8 rounded-[2rem] flex flex-col md:flex-row items-center justify-between shadow-sm">
               <div className="mb-6 md:mb-0">
                 <h3 className="font-black text-emerald-900 text-xl tracking-tight flex items-center mb-2"><FileSpreadsheet className="w-6 h-6 mr-3 text-emerald-600"/> Importação Massiva (Fornecedor)</h3>
-                <p className="text-sm font-medium text-emerald-700/80 mb-4 max-w-md">Atualize todos os preços e SKUs de uma vez fazendo o upload da planilha mensal.</p>
-                <button onClick={downloadCSVTemplate} className="text-xs font-black text-emerald-700 uppercase tracking-widest hover:text-emerald-900 flex items-center bg-white px-4 py-2 rounded-lg border border-emerald-200 shadow-sm"><Download className="w-4 h-4 mr-2" /> Baixar Template Padrão</button>
+                <p className="text-sm font-medium text-emerald-700/80 mb-4 max-w-md">Atualize todos os preços e SKUs de uma vez fazendo o upload da folha de cálculo mensal.</p>
+                <button onClick={downloadCSVTemplate} className="text-xs font-black text-emerald-700 uppercase tracking-widest hover:text-emerald-900 flex items-center bg-white px-4 py-2 rounded-lg border border-emerald-200 shadow-sm"><Download className="w-4 h-4 mr-2" /> Baixar Modelo Padrão</button>
               </div>
               <label className="cursor-pointer bg-emerald-700 text-white font-black py-4 px-8 rounded-2xl hover:bg-emerald-800 transition-all flex items-center shadow-lg shadow-emerald-700/30 hover:-translate-y-1 transform whitespace-nowrap">
                 <Upload className="w-5 h-5 mr-3" /><span>Fazer Upload CSV</span><input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
@@ -1032,7 +1041,6 @@ export default function App() {
               </h3>
               <form key={editingProduct?.id || 'new'} onSubmit={saveProduct} className="space-y-6">
                 
-                {/* --- SEÇÃO DA IMAGEM --- */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-6 bg-slate-50 border border-gray-100 rounded-2xl">
                   <div className="w-32 h-32 bg-white border-2 border-gray-100 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm relative group">
                     {imagePreview ? (
@@ -1052,10 +1060,9 @@ export default function App() {
                       </label>
                       <input name="imageFallback" defaultValue={(!editingProduct?.image || editingProduct.image.length > 5) ? '' : editingProduct.image} placeholder="Ou cole um Emoji (Ex: 🍎)" className="flex-1 bg-white border-2 border-gray-100 rounded-xl p-3 text-sm font-medium focus:border-emerald-500 outline-none transition-colors" />
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Formatos aceitos: JPG, PNG ou Emoji direto. Autocompressão ativa.</p>
+                    <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Formatos aceites: JPG, PNG ou Emoji direto. Autocompressão ativa.</p>
                   </div>
                 </div>
-                {/* ----------------------- */}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Código SKU</label><input name="sku" defaultValue={editingProduct?.sku || ''} required placeholder="EX: HORT-001" className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none uppercase font-black text-slate-700 transition-colors" /></div>
@@ -1077,7 +1084,7 @@ export default function App() {
                 <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Descrição</label><textarea name="description" defaultValue={editingProduct?.description || ''} placeholder="Destaque as qualidades do produto..." className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-4 focus:border-emerald-500 focus:bg-white outline-none font-medium text-gray-600 transition-colors" rows="2"></textarea></div>
                 <div className="flex justify-end gap-3 mt-4 pt-6 border-t border-gray-100">
                   {editingProduct && <button type="button" onClick={() => {setEditingProduct(null); setImagePreview('');}} className="px-6 py-4 bg-white border-2 border-gray-200 text-gray-500 font-black rounded-xl hover:bg-gray-50 hover:text-gray-700 transition-colors">Cancelar Edição</button>}
-                  <button type="submit" className="px-10 py-4 bg-emerald-700 text-white font-black rounded-xl hover:bg-emerald-800 shadow-lg shadow-emerald-700/30 transition-all hover:-translate-y-1">Guardar no Banco de Dados</button>
+                  <button type="submit" className="px-10 py-4 bg-emerald-700 text-white font-black rounded-xl hover:bg-emerald-800 shadow-lg shadow-emerald-700/30 transition-all hover:-translate-y-1">Guardar na Base de Dados</button>
                 </div>
               </form>
             </div>
@@ -1140,7 +1147,7 @@ export default function App() {
             <div className="flex items-center space-x-4">
               {user?.role === 'cliente' && (
                 <button onClick={() => setCurrentScreen(currentScreen === 'my_orders' ? 'shop' : 'my_orders')} className="text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition-colors shadow-sm">
-                  {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'Meus Pedidos'}
+                  {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'As Minhas Encomendas'}
                 </button>
               )}
               <div className="flex flex-col items-end hidden sm:flex">
@@ -1159,6 +1166,8 @@ export default function App() {
         {currentScreen === 'login' && renderLogin()}
         {currentScreen === 'shop' && renderShop()}
         {currentScreen === 'checkout' && renderCheckout()}
+        {currentScreen === 'gateway_pix' && renderPixGateway()}
+        {currentScreen === 'gateway_credit' && renderCreditGateway()}
         {currentScreen === 'my_orders' && renderMyOrders()}
         {currentScreen === 'dashboard_rep' && renderRepDashboard()}
         {currentScreen === 'print_rep' && renderPrintView()}
@@ -1169,18 +1178,18 @@ export default function App() {
             <div className="w-32 h-32 bg-emerald-50 rounded-full flex items-center justify-center mb-8 border-4 border-emerald-100">
                <CheckCircle className="w-16 h-16 text-emerald-600" />
             </div>
-            <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Pedido Confirmado!</h2>
-            <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">Tudo certo com a sua compra. O seu pedido já foi registado na nossa base com segurança.</p>
-            <button onClick={() => setCurrentScreen('shop')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Continuar a Comprar</button>
+            <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Pagamento Confirmado!</h2>
+            <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">Tudo certo com a sua compra. O seu pedido acabou de ser libertado para a equipa de logística.</p>
+            <button onClick={() => setCurrentScreen('my_orders')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Ver Os Meus Pedidos</button>
           </div>
         )}
       </main>
 
-      {user?.role === 'cliente' && currentScreen !== 'checkout' && currentScreen !== 'success' && currentScreen !== 'my_orders' && (
+      {user?.role === 'cliente' && currentScreen !== 'checkout' && currentScreen !== 'success' && currentScreen !== 'my_orders' && currentScreen !== 'gateway_pix' && currentScreen !== 'gateway_credit' && (
         <div className="fixed bottom-0 w-full bg-white/80 backdrop-blur-md border-t border-gray-200 p-4 pb-safe z-50">
           <div className="max-w-md mx-auto">
             <button 
-              onClick={() => cart.length > 0 ? setCurrentScreen('checkout') : showToast('Sua cesta está vazia! Adicione produtos saudáveis primeiro.', 'error')} 
+              onClick={() => cart.length > 0 ? setCurrentScreen('checkout') : showToast('O seu cesto está vazio! Adicione produtos saudáveis primeiro.', 'error')} 
               className={`w-full flex items-center justify-center py-4 rounded-2xl font-black transition-all relative ${cart.length > 0 ? 'bg-emerald-700 text-white shadow-xl shadow-emerald-700/30 hover:bg-emerald-800 hover:-translate-y-1' : 'bg-gray-100 text-gray-400'}`}
             >
               <ShoppingCart className="w-5 h-5 mr-3" />
