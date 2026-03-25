@@ -3,7 +3,8 @@ import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, 
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO SEU FIREBASE ---
 const firebaseConfig = {
@@ -18,6 +19,7 @@ const firebaseConfig = {
 // Inicializando o Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app); // NOVO: Motor de Autenticação
 
 // --- INJEÇÃO DO TAILWIND ---
 if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
@@ -40,12 +42,6 @@ const initialProducts = [
   { sku: 'MERC-001', category: 'Mercearia', name: 'Mel Silvestre (500g)', description: 'Mel puro de abelhas silvestres da região.', price: 35.00, minOrderQuantity: 12, stockLocal: 1, image: '🍯' },
 ];
 
-const initialCustomers = [
-  { name: 'João Silva', email: 'joao@email.com', whatsapp: '(12) 99999-1111', polo: 'Jacareí' },
-  { name: 'Dona Maria', email: 'maria@email.com', whatsapp: '(12) 99999-2222', polo: 'Jacareí' },
-  { name: 'Carlos (Padaria)', email: 'carlos@email.com', whatsapp: '(12) 99999-3333', polo: 'São José dos Campos (Sede)' }
-];
-
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('login');
   const [user, setUser] = useState(null);
@@ -55,6 +51,13 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
+
+  // --- NOVOS ESTADOS DE AUTENTICAÇÃO ---
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState('login'); // 'login' ou 'register'
+  const [loginPassword, setLoginPassword] = useState('');
+  const [registerRole, setRegisterRole] = useState('cliente');
+  // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -77,6 +80,38 @@ export default function App() {
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
 
+  // --- ESCUTADOR DE AUTENTICAÇÃO (O FÍGADO DE SEGURANÇA) ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // O usuário tem login, vamos buscar os detalhes dele (cargo, polo, nome)
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
+          
+          // Redireciona para a tela correta dependendo do cargo
+          if (userData.role === 'consolidador') setCurrentScreen('dashboard_admin');
+          else if (userData.role === 'representante') setCurrentScreen('dashboard_rep');
+          else setCurrentScreen('shop');
+        } else {
+          // Fallback de segurança
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Usuário' });
+          setCurrentScreen('shop');
+        }
+      } else {
+        setUser(null);
+        setCurrentScreen('login');
+      }
+      setAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // --- CARREGAR DADOS DO CATÁLOGO ---
   useEffect(() => {
     const fetchFromFirebase = async () => {
       try {
@@ -90,20 +125,13 @@ export default function App() {
         }
 
         const custSnapshot = await getDocs(collection(db, "customers"));
-        if (custSnapshot.empty) {
-          for (let c of initialCustomers) await addDoc(collection(db, "customers"), c);
-          const newCusts = await getDocs(collection(db, "customers"));
-          setCustomers(newCusts.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        } else {
-          setCustomers(custSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
+        setCustomers(custSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
         const ordSnapshot = await getDocs(collection(db, "orders"));
         setOrders(ordSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
       } catch (error) {
         console.error("Erro ao conectar no Firebase:", error);
-        showToast("Erro ao carregar dados da nuvem.", "error");
       } finally {
         setIsLoadingDB(false);
       }
@@ -116,6 +144,61 @@ export default function App() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3500);
   };
+
+  // --- FUNÇÕES DE LOGIN, REGISTRO E SAÍDA ---
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+      // O onAuthStateChanged vai detectar e fazer o resto automaticamente!
+      showToast('Login com sucesso!', 'success');
+    } catch (error) {
+      setAuthLoading(false);
+      if(error.code === 'auth/invalid-credential') showToast('Email ou senha incorretos.', 'error');
+      else showToast('Erro ao fazer login.', 'error');
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if(!loginName || !loginEmail || !loginPassword || !loginWhatsapp) return showToast('Preencha todos os campos.', 'error');
+    if(loginPassword.length < 6) return showToast('A senha deve ter pelo menos 6 caracteres.', 'error');
+    
+    setAuthLoading(true);
+    try {
+      // 1. Cria a conta no cofre de autenticação
+      const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
+      
+      // 2. Guarda os dados e o cargo do usuário na coleção 'users'
+      const newUserProfile = {
+        name: loginName,
+        email: loginEmail,
+        whatsapp: loginWhatsapp,
+        polo: selectedPolo,
+        role: registerRole // 'cliente', 'representante' ou 'consolidador'
+      };
+      await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
+      
+      // 3. Adiciona também ao CRM geral para representantes poderem ver
+      await addDoc(collection(db, "customers"), newUserProfile);
+      
+      showToast('Conta criada com sucesso!', 'success');
+    } catch (error) {
+      setAuthLoading(false);
+      if(error.code === 'auth/email-already-in-use') showToast('Este e-mail já está cadastrado.', 'error');
+      else showToast('Erro ao criar conta.', 'error');
+    }
+  };
+
+  const handleLogout = async () => {
+    setAuthLoading(true);
+    await signOut(auth);
+    setCart([]);
+    setLoginPassword('');
+    setAuthLoading(false);
+  };
+  // ----------------------------------------
 
   const addToCart = (product) => {
     const existing = cart.find(item => item.id === product.id);
@@ -138,13 +221,6 @@ export default function App() {
     if(manualCart.length === 0) return showToast('Adicione produtos ao pedido!', 'error');
     
     try {
-      const existingCustomer = customers.find(c => c.whatsapp === manualCustomerWhatsapp || c.email === manualCustomerEmail);
-      if (!existingCustomer && (manualCustomerEmail || manualCustomerWhatsapp)) {
-        const newCustData = { name: manualCustomerName, email: manualCustomerEmail, whatsapp: manualCustomerWhatsapp, polo: user.polo };
-        const custRef = await addDoc(collection(db, "customers"), newCustData);
-        setCustomers([...customers, { id: custRef.id, ...newCustData }]);
-      }
-      
       const newOrderData = {
         customer: `${manualCustomerName} (Via Rep)`,
         email: manualCustomerEmail,
@@ -174,13 +250,6 @@ export default function App() {
     const finalTotal = hasFee ? cartTotal * 1.05 : cartTotal;
 
     try {
-      const existingCustomer = customers.find(c => c.email === user.email);
-      if (!existingCustomer && user.email) {
-        const newCustData = { name: user.name, email: user.email, whatsapp: user.whatsapp, polo: user.polo };
-        const custRef = await addDoc(collection(db, "customers"), newCustData);
-        setCustomers([...customers, { id: custRef.id, ...newCustData }]);
-      }
-
       const newOrderData = {
         customer: user.name,
         email: user.email,
@@ -244,7 +313,6 @@ export default function App() {
     }
   };
 
-  // --- COMPRESSOR E CONVERSOR DE IMAGEM PARA BASE64 ---
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -270,7 +338,6 @@ export default function App() {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
-        // O "dataUrl" gerado aqui é uma string de texto puro da imagem que salva direto no Firestore!
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7); 
         setImagePreview(dataUrl);
       };
@@ -297,50 +364,86 @@ export default function App() {
     e.target.value = null;
   };
 
-  // --- RENDERIZAÇÕES DE TELA (NOVO TEMA: KORIN / ORGÂNICO PREMIUM) ---
+  // --- NOVA TELA DE LOGIN SEGURA ---
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <Leaf className="w-16 h-16 text-emerald-600 animate-bounce mx-auto mb-4" />
+          <p className="text-emerald-800 font-bold tracking-widest uppercase animate-pulse">Verificando Segurança...</p>
+        </div>
+      </div>
+    );
+  }
+
   const renderLogin = () => (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-slate-50">
       <div className="bg-white p-8 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-gray-100">
         <Leaf className="text-emerald-700 w-16 h-16 mx-auto mb-4 drop-shadow-sm" />
         <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tight">Clube de Compras</h1>
-        <p className="text-gray-500 mb-8 text-sm font-medium">
-          {isLoadingDB ? <span className="animate-pulse text-emerald-600 font-bold">Conectando à horta...</span> : 'Alimentos frescos direto para você'}
-        </p>
+        <p className="text-gray-500 mb-8 text-sm font-medium">Alimentos frescos direto para você</p>
         
-        <div className="text-left mb-6 space-y-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Seu Nome</label>
-            <input type="text" value={loginName} onChange={(e) => setLoginName(e.target.value)} placeholder="Ex: João Silva" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" disabled={isLoadingDB}/>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">E-mail</label>
-            <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="seu@email.com" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" disabled={isLoadingDB}/>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">WhatsApp</label>
-            <input type="tel" value={loginWhatsapp} onChange={(e) => setLoginWhatsapp(e.target.value)} placeholder="(12) 99999-9999" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" disabled={isLoadingDB}/>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Polo de Retirada</label>
-            <select value={selectedPolo} onChange={(e) => setSelectedPolo(e.target.value)} className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors cursor-pointer" disabled={isLoadingDB}>
-              {polos.map(polo => <option key={polo} value={polo}>{polo}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-3 mt-8">
-          <button onClick={() => { if(!loginName || !loginEmail || !loginWhatsapp) return showToast('Preencha os campos!', 'error'); setUser({ name: loginName, email: loginEmail, whatsapp: loginWhatsapp, role: 'cliente', polo: selectedPolo }); setCurrentScreen('shop'); }} className="w-full flex items-center justify-center bg-emerald-700 text-white font-bold py-4 rounded-xl hover:bg-emerald-800 transition shadow-lg shadow-emerald-700/20" disabled={isLoadingDB}>
-            <User className="mr-2 w-5 h-5" /> Entrar e Comprar
-          </button>
-          <button onClick={() => { if(!loginName) return showToast('Digite o nome!', 'error'); setUser({ name: loginName, role: 'representante', polo: selectedPolo }); setCurrentScreen('dashboard_rep'); }} className="w-full flex items-center justify-center bg-white text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl hover:bg-emerald-50 transition" disabled={isLoadingDB}>
-            <Users className="mr-2 w-5 h-5 text-emerald-600" /> Acesso Representante
-          </button>
-          <div className="pt-6 mt-6 border-t border-gray-100">
-            <button onClick={() => { setUser({ name: 'Você (Gestor)', role: 'consolidador', polo: 'Todas as Cidades' }); setCurrentScreen('dashboard_admin'); }} className="w-full flex items-center justify-center text-gray-400 font-medium py-2 hover:text-gray-600 transition text-sm" disabled={isLoadingDB}>
-              <Package className="mr-2 w-4 h-4" /> Gestão Geral
+        {authMode === 'login' ? (
+          <form onSubmit={handleLogin} className="text-left space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">E-mail</label>
+              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required placeholder="seu@email.com" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Senha Secreta</label>
+              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required placeholder="••••••••" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 focus:bg-emerald-50/30 outline-none transition-colors" />
+            </div>
+            
+            <button type="submit" className="w-full flex items-center justify-center bg-emerald-700 text-white font-bold py-4 rounded-xl hover:bg-emerald-800 transition shadow-lg shadow-emerald-700/20 mt-6">
+              Entrar com Segurança
             </button>
-          </div>
-        </div>
+            <button type="button" onClick={() => {setAuthMode('register'); setLoginPassword('');}} className="w-full mt-4 text-emerald-600 font-bold hover:underline text-sm">
+              Não tem conta? Criar agora
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleRegister} className="text-left space-y-4 max-h-[60vh] overflow-y-auto px-2 pb-2">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Como deseja se cadastrar?</label>
+              <select value={registerRole} onChange={(e) => setRegisterRole(e.target.value)} className="w-full border-2 border-emerald-100 bg-emerald-50/30 text-emerald-800 rounded-xl p-3 focus:border-emerald-600 outline-none font-bold">
+                <option value="cliente">👤 Cliente Padrão</option>
+                <option value="representante">💼 Representante Logístico</option>
+                <option value="consolidador">⭐ Gestor Geral (Admin)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Seu Nome Completo</label>
+              <input type="text" value={loginName} onChange={(e) => setLoginName(e.target.value)} required placeholder="Ex: João Silva" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">WhatsApp</label>
+                <input type="tel" value={loginWhatsapp} onChange={(e) => setLoginWhatsapp(e.target.value)} required placeholder="(12) 99999-9999" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Polo Base</label>
+                <select value={selectedPolo} onChange={(e) => setSelectedPolo(e.target.value)} className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors">
+                  {polos.map(polo => <option key={polo} value={polo}>{polo}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">E-mail</label>
+              <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} required placeholder="seu@email.com" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Criar Senha Segura</label>
+              <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} required placeholder="Mínimo 6 caracteres" minLength="6" className="w-full border-b-2 border-gray-200 bg-gray-50/50 rounded-t-lg p-3 focus:border-emerald-600 outline-none transition-colors" />
+            </div>
+            
+            <button type="submit" className="w-full flex items-center justify-center bg-slate-800 text-white font-bold py-4 rounded-xl hover:bg-slate-900 transition shadow-lg mt-6">
+              Criar Conta e Acessar
+            </button>
+            <button type="button" onClick={() => {setAuthMode('login'); setLoginPassword('');}} className="w-full mt-4 text-gray-500 font-bold hover:text-gray-800 text-sm">
+              Voltar para o Login
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -1024,7 +1127,7 @@ export default function App() {
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{user.role}</span>
                 <span className="text-sm text-slate-800 font-black">{user.name}</span>
               </div>
-              <button onClick={() => { setUser(null); setCurrentScreen('login'); setCart([]); }} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center font-bold hover:bg-red-100 transition-colors shadow-sm" title="Sair">
+              <button onClick={handleLogout} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center font-bold hover:bg-red-100 transition-colors shadow-sm" title="Sair">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               </button>
             </div>
