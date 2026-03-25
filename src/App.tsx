@@ -32,7 +32,7 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
 // Dados iniciais
 const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba'];
 
-// --- LEITOR INTELIGENTE DE CSV (MÁQUINA DE PARSING) ---
+// --- LEITOR INTELIGENTE DE CSV ---
 const parseCSVLine = (text) => {
   const result = [];
   let current = '';
@@ -77,6 +77,7 @@ export default function App() {
   const [pendingOrder, setPendingOrder] = useState(null);
   const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [] });
   const [isUploadingCSV, setIsUploadingCSV] = useState(false);
+  const [financeTab, setFinanceTab] = useState('credito'); // NOVO: Aba ativa no Financeiro (credito ou pix)
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -100,7 +101,6 @@ export default function App() {
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
 
-  // Categorias Dinâmicas com base nos produtos atuais
   const activeCategories = ['Todos', ...Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort()];
 
   // --- ESCUTADOR DE AUTENTICAÇÃO ---
@@ -321,6 +321,11 @@ export default function App() {
   const handleConfirmFaltas = async (missingTotal) => {
     if (missingTotal <= 0) return;
     
+    // Calcula itens faltantes para salvar no histórico do pedido
+    const missingItemsToSave = missingItemsModal.missingItems
+      .filter(i => i.removedQtd > 0)
+      .map(i => ({ name: i.name, qtd: i.removedQtd }));
+
     const newItems = missingItemsModal.missingItems.map(i => ({...i, qtd: i.qtd - i.removedQtd})).filter(i => i.qtd > 0);
     const newTotal = missingItemsModal.order.total - missingTotal;
 
@@ -329,7 +334,8 @@ export default function App() {
             items: newItems,
             total: Math.max(0, newTotal),
             refundStatus: 'credito_gerado',
-            refundAmount: missingTotal
+            refundAmount: missingTotal,
+            missingItems: missingItemsToSave // Guardamos o que faltou para o Gestor ver depois
         });
 
         const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
@@ -348,7 +354,7 @@ export default function App() {
             }
         }
 
-        setOrders(orders.map(o => o.id === missingItemsModal.order.id ? { ...o, items: newItems, total: Math.max(0, newTotal), refundStatus: 'credito_gerado', refundAmount: missingTotal } : o));
+        setOrders(orders.map(o => o.id === missingItemsModal.order.id ? { ...o, items: newItems, total: Math.max(0, newTotal), refundStatus: 'credito_gerado', refundAmount: missingTotal, missingItems: missingItemsToSave } : o));
         setMissingItemsModal({open: false, order: null, missingItems: []});
         showToast("Falta registada e crédito adicionado à carteira!", "success");
     } catch(e) {
@@ -368,8 +374,15 @@ export default function App() {
         pendingPixRefund: currentPending + amountToRefund
       });
       
+      // Atualizar os pedidos para "pendente_estorno" para o Gestor saber de onde veio
+      const userOrdersWithCredit = orders.filter(o => o.email === user.email && o.refundStatus === 'credito_gerado');
+      for (const o of userOrdersWithCredit) {
+         await updateDoc(doc(db, "orders", o.id), { refundStatus: 'pendente_estorno' });
+      }
+      
       setUser({ ...user, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund });
       setAllUsers(prev => prev.map(u => u.id === user.uid ? { ...u, walletBalance: 0, pendingPixRefund: currentPending + amountToRefund } : u));
+      setOrders(orders.map(o => o.email === user.email && o.refundStatus === 'credito_gerado' ? { ...o, refundStatus: 'pendente_estorno' } : o));
       
       showToast("Solicitação de PIX enviada à equipa financeira!", "success");
     } catch(e) {
@@ -381,6 +394,17 @@ export default function App() {
   const confirmPixTransfer = async (userId) => {
     try {
        await updateDoc(doc(db, "users", userId), { pendingPixRefund: 0 });
+       
+       // Marca pedidos como resolvidos (estornado)
+       const targetUser = allUsers.find(u => u.id === userId);
+       if (targetUser) {
+           const userOrdersWithPending = orders.filter(o => o.email === targetUser.email && o.refundStatus === 'pendente_estorno');
+           for (const o of userOrdersWithPending) {
+              await updateDoc(doc(db, "orders", o.id), { refundStatus: 'estornado' });
+           }
+           setOrders(orders.map(o => o.email === targetUser.email && o.refundStatus === 'pendente_estorno' ? { ...o, refundStatus: 'estornado' } : o));
+       }
+
        setAllUsers(prev => prev.map(u => u.id === userId ? { ...u, pendingPixRefund: 0 } : u));
        showToast("Transferência de estorno confirmada!", "success");
     } catch(e) { 
@@ -414,6 +438,17 @@ export default function App() {
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
     const text = `Olá, ${customer.name}! 🌿 Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const handleSendPixWhatsApp = (customer, amount) => {
+    if (!customer.whatsapp) {
+        showToast('O cliente não tem WhatsApp registado.', 'error');
+        return;
+    }
+    let phone = customer.whatsapp.replace(/\D/g, '');
+    if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
+    const text = `Olá, ${customer.name}! 🌿\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contacto para realizar o seu estorno no valor de *R$ ${amount.toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nPor favor, confirme a sua chave PIX para realizarmos a transferência. Obrigado! 💚`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -456,7 +491,7 @@ export default function App() {
     }
   };
 
-  // --- NOVA FUNÇÃO: UPLOAD INTELIGENTE DE CSV ---
+  // --- UPLOAD INTELIGENTE DE CSV ---
   const handleCSVUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -477,7 +512,6 @@ export default function App() {
 
       const newProducts = [];
       
-      // Salta o cabeçalho (i=1)
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line) continue;
@@ -489,7 +523,6 @@ export default function App() {
           const name = columns[2]?.trim();
           const description = columns[3]?.trim() || '';
           
-          // Trata os preços que vêm com vírgula ou dentro de aspas (Ex: "11,5")
           let priceStr = columns[4]?.replace(/['"]/g, '').trim();
           priceStr = priceStr ? priceStr.replace(',', '.') : '0';
           const price = parseFloat(priceStr) || 0;
@@ -498,7 +531,7 @@ export default function App() {
           const stockLocal = parseInt(columns[6]) || 0;
           const image = columns[7]?.trim() || '📦';
 
-          if (!name) continue; // Ignora linhas em branco ou mal formatadas
+          if (!name) continue;
 
           newProducts.push({
             sku, category, name, description, price, minOrderQuantity, stockLocal, image
@@ -512,16 +545,13 @@ export default function App() {
         const updatedLocalProducts = [...currentProducts];
 
         for (const np of newProducts) {
-           // Tenta cruzar pelo SKU, se não tiver SKU, tenta pelo Nome
            const existingIndex = updatedLocalProducts.findIndex(p => (np.sku && p.sku === np.sku) || (!np.sku && p.name === np.name));
 
            if (existingIndex >= 0) {
-              // Produto já existe, vamos atualizar o preço e os dados!
               const existingId = updatedLocalProducts[existingIndex].id;
               await updateDoc(doc(db, "products", existingId), np);
               updatedLocalProducts[existingIndex] = { id: existingId, ...np };
            } else {
-              // Produto novo, adicionar!
               const docRef = await addDoc(collection(db, "products"), np);
               updatedLocalProducts.push({ id: docRef.id, ...np });
            }
@@ -534,11 +564,11 @@ export default function App() {
         showToast('Erro ao sincronizar com a base de dados.', 'error');
       } finally {
         setIsUploadingCSV(false);
-        e.target.value = null; // Limpa o input do ficheiro
+        e.target.value = null;
       }
     };
 
-    reader.readAsText(file); // Usa UTF-8 por padrão
+    reader.readAsText(file);
   };
 
   const handleImageUpload = (e) => {
@@ -678,11 +708,17 @@ export default function App() {
     const filteredProducts = shopCategory === 'Todos' ? products : products.filter(p => p.category === shopCategory);
     return (
       <div className="pb-24 pt-6 px-4 max-w-5xl mx-auto">
-        <div className="bg-white border border-emerald-100 text-emerald-900 p-4 rounded-2xl mb-8 flex items-center justify-between shadow-sm">
+        <div className="bg-white border border-emerald-100 text-emerald-900 p-4 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
           <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Polo de Retirada: <strong className="font-black text-emerald-800">{user.polo}</strong></span></div>
+          {/* --- NOVO: EXIBIÇÃO DE CRÉDITO DIRETO NA LOJA --- */}
+          {user?.walletBalance > 0 && (
+            <div className="flex items-center bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 w-full sm:w-auto">
+              <Wallet className="w-5 h-5 text-emerald-600 mr-2"/>
+              <span className="text-sm font-medium text-emerald-800">Crédito Disponível: <strong className="font-black">R$ {user.walletBalance.toFixed(2).replace('.', ',')}</strong></span>
+            </div>
+          )}
         </div>
         
-        {/* --- CATEGORIAS GERADAS DINAMICAMENTE DA BASE DE DADOS --- */}
         <div className="flex overflow-x-auto space-x-3 mb-10 pb-2 scrollbar-hide">
           {activeCategories.map(cat => (
             <button key={cat} onClick={() => setShopCategory(cat)} className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-200 ${shopCategory === cat ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20 transform scale-105' : 'bg-white text-gray-500 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
@@ -957,6 +993,18 @@ export default function App() {
                   
                 </div>
                 
+                {order.refundStatus && (
+                  <div className="mb-4 bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm text-orange-800 flex items-start gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="font-bold">Atenção ao seu pedido</p>
+                      <p className="text-xs mt-1">
+                        {order.refundStatus === 'credito_gerado' ? `Um item faltou e R$ ${order.refundAmount.toFixed(2)} foram adicionados como crédito à sua carteira!` : `Um item faltou. Entraremos em contacto para realizar o estorno de R$ ${order.refundAmount.toFixed(2)}.`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-3 mb-6">
                   {order.items.map((item, idx) => (<div key={idx} className="flex items-center text-sm text-gray-600"><span className="w-8 h-8 bg-gray-50 text-emerald-700 font-black rounded-lg flex items-center justify-center mr-3 border border-gray-100">{item.qtd}x</span> <span className="font-medium">{item.name}</span></div>))}
                 </div>
@@ -973,168 +1021,6 @@ export default function App() {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderRepDashboard = () => {
-    const myPoloOrders = orders.filter(o => o.polo === user.polo && o.status === 'pago');
-    const appOrders = myPoloOrders.filter(o => o.method !== 'dinheiro/pix direto');
-    const manualOrders = myPoloOrders.filter(o => o.method === 'dinheiro/pix direto');
-    const sumTotal = (arr) => arr.reduce((sum, o) => sum + o.total, 0);
-
-    const ordersByMonth = myPoloOrders.reduce((acc, order) => {
-      const d = order.date ? new Date(order.date) : new Date();
-      const monthYear = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-      const capitalizedMonth = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
-      if (!acc[capitalizedMonth]) acc[capitalizedMonth] = { orders: [], total: 0, count: 0 };
-      acc[capitalizedMonth].orders.push(order);
-      acc[capitalizedMonth].total += order.total;
-      acc[capitalizedMonth].count += 1;
-      return acc;
-    }, {});
-
-    const toggleMonth = (month) => setExpandedMonths(prev => ({ ...prev, [month]: !prev[month] }));
-
-    return (
-      <div className="p-4 max-w-4xl mx-auto pt-8 pb-24">
-        <div className="mb-8">
-          <h2 className="text-3xl font-black text-gray-800 tracking-tight">Painel Representante</h2>
-          <p className="text-emerald-700 font-bold mt-1">Gestão da unidade de <strong>{user.polo}</strong></p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors">
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Pelo App (Confirmados)</span>
-            <span className="text-4xl font-black text-gray-800 tracking-tighter">{appOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
-            <span className="text-sm text-emerald-600 font-black mt-2 bg-emerald-50 self-start px-2 py-1 rounded-md">R$ {sumTotal(appOrders).toFixed(2).replace('.', ',')}</span>
-          </div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors">
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Seus Lançamentos</span>
-            <span className="text-4xl font-black text-gray-800 tracking-tighter">{manualOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
-            <span className="text-sm text-orange-600 font-black mt-2 bg-orange-50 self-start px-2 py-1 rounded-md">R$ {sumTotal(manualOrders).toFixed(2).replace('.', ',')}</span>
-          </div>
-          <div className="bg-emerald-800 p-6 rounded-[2rem] shadow-lg shadow-emerald-800/20 text-white flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute -right-6 -top-6 w-24 h-24 bg-white opacity-5 rounded-full"></div>
-            <span className="text-xs text-emerald-200 font-bold uppercase tracking-widest mb-2">Volume da Unidade</span>
-            <span className="text-5xl font-black tracking-tighter">{myPoloOrders.length}</span>
-            <span className="text-lg font-black text-emerald-300 mt-2">R$ {sumTotal(myPoloOrders).toFixed(2).replace('.', ',')}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-4 mb-10">
-          <button onClick={() => setIsManualOrderModalOpen(true)} className="flex-1 bg-white text-emerald-700 border-2 border-emerald-100 font-black py-4 rounded-2xl flex items-center justify-center hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm"><Plus className="w-5 h-5 mr-2" /> Novo Pedido Avulso</button>
-          <button onClick={() => setCurrentScreen('print_rep')} className="flex-1 bg-slate-800 text-white font-black py-4 rounded-2xl flex items-center justify-center hover:bg-slate-900 transition-colors shadow-lg"><Printer className="w-5 h-5 mr-2" /> Gerar Lista de Separação</button>
-        </div>
-
-        <h3 className="font-black text-emerald-800 mb-5 uppercase tracking-widest text-sm pl-2 flex items-center"><ClipboardList className="w-4 h-4 mr-2"/> Histórico Mensal</h3>
-        <div className="space-y-4">
-          {Object.entries(ordersByMonth).length === 0 ? (
-            <p className="text-gray-500 text-center py-10 bg-white rounded-[2rem] border border-gray-100">Nenhum pedido processado ainda.</p>
-          ) : (
-            Object.entries(ordersByMonth).sort((a,b) => new Date(b[0]) - new Date(a[0])).map(([month, data]) => {
-              const isExpanded = expandedMonths[month] !== false; 
-              return (
-                <div key={month} className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden transition-all">
-                  <button onClick={() => toggleMonth(month)} className="w-full flex items-center justify-between p-6 bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-gray-50">
-                    <div className="text-left"><p className="font-black text-gray-800 capitalize text-lg">{month}</p><p className="text-sm text-gray-500 font-medium mt-1"><span className="text-emerald-700 font-bold">{data.count}</span> pedidos • R$ {data.total.toFixed(2).replace('.', ',')}</p></div>
-                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">{isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}</div>
-                  </button>
-                  {isExpanded && (
-                    <div className="divide-y divide-gray-50 p-2">
-                      {data.orders.slice().reverse().map(order => (
-                        <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 rounded-xl transition-colors m-2 border border-transparent hover:border-gray-100">
-                          <div>
-                            <p className="font-black text-gray-800 text-lg mb-1">{order.customer}</p>
-                            <p className="text-xs text-gray-500 mb-2 font-medium">#{order.id.slice(0,5)}... • <span className="font-bold text-gray-700">R$ {order.total.toFixed(2).replace('.', ',')}</span></p>
-                            <div className="flex flex-wrap gap-1.5 mt-3">
-                              {order.items.map((item, idx) => (<span key={idx} className="bg-white text-gray-600 text-[10px] px-2.5 py-1 rounded-md border border-gray-200 uppercase font-bold shadow-sm">{item.qtd}x {item.name.split(' ')[0]}</span>))}
-                            </div>
-                          </div>
-                          <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
-                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                              {order.method === 'dinheiro/pix direto' ? 'S/ CAIXA' : 'APP'}
-                            </span>
-                            
-                            <div className="flex gap-2">
-                                {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
-                                
-                                {(!order.refundStatus || order.refundStatus === '') && order.status === 'pago' && (
-                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: order.items.map(i=>({...i, removedQtd:0}))})} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
-                                      Faltas
-                                   </button>
-                                )}
-                                
-                                <button onClick={() => handleSendWhatsApp(order)} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
-                                  <MessageCircle className="w-3 h-3 mr-1.5" /> Recibo
-                                </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* MODAL DE PEDIDO RÁPIDO */}
-        {isManualOrderModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-            <div className="bg-white rounded-[2rem] p-8 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-              <h3 className="text-2xl font-black text-gray-800 mb-6 tracking-tight">Pedido Rápido</h3>
-              <form onSubmit={confirmManualOrder}>
-                <div className="mb-6 bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Já é cliente?</label>
-                  <select className="w-full border-2 border-gray-200 rounded-xl p-3 text-sm bg-white focus:border-emerald-500 outline-none mb-4 font-medium transition-colors cursor-pointer"
-                    onChange={(e) => {
-                      const c = customers.find(x => x.id === e.target.value);
-                      if (c) { setManualCustomerName(c.name); setManualCustomerEmail(c.email); setManualCustomerWhatsapp(c.whatsapp); }
-                    }}>
-                    <option value="">Não (Cadastrar Novo)</option>
-                    {customers.filter(c => c.polo === user.polo).map(c => (<option key={c.id} value={c.id}>{c.name} - {c.whatsapp}</option>))}
-                  </select>
-                  <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest mt-2">Dados do Cliente</label>
-                  <input required value={manualCustomerName} onChange={(e) => setManualCustomerName(e.target.value)} placeholder="Nome Completo" className="w-full border-b-2 border-gray-200 bg-white rounded-t-lg p-3 text-sm mb-3 focus:border-emerald-500 outline-none" />
-                  <div className="flex gap-3 mb-2">
-                    <input type="tel" value={manualCustomerWhatsapp} onChange={(e) => setManualCustomerWhatsapp(e.target.value)} placeholder="WhatsApp" className="w-full border-b-2 border-gray-200 bg-white rounded-t-lg p-3 text-sm focus:border-emerald-500 outline-none" />
-                  </div>
-                </div>
-                
-                <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest">Adicionar Produtos</label>
-                <div className="space-y-2 mb-6 max-h-56 overflow-y-auto border border-gray-100 rounded-2xl p-2 bg-slate-50/50">
-                  {products.map(p => {
-                    const mItem = manualCart.find(i => i.id === p.id);
-                    return (
-                      <div key={p.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:border-emerald-200 transition-colors">
-                        <div className="flex items-center gap-3"><span className="text-2xl">{p.image && p.image.length < 5 ? p.image : '📦'}</span><span className="text-sm font-bold text-gray-700">{p.name}</span></div>
-                        {mItem ? (
-                           <div className="flex items-center space-x-2 bg-emerald-50 rounded-lg border border-emerald-100 p-1 shadow-inner">
-                             <button type="button" onClick={() => setManualCart(manualCart.map(i => i.id === p.id ? {...i, qtd: Math.max(0, i.qtd - 1)} : i).filter(i => i.qtd > 0))} className="w-7 h-7 flex items-center justify-center font-black text-emerald-800 hover:bg-white rounded-md transition-colors">-</button>
-                             <span className="text-sm font-black w-4 text-center text-emerald-800">{mItem.qtd}</span>
-                             <button type="button" onClick={() => addToManualCart(p)} className="w-7 h-7 flex items-center justify-center font-black text-emerald-800 hover:bg-white rounded-md transition-colors">+</button>
-                           </div>
-                        ) : (<button type="button" onClick={() => addToManualCart(p)} className="text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-lg font-black hover:bg-emerald-50 transition-colors">ADD</button>)}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="flex justify-between items-end bg-slate-800 text-white p-5 rounded-2xl mb-6 shadow-lg">
-                  <span className="font-bold text-gray-400 text-xs uppercase tracking-widest">Total da Compra</span>
-                  <span className="text-3xl font-black tracking-tighter">R$ {manualCartTotal.toFixed(2).replace('.', ',')}</span>
-                </div>
-
-                <div className="flex space-x-3">
-                  <button type="button" onClick={() => {setIsManualOrderModalOpen(false); setManualCart([]); setManualCustomerName('');}} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
-                  <button type="submit" className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-600/30 transition-all hover:-translate-y-1">Gravar</button>
-                </div>
-              </form>
-            </div>
           </div>
         )}
       </div>
@@ -1193,46 +1079,110 @@ export default function App() {
           <button onClick={() => setAdminTab('financeiro')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'financeiro' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Financeiro & Reembolsos</button>
         </div>
 
+        {/* --- NOVO: PAINEL FINANCEIRO INTERATIVO --- */}
         {adminTab === 'financeiro' && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="bg-emerald-700 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+               <button onClick={() => setFinanceTab('credito')} className={`text-left bg-emerald-700 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden transition-transform ${financeTab === 'credito' ? 'ring-4 ring-emerald-300 scale-[1.02]' : 'hover:scale-[1.02] opacity-90'}`}>
                   <div className="absolute -right-4 -top-4 opacity-10"><Wallet className="w-40 h-40"/></div>
                   <p className="text-emerald-200 font-black uppercase tracking-widest text-xs mb-2">Crédito Total nas Carteiras (Retido)</p>
                   <p className="text-5xl font-black tracking-tighter">R$ {allUsers.reduce((sum, u) => sum + (u.walletBalance || 0), 0).toFixed(2).replace('.', ',')}</p>
-               </div>
-               <div className="bg-orange-500 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden">
+               </button>
+               <button onClick={() => setFinanceTab('pix')} className={`text-left bg-orange-500 p-8 rounded-[2rem] text-white shadow-lg relative overflow-hidden transition-transform ${financeTab === 'pix' ? 'ring-4 ring-orange-300 scale-[1.02]' : 'hover:scale-[1.02] opacity-90'}`}>
                   <div className="absolute -right-4 -top-4 opacity-10"><Landmark className="w-40 h-40"/></div>
                   <p className="text-orange-200 font-black uppercase tracking-widest text-xs mb-2">Total a Devolver via PIX (Estornos)</p>
                   <p className="text-5xl font-black tracking-tighter">R$ {allUsers.reduce((sum, u) => sum + (u.pendingPixRefund || 0), 0).toFixed(2).replace('.', ',')}</p>
-               </div>
+               </button>
             </div>
 
-            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-              <div className="p-6 bg-slate-50 border-b border-gray-100 font-black text-slate-800 text-lg tracking-tight">Solicitações de Estorno (PIX)</div>
-              <div className="divide-y divide-gray-50">
-                {allUsers.filter(u => u.pendingPixRefund > 0).length === 0 ? (
-                  <p className="p-10 text-center text-gray-400 font-medium">Nenhuma solicitação de estorno pendente neste momento.</p>
-                ) : (
-                  allUsers.filter(u => u.pendingPixRefund > 0).map(u => (
-                    <div key={u.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                       <div>
-                          <p className="font-black text-slate-800 text-xl mb-1">{u.name}</p>
-                          <p className="text-sm font-medium text-gray-500">Chave Telefone/WhatsApp: <strong className="text-slate-700">{u.whatsapp}</strong></p>
-                          <p className="text-xs text-gray-400 mt-1">Email: {u.email}</p>
-                       </div>
-                       <div className="flex flex-col sm:flex-row items-center gap-4 bg-orange-50 p-4 rounded-xl border border-orange-100">
-                          <div className="text-right">
-                            <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Valor a Transferir</p>
-                            <p className="text-2xl font-black text-orange-800">R$ {u.pendingPixRefund.toFixed(2).replace('.', ',')}</p>
-                          </div>
-                          <button onClick={() => confirmPixTransfer(u.id)} className="bg-orange-600 text-white font-black px-6 py-3 rounded-xl hover:bg-orange-700 transition shadow-md w-full sm:w-auto">Confirmar Envio</button>
-                       </div>
-                    </div>
-                  ))
-                )}
+            {financeTab === 'credito' && (
+              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 bg-emerald-50 border-b border-emerald-100 font-black text-emerald-800 text-lg tracking-tight">Detalhamento de Créditos (Carteiras de Clientes)</div>
+                <div className="divide-y divide-gray-50">
+                  {allUsers.filter(u => u.walletBalance > 0).length === 0 ? (
+                    <p className="p-10 text-center text-gray-400 font-medium">Nenhum cliente com crédito na carteira neste momento.</p>
+                  ) : (
+                    allUsers.filter(u => u.walletBalance > 0).map(u => {
+                      const uOrders = orders.filter(o => o.email === u.email && o.refundStatus === 'credito_gerado');
+                      return (
+                        <div key={u.id} className="p-6 flex flex-col md:flex-row justify-between gap-4 hover:bg-slate-50 transition-colors">
+                           <div>
+                              <p className="font-black text-slate-800 text-xl mb-1">{u.name}</p>
+                              <p className="text-sm font-medium text-gray-500">Contato: <strong className="text-slate-700">{u.whatsapp}</strong></p>
+                              
+                              {uOrders.length > 0 && (
+                                <div className="mt-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm max-w-sm">
+                                  <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Produtos que geraram este crédito:</p>
+                                  {uOrders.map(o => (
+                                    <div key={o.id} className="mb-1 text-xs text-gray-600">
+                                      <span className="font-bold text-gray-800">Pedido #{o.id.slice(0,5)}:</span> {o.missingItems && o.missingItems.length > 0 ? o.missingItems.map(i => `${i.qtd}x ${i.name}`).join(', ') : 'Itens não detalhados (versão anterior)'}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                           </div>
+                           <div className="flex flex-col items-end justify-center gap-3">
+                              <div className="text-right bg-emerald-50 p-3 rounded-xl border border-emerald-100 w-full sm:w-auto">
+                                <p className="text-[10px] font-black uppercase text-emerald-600 tracking-widest">Saldo na Carteira</p>
+                                <p className="text-2xl font-black text-emerald-800">R$ {u.walletBalance.toFixed(2).replace('.', ',')}</p>
+                              </div>
+                           </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {financeTab === 'pix' && (
+              <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-6 bg-orange-50 border-b border-orange-100 font-black text-orange-800 text-lg tracking-tight">Solicitações de Estorno (PIX) Pendentes</div>
+                <div className="divide-y divide-gray-50">
+                  {allUsers.filter(u => u.pendingPixRefund > 0).length === 0 ? (
+                    <p className="p-10 text-center text-gray-400 font-medium">Nenhuma solicitação de estorno pendente neste momento.</p>
+                  ) : (
+                    allUsers.filter(u => u.pendingPixRefund > 0).map(u => {
+                      const uOrders = orders.filter(o => o.email === u.email && o.refundStatus === 'pendente_estorno');
+                      return (
+                        <div key={u.id} className="p-6 flex flex-col md:flex-row justify-between gap-4 hover:bg-slate-50 transition-colors">
+                           <div>
+                              <p className="font-black text-slate-800 text-xl mb-1">{u.name}</p>
+                              <p className="text-sm font-medium text-gray-500">Chave Telefone/WhatsApp: <strong className="text-slate-700">{u.whatsapp}</strong></p>
+                              <p className="text-xs text-gray-400 mt-1">Email: {u.email}</p>
+
+                              {uOrders.length > 0 && (
+                                <div className="mt-3 bg-white p-3 rounded-lg border border-gray-100 shadow-sm max-w-sm">
+                                  <p className="text-[10px] font-black uppercase text-gray-400 mb-2">Produtos que geraram o estorno:</p>
+                                  {uOrders.map(o => (
+                                    <div key={o.id} className="mb-1 text-xs text-gray-600">
+                                      <span className="font-bold text-gray-800">Pedido #{o.id.slice(0,5)}:</span> {o.missingItems && o.missingItems.length > 0 ? o.missingItems.map(i => `${i.qtd}x ${i.name}`).join(', ') : 'Itens não detalhados (versão anterior)'}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                           </div>
+                           <div className="flex flex-col items-end justify-center gap-3">
+                              <div className="text-right bg-orange-50 p-3 rounded-xl border border-orange-100 w-full sm:w-auto">
+                                <p className="text-[10px] font-black uppercase text-orange-600 tracking-widest">Valor a Transferir</p>
+                                <p className="text-2xl font-black text-orange-800">R$ {u.pendingPixRefund.toFixed(2).replace('.', ',')}</p>
+                              </div>
+                              <div className="flex gap-2 w-full sm:w-auto">
+                                <button onClick={() => handleSendPixWhatsApp(u, u.pendingPixRefund)} className="flex items-center justify-center bg-emerald-100 text-emerald-800 font-black px-4 py-2 rounded-xl hover:bg-emerald-200 transition shadow-sm border border-emerald-200">
+                                  <MessageCircle className="w-4 h-4 mr-2" /> Contatar
+                                </button>
+                                <button onClick={() => confirmPixTransfer(u.id)} className="flex items-center justify-center bg-orange-600 text-white font-black px-4 py-2 rounded-xl hover:bg-orange-700 transition shadow-sm">
+                                  Confirmar Envio
+                                </button>
+                              </div>
+                           </div>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1277,7 +1227,6 @@ export default function App() {
                         </div>
                       </div>
                       
-                      {/* --- FIX MOBILE OVERFLOW --- */}
                       <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
                         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Vendido</p><p className="text-3xl font-black text-slate-800">{totalVendidos}</p>
