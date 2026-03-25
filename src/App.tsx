@@ -326,11 +326,10 @@ export default function App() {
     </div>
   );
 
-  // --- COMPONENTES DE TELA (REUTILIZADOS) ---
   const renderShop = () => (
     <div className="pb-24 pt-6 px-4 max-w-5xl mx-auto">
       <div className="bg-white border p-4 rounded-2xl mb-8 flex items-center justify-between shadow-sm">
-        <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Retirada: <strong>{user.polo}</strong></span></div>
+        <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Retirada: <strong className="font-black text-emerald-800">{user.polo}</strong></span></div>
       </div>
       <div className="flex overflow-x-auto space-x-3 mb-10 pb-2">
         {categorias.map(cat => (
@@ -367,6 +366,95 @@ export default function App() {
       </div>
     </div>
   );
+
+  const renderRepDashboard = () => {
+    const myPoloOrders = orders.filter(o => o.polo === user.polo && o.status === 'pago');
+    
+    // Agrupamento por mês
+    const ordersByMonth = myPoloOrders.reduce((acc, order) => {
+      const d = order.date ? new Date(order.date) : new Date();
+      const monthYear = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      const capitalizedMonth = monthYear.charAt(0).toUpperCase() + monthYear.slice(1);
+      if (!acc[capitalizedMonth]) acc[capitalizedMonth] = { orders: [], total: 0, count: 0 };
+      acc[capitalizedMonth].orders.push(order);
+      acc[capitalizedMonth].total += order.total;
+      acc[capitalizedMonth].count += 1;
+      return acc;
+    }, {});
+
+    return (
+      <div className="p-4 max-w-4xl mx-auto pt-8 pb-24">
+        <div className="mb-8">
+          <h2 className="text-3xl font-black text-gray-800">Painel do Representante</h2>
+          <p className="text-emerald-700 font-bold">Unidade: {user.polo}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <button onClick={() => setIsManualOrderModalOpen(true)} className="bg-white border-2 border-emerald-100 p-6 rounded-[2rem] flex items-center justify-center gap-3 font-black text-emerald-700 hover:bg-emerald-50 transition-all shadow-sm">
+            <Plus className="w-6 h-6"/> Nova Venda Manual
+          </button>
+          <button onClick={() => window.print()} className="bg-slate-800 p-6 rounded-[2rem] flex items-center justify-center gap-3 font-black text-white hover:bg-slate-900 transition-all shadow-lg">
+            <Printer className="w-6 h-6"/> Imprimir Separação
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {Object.entries(ordersByMonth).map(([month, data]) => (
+            <div key={month} className="bg-white rounded-[2rem] border overflow-hidden shadow-sm">
+              <button onClick={() => setExpandedMonths({...expandedMonths, [month]: !expandedMonths[month]})} className="w-full p-6 flex justify-between items-center bg-slate-50 border-b">
+                <div className="text-left"><p className="font-black text-lg">{month}</p><p className="text-xs font-bold text-gray-400 uppercase">{data.count} Pedidos • R$ {data.total.toFixed(2)}</p></div>
+                {expandedMonths[month] ? <ChevronUp/> : <ChevronDown/>}
+              </button>
+              {expandedMonths[month] && (
+                <div className="divide-y">
+                  {data.orders.map(o => (
+                    <div key={o.id} className="p-4 flex justify-between items-center hover:bg-emerald-50/30 transition-colors">
+                      <div>
+                        <p className="font-bold text-gray-800">{o.customer}</p>
+                        <p className="text-xs text-gray-400">Total: R$ {o.total.toFixed(2)}</p>
+                      </div>
+                      <button onClick={() => handleSendWhatsApp(o)} className="p-3 bg-emerald-100 text-emerald-700 rounded-xl hover:bg-emerald-200 transition-colors">
+                        <MessageCircle className="w-5 h-5"/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {isManualOrderModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+            <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+               <h3 className="text-2xl font-black mb-6">Venda via WhatsApp</h3>
+               <div className="space-y-4 mb-6">
+                 <input value={manualCustomerName} onChange={(e) => setManualCustomerName(e.target.value)} placeholder="Nome do Cliente" className="w-full border-b-2 p-3 outline-none" />
+                 <input value={manualCustomerWhatsapp} onChange={(e) => setManualCustomerWhatsapp(e.target.value)} placeholder="WhatsApp" className="w-full border-b-2 p-3 outline-none" />
+               </div>
+               <div className="max-h-48 overflow-y-auto space-y-2 mb-6 border rounded-xl p-2 bg-slate-50">
+                  {products.map(p => (
+                    <div key={p.id} className="flex justify-between items-center p-2 bg-white rounded-lg border">
+                      <span className="text-sm font-bold">{p.name}</span>
+                      <button onClick={() => {
+                        const existing = manualCart.find(i => i.id === p.id);
+                        if (existing) setManualCart(manualCart.map(i => i.id === p.id ? {...i, qtd: i.qtd + 1} : i));
+                        else setManualCart([...manualCart, {...p, qtd: 1}]);
+                      }} className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-md text-xs font-black">+ ADD</button>
+                    </div>
+                  ))}
+               </div>
+               {manualCart.length > 0 && <p className="mb-6 font-black text-emerald-700">Itens na cesta: {manualCart.length}</p>}
+               <div className="flex gap-2">
+                  <button onClick={() => setIsManualOrderModalOpen(false)} className="flex-1 py-4 font-bold text-gray-400">Cancelar</button>
+                  <button onClick={confirmManualOrder} className="flex-1 py-4 bg-emerald-700 text-white font-black rounded-xl">Salvar Venda</button>
+               </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderAdminDashboard = () => (
     <div className="p-4 max-w-6xl mx-auto pt-8 pb-24">
@@ -416,7 +504,6 @@ export default function App() {
            </div>
         </div>
       )}
-      {adminTab === 'pedidos' && <div className="bg-white p-12 rounded-[2rem] shadow-sm border text-center font-bold text-gray-400">Clique em "Despacho" ou "Planilha" para relatórios detalhados.</div>}
       {adminTab === 'crm' && (
         <div className="bg-white rounded-[2rem] shadow-sm border overflow-x-auto">
           <table className="w-full text-left">
@@ -426,7 +513,7 @@ export default function App() {
                 <tr key={c.id}>
                   <td className="p-5 font-bold">{c.name}</td>
                   <td className="p-5 text-sm">{c.polo}</td>
-                  <td className="p-5"><button onClick={() => { let ph = c.whatsapp.replace(/\D/g,''); window.open(`https://wa.me/55${ph}`, '_blank'); }} className="text-emerald-700 font-bold flex items-center text-xs"><MessageCircle className="w-4 h-4 mr-1"/> Falar</button></td>
+                  <td className="p-5"><button onClick={() => { let ph = (c.whatsapp || '').replace(/\D/g,''); window.open(`https://wa.me/55${ph}`, '_blank'); }} className="text-emerald-700 font-bold flex items-center text-xs"><MessageCircle className="w-4 h-4 mr-1"/> Falar</button></td>
                 </tr>
               ))}
             </tbody>
@@ -443,12 +530,16 @@ export default function App() {
       {currentScreen !== 'login' && (
         <header className="bg-white shadow-sm sticky top-0 z-50 border-b">
           <div className="max-w-5xl mx-auto px-4 h-20 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 cursor-pointer" onClick={() => {
+                if (user.role === 'consolidador') setCurrentScreen('dashboard_admin');
+                else if (user.role === 'representante') setCurrentScreen('dashboard_rep');
+                else setCurrentScreen('shop');
+            }}>
               <Leaf className="text-emerald-700 w-8 h-8" />
               <span className="font-black text-xl text-slate-800 tracking-tighter">Clube de Compras</span>
             </div>
 
-            {/* --- NOVO MENU DE NAVEGAÇÃO SUPER USUÁRIO (GESTOR) --- */}
+            {/* --- MENU DE NAVEGAÇÃO SUPER USUÁRIO (GESTOR) --- */}
             {user?.role === 'consolidador' && (
               <nav className="hidden md:flex bg-slate-100 p-1.5 rounded-2xl border">
                 <button onClick={() => setCurrentScreen('shop')} className={`flex items-center px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${currentScreen === 'shop' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-400'}`}><Store className="w-4 h-4 mr-2"/> Comprar</button>
@@ -457,23 +548,33 @@ export default function App() {
               </nav>
             )}
 
+            {/* --- NOVO MENU DE NAVEGAÇÃO PARA REPRESENTANTE --- */}
+            {user?.role === 'representante' && (
+              <nav className="hidden md:flex bg-slate-100 p-1.5 rounded-2xl border">
+                <button onClick={() => setCurrentScreen('shop')} className={`flex items-center px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${currentScreen === 'shop' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-400'}`}><Store className="w-4 h-4 mr-2"/> Comprar</button>
+                <button onClick={() => setCurrentScreen('dashboard_rep')} className={`flex items-center px-4 py-2 rounded-xl text-xs font-black uppercase transition-all ${currentScreen === 'dashboard_rep' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-400'}`}><LayoutDashboard className="w-4 h-4 mr-2"/> Minha Unidade</button>
+              </nav>
+            )}
+
             <div className="flex items-center space-x-4">
               <div className="hidden sm:flex flex-col items-end">
-                <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user.role === 'consolidador' ? 'Gestor Master' : user.role}</span>
+                <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user.role}</span>
                 <span className="text-sm font-black text-slate-800">{user.name}</span>
               </div>
-              <button onClick={handleLogout} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors">
+              <button onClick={handleLogout} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm border border-red-100">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               </button>
             </div>
           </div>
           
-          {/* Menu Mobile para Gestor */}
-          {user?.role === 'consolidador' && (
+          {/* Menu Mobile para Gestor e Representante */}
+          {(user?.role === 'consolidador' || user?.role === 'representante') && (
             <div className="md:hidden flex justify-around p-3 border-t bg-slate-50">
               <button onClick={() => setCurrentScreen('shop')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'shop' ? 'text-emerald-700' : 'text-gray-400'}`}><Store className="w-5 h-5"/> Loja</button>
-              <button onClick={() => setCurrentScreen('dashboard_rep')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_rep' ? 'text-emerald-700' : 'text-gray-400'}`}><LayoutDashboard className="w-5 h-5"/> Rep</button>
-              <button onClick={() => setCurrentScreen('dashboard_admin')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_admin' ? 'text-emerald-700' : 'text-gray-400'}`}><Package className="w-5 h-5"/> Admin</button>
+              <button onClick={() => setCurrentScreen('dashboard_rep')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_rep' ? 'text-emerald-700' : 'text-gray-400'}`}><LayoutDashboard className="w-5 h-5"/> {user.role === 'consolidador' ? 'Rep' : 'Unidade'}</button>
+              {user.role === 'consolidador' && (
+                <button onClick={() => setCurrentScreen('dashboard_admin')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_admin' ? 'text-emerald-700' : 'text-gray-400'}`}><Package className="w-5 h-5"/> Admin</button>
+              )}
             </div>
           )}
         </header>
@@ -482,32 +583,35 @@ export default function App() {
       <main>
         {currentScreen === 'login' && renderLogin()}
         {currentScreen === 'shop' && renderShop()}
-        {currentScreen === 'dashboard_rep' && (
-          <div className="p-4 max-w-4xl mx-auto pt-8">
-            <h2 className="text-3xl font-black mb-8">Painel de Logística</h2>
-            <div className="grid grid-cols-1 gap-4">
-              {orders.filter(o => (user.role === 'consolidador' || o.polo === user.polo) && o.status === 'pago').map(o => (
-                <div key={o.id} className="bg-white p-6 rounded-[2rem] shadow-sm border flex justify-between items-center">
-                  <div>
-                    <p className="font-black text-lg">{o.customer}</p>
-                    <p className="text-xs text-gray-400 uppercase">{o.polo} • R$ {o.total.toFixed(2)}</p>
-                  </div>
-                  <button onClick={() => handleSendWhatsApp(o)} className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl hover:bg-emerald-100 transition"><MessageCircle className="w-6 h-6"/></button>
-                </div>
-              ))}
-            </div>
+        {currentScreen === 'dashboard_rep' && renderRepDashboard()}
+        {currentScreen === 'dashboard_admin' && renderAdminDashboard()}
+        {currentScreen === 'gateway_pix' && (
+          <div className="p-4 max-w-lg mx-auto text-center pt-10">
+             <QrCode className="w-20 h-20 mx-auto text-emerald-600 mb-4" />
+             <h2 className="text-3xl font-black mb-4">Pagamento via PIX</h2>
+             <div className="bg-white p-6 rounded-[2rem] border-2 border-dashed mb-6">
+                <p className="font-mono text-xs break-all mb-4 text-gray-500">00020126580014br.gov.bcb.pix0136-simulado-clube-compras-sjc-2024</p>
+                <button onClick={() => { navigator.clipboard.writeText('000201...2024'); showToast('Código Copiado!'); }} className="bg-emerald-700 text-white px-6 py-2 rounded-xl font-bold">Copiar Código</button>
+             </div>
+             <button onClick={simulateBankWebhook} className="w-full bg-slate-800 text-emerald-400 py-4 rounded-xl font-black">Simular Confirmação Bancária</button>
           </div>
         )}
-        {currentScreen === 'dashboard_admin' && renderAdminDashboard()}
-        {/* Outras telas seguem a lógica de renderização anterior... */}
+        {currentScreen === 'success' && (
+          <div className="flex flex-col items-center justify-center min-h-[70vh] text-center">
+            <CheckCircle className="w-24 h-24 text-emerald-500 mb-6" />
+            <h2 className="text-4xl font-black mb-2">Sucesso!</h2>
+            <p className="text-gray-400 mb-8">Seu pedido foi processado na nuvem.</p>
+            <button onClick={() => setCurrentScreen('shop')} className="bg-emerald-700 text-white py-4 px-12 rounded-xl font-black">Voltar à Loja</button>
+          </div>
+        )}
       </main>
 
-      {/* Barra Inferior de Compras (Apenas para modo Loja) */}
+      {/* Barra Inferior de Compras (Modo Loja para qualquer papel) */}
       {currentScreen === 'shop' && cart.length > 0 && (
         <div className="fixed bottom-0 w-full p-4 z-50">
-          <button onClick={() => setCurrentScreen('checkout')} className="max-w-md mx-auto w-full bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-2xl flex justify-between px-8">
-            <span>Finalizar Pedido</span>
-            <span>{cart.length} itens</span>
+          <button onClick={() => setCurrentScreen('checkout')} className="max-w-md mx-auto w-full bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-2xl flex justify-between px-8 border-4 border-white/20">
+            <span>Finalizar Cesta</span>
+            <span>{cart.reduce((sum, i) => sum + i.qtd, 0)} itens</span>
           </button>
         </div>
       )}
