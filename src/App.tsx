@@ -849,6 +849,32 @@ export default function App() {
                 {editingProduct ? 'Editar Produto na Nuvem' : 'Adicionar Novo Produto à Nuvem'}
               </h3>
               <form key={editingProduct?.id || 'new'} onSubmit={saveProduct} className="space-y-4">
+                
+                {/* --- SEÇÃO DA IMAGEM --- */}
+                <div className="flex items-center space-x-4 p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                  <div className="w-20 h-20 bg-white border border-gray-200 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm">
+                    {imagePreview ? (
+                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : editingProduct?.image && editingProduct.image.length > 5 ? (
+                      <img src={editingProduct.image} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-4xl">{editingProduct?.image || '📦'}</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wide">Imagem do Produto</label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <label className="cursor-pointer bg-blue-50 border border-blue-200 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-100 transition flex items-center justify-center whitespace-nowrap">
+                        <ImageIcon className="w-4 h-4 mr-2" /> Escolher Foto
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      </label>
+                      <input name="imageFallback" defaultValue={(!editingProduct?.image || editingProduct.image.length > 5) ? '' : editingProduct.image} placeholder="Ou cole um Emoji (Ex: 🍎)" className="flex-1 border border-gray-300 rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500 outline-none" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 font-medium">Você pode escolher uma foto do celular/computador ou digitar um emoji.</p>
+                  </div>
+                </div>
+                {/* ----------------------- */}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div><label className="block text-xs font-bold text-gray-500 mb-1">Código SKU</label><input name="sku" defaultValue={editingProduct?.sku || ''} required className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none uppercase" /></div>
                   <div className="md:col-span-2"><label className="block text-xs font-bold text-gray-500 mb-1">Nome do Produto</label><input name="name" defaultValue={editingProduct?.name || ''} required className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-green-500 outline-none" /></div>
