@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet, Landmark } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet, Landmark, Loader2 } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -31,35 +31,29 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
 
 // Dados iniciais
 const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba'];
-const categorias = ['Todos', 'Carnes & Aves', 'Peixes', 'Grãos & Cereais', 'Mercearia'];
 
-// --- ATUALIZAÇÃO: CATÁLOGO BASEADO NA TABELA KORIN ---
-const initialProducts = [
-  { sku: '1423', category: 'Carnes & Aves', name: 'Coxa NGMO Cong Pct 1kg', description: 'Coxa de frango sem antibióticos.', price: 11.50, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: '1563', category: 'Carnes & Aves', name: 'Coxinha Asa NGMO Cong Pct 1kg', description: 'Coxinha da asa sem antibióticos.', price: 14.04, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: '1438', category: 'Carnes & Aves', name: 'Sobrecoxa NGMO Cong Pct 1kg', description: 'Sobrecoxa de frango sem transgênicos.', price: 22.27, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: '1420', category: 'Carnes & Aves', name: 'Pé NGMO Cong Pct 1kg', description: 'Pé de frango sem transgênicos.', price: 6.66, minOrderQuantity: 10, stockLocal: 0, image: '🍗' },
-  { sku: '1441', category: 'Carnes & Aves', name: 'Pescoço NGMO Cong Pct 1kg', description: 'Pescoço de frango sem transgênicos.', price: 5.93, minOrderQuantity: 10, stockLocal: 0, image: '🍗' },
-  { sku: '1414', category: 'Carnes & Aves', name: 'Fígado BP Cong BD 600g', description: 'Fígado de frango congelado.', price: 4.80, minOrderQuantity: 12, stockLocal: 0, image: '🥩' },
-  { sku: '1407', category: 'Carnes & Aves', name: 'Filé Coxa c/Sbr s/Pé NGMO Cong BD 600g', description: 'Filé de coxa com sobrecoxa.', price: 21.65, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
-  { sku: '1409', category: 'Carnes & Aves', name: 'Meio da Asa NGMO Cong BD 600g', description: 'Meio da asa de frango.', price: 12.05, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
-  { sku: '1445', category: 'Carnes & Aves', name: 'Coxa c/Sbr s/Osso c/Pele NGMO BD 600g', description: 'Coxa e sobrecoxa desossada com pele.', price: 17.16, minOrderQuantity: 12, stockLocal: 0, image: '🍗' },
-  { sku: '41013', category: 'Carnes & Aves', name: 'Hambúrguer Bovino Org Cong Pct 340g', description: 'Hambúrguer orgânico bovino de alta qualidade.', price: 34.44, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
-  { sku: '41027', category: 'Carnes & Aves', name: 'Carne Moída de Frango NGMO Pct 400g', description: 'Carne moída de frango.', price: 15.42, minOrderQuantity: 15, stockLocal: 0, image: '🥩' },
-  { sku: '1413', category: 'Carnes & Aves', name: 'Coração NGMO Cong BD 600g', description: 'Coração de frango.', price: 29.38, minOrderQuantity: 12, stockLocal: 0, image: '❤️' },
-  { sku: '1408', category: 'Carnes & Aves', name: 'Filé Peito NGMO Cong BD 600g', description: 'Filé de peito de frango Korin.', price: 30.81, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: '41014', category: 'Carnes & Aves', name: 'Carne Moída Bovina Org Cong Pct 400g', description: 'Carne moída bovina orgânica.', price: 45.11, minOrderQuantity: 15, stockLocal: 0, image: '🥩' },
-  { sku: '41116', category: 'Carnes & Aves', name: 'Hambúrguer Frango NGMO Cong 360g', description: 'Hambúrguer de frango.', price: 25.94, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
-  { sku: '56004', category: 'Peixes', name: 'Filé de Truta Korin Cong Pct 500g', description: 'Filé de truta sustentável.', price: 73.45, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
-  { sku: '56005', category: 'Peixes', name: 'Filé de Tilápia s/Pele Korin Cong 450g', description: 'Tilápia sustentável Korin.', price: 40.82, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
-  { sku: '57501', category: 'Grãos & Cereais', name: 'Arroz Agulhinha Polido Org Vácuo 1kg', description: 'Arroz branco orgânico tipo 1.', price: 19.50, minOrderQuantity: 20, stockLocal: 0, image: '🍚' },
-  { sku: '57503', category: 'Grãos & Cereais', name: 'Arroz Agulhinha Integral Org Vácuo 1kg', description: 'Arroz integral orgânico.', price: 18.85, minOrderQuantity: 20, stockLocal: 0, image: '🍚' },
-  { sku: '58009', category: 'Grãos & Cereais', name: 'Feijão Carioca Org 500g', description: 'Feijão carioca 100% orgânico.', price: 13.65, minOrderQuantity: 20, stockLocal: 0, image: '🫘' },
-  { sku: '58008', category: 'Grãos & Cereais', name: 'Feijão Preto Org 500g', description: 'Feijão preto orgânico.', price: 13.39, minOrderQuantity: 20, stockLocal: 0, image: '🫘' },
-  { sku: '57010', category: 'Mercearia', name: 'Extrato de Própolis Verde Org 30ml', description: 'Própolis verde puro.', price: 23.14, minOrderQuantity: 12, stockLocal: 0, image: '🍯' },
-  { sku: '57001', category: 'Mercearia', name: 'Mel Org Bisnaga 300g', description: 'Mel orgânico em bisnaga.', price: 25.09, minOrderQuantity: 12, stockLocal: 0, image: '🍯' },
-  { sku: '57009', category: 'Mercearia', name: 'Mel Org Pt 1kg', description: 'Mel orgânico no pote.', price: 65.65, minOrderQuantity: 10, stockLocal: 0, image: '🍯' },
-];
+// --- LEITOR INTELIGENTE DE CSV (MÁQUINA DE PARSING) ---
+const parseCSVLine = (text) => {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"' && text[i+1] === '"') {
+      current += '"';
+      i++;
+    } else if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+};
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('login');
@@ -69,7 +63,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [allUsers, setAllUsers] = useState([]); // NOVO: Guarda o perfil de todos para o financeiro
+  const [allUsers, setAllUsers] = useState([]);
   const [isLoadingDB, setIsLoadingDB] = useState(true);
 
   // --- ESTADOS DE AUTENTICAÇÃO ---
@@ -82,6 +76,7 @@ export default function App() {
   // --- ESTADOS DE PAGAMENTO E GESTÃO ---
   const [pendingOrder, setPendingOrder] = useState(null);
   const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [] });
+  const [isUploadingCSV, setIsUploadingCSV] = useState(false);
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -104,6 +99,9 @@ export default function App() {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
+
+  // Categorias Dinâmicas com base nos produtos atuais
+  const activeCategories = ['Todos', ...Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort()];
 
   // --- ESCUTADOR DE AUTENTICAÇÃO ---
   useEffect(() => {
@@ -144,13 +142,7 @@ export default function App() {
     const fetchFromFirebase = async () => {
       try {
         const prodSnapshot = await getDocs(collection(db, "products"));
-        if (prodSnapshot.empty) {
-          for (let p of initialProducts) await addDoc(collection(db, "products"), p);
-          const newProds = await getDocs(collection(db, "products"));
-          setProducts(newProds.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        } else {
-          setProducts(prodSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
+        setProducts(prodSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
         const custSnapshot = await getDocs(collection(db, "customers"));
         setCustomers(custSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -158,7 +150,6 @@ export default function App() {
         const ordSnapshot = await getDocs(collection(db, "orders"));
         setOrders(ordSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-        // Buscar utilizadores para o painel financeiro do Gestor
         const usersSnapshot = await getDocs(collection(db, "users"));
         setAllUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
@@ -201,7 +192,6 @@ export default function App() {
     setAuthLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
-      // Cria a estrutura com a carteira digital zerada
       const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0, pendingPixRefund: 0 };
       await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
       await addDoc(collection(db, "customers"), newUserProfile);
@@ -287,7 +277,6 @@ export default function App() {
       setOrders([...orders, savedOrder]);
       setCart([]);
       
-      // Se a carteira pagou 100% do pedido, não precisa de banco
       if (finalTotal <= 0 && walletDiscount > 0) {
           const newWalletBalance = user.walletBalance - walletDiscount;
           await updateDoc(doc(db, "users", user.uid), { walletBalance: newWalletBalance });
@@ -315,7 +304,6 @@ export default function App() {
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' });
       setOrders(orders.map(o => o.id === pendingOrder.id ? { ...o, status: 'pago' } : o));
       
-      // Abate o saldo da carteira apenas quando o banco confirma o valor restante
       if (pendingOrder.walletDiscountApplied > 0) {
          const newWalletBalance = user.walletBalance - pendingOrder.walletDiscountApplied;
          await updateDoc(doc(db, "users", user.uid), { walletBalance: newWalletBalance });
@@ -344,7 +332,6 @@ export default function App() {
             refundAmount: missingTotal
         });
 
-        // Gera Crédito Automaticamente na Carteira Digital do Cliente
         const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
         const querySnapshot = await getDocs(q);
         
@@ -353,7 +340,6 @@ export default function App() {
             const currentWallet = userDoc.data().walletBalance || 0;
             await updateDoc(doc(db, "users", userDoc.id), { walletBalance: currentWallet + missingTotal });
             
-            // Atualiza localmente e na visão do Gestor
             setAllUsers(prev => prev.map(u => u.id === userDoc.id ? { ...u, walletBalance: currentWallet + missingTotal } : u));
             if (user.uid === userDoc.id) setUser({...user, walletBalance: currentWallet + missingTotal});
         } else {
@@ -430,14 +416,14 @@ export default function App() {
     const text = `Olá, ${customer.name}! 🌿 Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
-  // ------------------------------------------
 
+  // --- GRAVAR PRODUTO MANUAL ---
   const saveProduct = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const newProdData = {
       sku: formData.get('sku'),
-      category: formData.get('category'),
+      category: formData.get('category') || 'Outros',
       name: formData.get('name'),
       description: formData.get('description'),
       price: parseFloat(formData.get('price')),
@@ -468,6 +454,91 @@ export default function App() {
         showToast('Produto removido.', 'success');
       } catch(err) { showToast('Erro ao remover.', 'error'); }
     }
+  };
+
+  // --- NOVA FUNÇÃO: UPLOAD INTELIGENTE DE CSV ---
+  const handleCSVUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsUploadingCSV(true);
+    showToast(`A processar a folha "${file.name}"... Aguarde.`, 'success');
+    
+    const reader = new FileReader();
+
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/);
+
+      if (lines.length < 2) {
+        setIsUploadingCSV(false);
+        return showToast('O ficheiro CSV parece estar vazio.', 'error');
+      }
+
+      const newProducts = [];
+      
+      // Salta o cabeçalho (i=1)
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const columns = parseCSVLine(line);
+        if (columns.length >= 5) {
+          const sku = columns[0]?.trim();
+          const category = columns[1]?.trim() || 'Outros';
+          const name = columns[2]?.trim();
+          const description = columns[3]?.trim() || '';
+          
+          // Trata os preços que vêm com vírgula ou dentro de aspas (Ex: "11,5")
+          let priceStr = columns[4]?.replace(/['"]/g, '').trim();
+          priceStr = priceStr ? priceStr.replace(',', '.') : '0';
+          const price = parseFloat(priceStr) || 0;
+          
+          const minOrderQuantity = parseInt(columns[5]) || 1;
+          const stockLocal = parseInt(columns[6]) || 0;
+          const image = columns[7]?.trim() || '📦';
+
+          if (!name) continue; // Ignora linhas em branco ou mal formatadas
+
+          newProducts.push({
+            sku, category, name, description, price, minOrderQuantity, stockLocal, image
+          });
+        }
+      }
+
+      try {
+        const prodSnapshot = await getDocs(collection(db, "products"));
+        const currentProducts = prodSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const updatedLocalProducts = [...currentProducts];
+
+        for (const np of newProducts) {
+           // Tenta cruzar pelo SKU, se não tiver SKU, tenta pelo Nome
+           const existingIndex = updatedLocalProducts.findIndex(p => (np.sku && p.sku === np.sku) || (!np.sku && p.name === np.name));
+
+           if (existingIndex >= 0) {
+              // Produto já existe, vamos atualizar o preço e os dados!
+              const existingId = updatedLocalProducts[existingIndex].id;
+              await updateDoc(doc(db, "products", existingId), np);
+              updatedLocalProducts[existingIndex] = { id: existingId, ...np };
+           } else {
+              // Produto novo, adicionar!
+              const docRef = await addDoc(collection(db, "products"), np);
+              updatedLocalProducts.push({ id: docRef.id, ...np });
+           }
+        }
+
+        setProducts(updatedLocalProducts);
+        showToast(`Sucesso! ${newProducts.length} itens importados ou atualizados.`, 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Erro ao sincronizar com a base de dados.', 'error');
+      } finally {
+        setIsUploadingCSV(false);
+        e.target.value = null; // Limpa o input do ficheiro
+      }
+    };
+
+    reader.readAsText(file); // Usa UTF-8 por padrão
   };
 
   const handleImageUpload = (e) => {
@@ -502,20 +573,13 @@ export default function App() {
 
   const downloadCSVTemplate = () => {
     const headers = "SKU,Categoria,Nome,Descricao,Preco,QtdMinimaFornecedor,EstoqueAtual,Imagem_URL_ou_Emoji\n";
-    const sample = "1423,Carnes & Aves,Coxa NGMO Cong Pct 1kg,Coxa de frango.,11.50,15,5,🍗\n";
+    const sample = "1423,Carnes & Aves,Coxa NGMO Cong Pct 1kg,Coxa de frango.,\"11,50\",15,5,🍗\n";
     const blob = new Blob([headers + sample], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = url; link.download = "modelo_catalogo.csv";
+    link.href = url; link.download = "modelo_catalogo_korin.csv";
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
     showToast('Modelo descarregado!', 'success');
-  };
-
-  const handleCSVUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    showToast(`Tabela "${file.name}" carregada! Em breve processaremos.`, 'success');
-    e.target.value = null;
   };
 
   // --- ECRÃS ---
@@ -618,8 +682,9 @@ export default function App() {
           <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Polo de Retirada: <strong className="font-black text-emerald-800">{user.polo}</strong></span></div>
         </div>
         
+        {/* --- CATEGORIAS GERADAS DINAMICAMENTE DA BASE DE DADOS --- */}
         <div className="flex overflow-x-auto space-x-3 mb-10 pb-2 scrollbar-hide">
-          {categorias.map(cat => (
+          {activeCategories.map(cat => (
             <button key={cat} onClick={() => setShopCategory(cat)} className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-200 ${shopCategory === cat ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20 transform scale-105' : 'bg-white text-gray-500 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
               {cat}
             </button>
@@ -746,7 +811,7 @@ export default function App() {
         )}
 
         <button onClick={() => processGatewayPayment(finalTotal, walletDiscount)} disabled={isProcessingPayment} className={`w-full text-white font-black text-lg py-5 rounded-2xl shadow-xl flex items-center justify-center transition-all ${isProcessingPayment ? 'bg-emerald-400 cursor-wait' : 'bg-emerald-700 hover:bg-emerald-800 hover:shadow-emerald-700/30 hover:-translate-y-1'}`}>
-          {isProcessingPayment ? <span className="animate-pulse flex items-center">A processar o seu pedido...</span> : finalTotal <= 0 ? 'Pagar Usando Saldo' : `Gerar Pagamento Seguro`}
+          {isProcessingPayment ? <span className="animate-pulse flex items-center">A processar a sua encomenda...</span> : finalTotal <= 0 ? 'Pagar Usando Saldo' : `Gerar Pagamento Seguro`}
         </button>
       </div>
     );
@@ -1125,7 +1190,6 @@ export default function App() {
           <button onClick={() => setAdminTab('pedidos')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'pedidos' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Painel de Compras</button>
           <button onClick={() => setAdminTab('catalogo')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'catalogo' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Gestão de Catálogo</button>
           <button onClick={() => setAdminTab('crm')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'crm' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>CRM de Clientes</button>
-          {/* NOVO BOTÃO FINANCEIRO */}
           <button onClick={() => setAdminTab('financeiro')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'financeiro' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Financeiro & Reembolsos</button>
         </div>
 
@@ -1213,7 +1277,7 @@ export default function App() {
                         </div>
                       </div>
                       
-                      {/* --- FIX MOBILE OVERFLOW AQUI: DE FLEX PARA GRID --- */}
+                      {/* --- FIX MOBILE OVERFLOW --- */}
                       <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
                         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Vendido</p><p className="text-3xl font-black text-slate-800">{totalVendidos}</p>
@@ -1282,11 +1346,13 @@ export default function App() {
             <div className="bg-emerald-50/50 border border-emerald-100 p-8 rounded-[2rem] flex flex-col md:flex-row items-center justify-between shadow-sm">
               <div className="mb-6 md:mb-0">
                 <h3 className="font-black text-emerald-900 text-xl tracking-tight flex items-center mb-2"><FileSpreadsheet className="w-6 h-6 mr-3 text-emerald-600"/> Importação Massiva (Fornecedor)</h3>
-                <p className="text-sm font-medium text-emerald-700/80 mb-4 max-w-md">Atualize todos os preços e SKUs de uma vez fazendo o upload da folha de cálculo mensal.</p>
+                <p className="text-sm font-medium text-emerald-700/80 mb-4 max-w-md">Atualize todos os preços e SKUs de uma vez fazendo o upload da folha de cálculo mensal CSV.</p>
                 <button onClick={downloadCSVTemplate} className="text-xs font-black text-emerald-700 uppercase tracking-widest hover:text-emerald-900 flex items-center bg-white px-4 py-2 rounded-lg border border-emerald-200 shadow-sm"><Download className="w-4 h-4 mr-2" /> Baixar Modelo Padrão</button>
               </div>
-              <label className="cursor-pointer bg-emerald-700 text-white font-black py-4 px-8 rounded-2xl hover:bg-emerald-800 transition-all flex items-center shadow-lg shadow-emerald-700/30 hover:-translate-y-1 transform whitespace-nowrap">
-                <Upload className="w-5 h-5 mr-3" /><span>Fazer Upload CSV</span><input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} />
+              <label className={`cursor-pointer bg-emerald-700 text-white font-black py-4 px-8 rounded-2xl transition-all flex items-center shadow-lg shadow-emerald-700/30 whitespace-nowrap ${isUploadingCSV ? 'opacity-70' : 'hover:bg-emerald-800 hover:-translate-y-1 transform'}`}>
+                {isUploadingCSV ? <Loader2 className="w-5 h-5 mr-3 animate-spin" /> : <Upload className="w-5 h-5 mr-3" />}
+                <span>{isUploadingCSV ? 'A Processar...' : 'Fazer Upload CSV'}</span>
+                <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload} disabled={isUploadingCSV} />
               </label>
             </div>
 
@@ -1328,9 +1394,10 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Categoria</label>
-                    <select name="category" defaultValue={editingProduct?.category || categorias[1]} className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-bold text-slate-700 transition-colors cursor-pointer">
-                      {categorias.filter(c => c !== 'Todos').map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
+                    <input name="category" list="categories-list" defaultValue={editingProduct?.category || ''} required placeholder="Ex: Carnes & Aves" className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-bold text-slate-700 transition-colors" />
+                    <datalist id="categories-list">
+                      {activeCategories.filter(c => c !== 'Todos').map(cat => <option key={cat} value={cat} />)}
+                    </datalist>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Preço (R$)</label><input name="price" type="number" step="0.01" defaultValue={editingProduct?.price || ''} required placeholder="0.00" className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-black text-emerald-700 transition-colors" /></div>
