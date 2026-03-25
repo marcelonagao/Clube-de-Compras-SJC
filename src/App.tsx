@@ -1020,7 +1020,7 @@ export default function App() {
                 <div className="flex justify-between items-end bg-slate-50 p-4 rounded-xl">
                   <div>
                      <span className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1">Total a Pagar</span>
-                     <span className="font-black text-2xl text-emerald-800">R$ {(order.total || 0).toFixed(2).replace('.', ',')}</span>
+                     <span className="font-black text-2xl text-emerald-800">R$ ${(order.total || 0).toFixed(2).replace('.', ',')}</span>
                   </div>
                   {order.status === 'aguardando_pagamento' ? (
                      <button onClick={() => { setPendingOrder(order); setPaymentMethod(order.method); setCurrentScreen(order.method === 'pix' ? 'gateway_pix' : 'gateway_credit'); }} className="text-xs font-black text-white uppercase bg-orange-500 px-4 py-2 rounded-lg border border-orange-600 hover:bg-orange-600 transition shadow-sm">Pagar Agora</button>
@@ -1032,25 +1032,6 @@ export default function App() {
             ))}
           </div>
         )}
-
-        {/* MODAL DE SOLICITAÇÃO DE PIX */}
-        {pixRefundModal.open && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-            <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
-               <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Solicitar Estorno PIX</h3>
-               <p className="text-sm text-gray-500 mb-6 font-medium">Iremos transferir R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')} para a sua conta.</p>
-               <form onSubmit={requestPixRefund}>
-                 <label className="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-widest">Sua Chave PIX</label>
-                 <input autoFocus required value={pixRefundModal.key} onChange={(e) => setPixRefundModal({...pixRefundModal, key: e.target.value})} placeholder="CPF, E-mail, Celular ou Aleatória" className="w-full border-2 border-gray-200 rounded-xl p-4 text-sm focus:border-emerald-500 outline-none mb-6 font-bold text-slate-700 bg-slate-50" />
-                 <div className="flex gap-3">
-                    <button type="button" onClick={() => setPixRefundModal({ open: false, key: '' })} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-[2] py-4 bg-emerald-700 text-white font-black rounded-xl shadow-lg transition-all hover:bg-emerald-800 hover:-translate-y-1">Confirmar Pedido</button>
-                 </div>
-               </form>
-            </div>
-          </div>
-        )}
-
       </div>
     );
   };
@@ -1687,9 +1668,11 @@ export default function App() {
             )}
 
             <div className="flex items-center space-x-4">
-              <button onClick={() => setCurrentScreen(currentScreen === 'my_orders' ? 'shop' : 'my_orders')} className="hidden sm:flex text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition-colors shadow-sm">
-                {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'Minhas Encomendas'}
-              </button>
+              {(!user?.role || user?.role?.toLowerCase() === 'cliente' || currentScreen === 'shop' || currentScreen === 'my_orders') && (
+                <button onClick={() => setCurrentScreen(currentScreen === 'my_orders' ? 'shop' : 'my_orders')} className="hidden sm:flex text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition-colors shadow-sm">
+                  {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'Minhas Encomendas'}
+                </button>
+              )}
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user?.role === 'consolidador' ? 'Gestor Master' : user?.role}</span>
                 <span className="text-sm font-black text-slate-800">{user?.name}</span>
@@ -1704,7 +1687,9 @@ export default function App() {
           <div className="sm:hidden flex justify-around p-3 border-t bg-slate-50">
             <button onClick={() => setCurrentScreen('shop')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'shop' ? 'text-emerald-700' : 'text-gray-400'}`}><Store className="w-5 h-5"/> Loja</button>
             
-            <button onClick={() => setCurrentScreen('my_orders')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'my_orders' ? 'text-emerald-700' : 'text-gray-400'}`}><ClipboardList className="w-5 h-5"/> Pedidos</button>
+            {(!user?.role || user?.role?.toLowerCase() === 'cliente' || currentScreen === 'shop' || currentScreen === 'my_orders') && (
+              <button onClick={() => setCurrentScreen('my_orders')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'my_orders' ? 'text-emerald-700' : 'text-gray-400'}`}><ClipboardList className="w-5 h-5"/> Pedidos</button>
+            )}
 
             {(user?.role === 'consolidador' || user?.role === 'representante') && (
               <button onClick={() => setCurrentScreen('dashboard_rep')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_rep' ? 'text-emerald-700' : 'text-gray-400'}`}><LayoutDashboard className="w-5 h-5"/> {user?.role === 'consolidador' ? 'Rep' : 'Unidade'}</button>
@@ -1735,7 +1720,7 @@ export default function App() {
             </div>
             <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Tudo Certo!</h2>
             <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">O seu pedido foi registado na nossa base com segurança e a operação foi concluída.</p>
-            <button onClick={() => setCurrentScreen('my_orders')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Ver Meus Pedidos</button>
+            <button onClick={() => setCurrentScreen((!user?.role || user?.role?.toLowerCase().includes('cliente')) ? 'my_orders' : 'dashboard_rep')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Continuar</button>
           </div>
         )}
       </main>
