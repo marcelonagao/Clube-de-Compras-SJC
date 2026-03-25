@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO SEU FIREBASE ---
@@ -19,7 +19,7 @@ const firebaseConfig = {
 // Inicializando o Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); // Motor de Autenticação
+const auth = getAuth(app);
 
 // --- INJEÇÃO DO TAILWIND ---
 if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
@@ -31,15 +31,18 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
 
 // Dados iniciais
 const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba'];
-const categorias = ['Todos', 'Hortifruti', 'Carnes & Aves', 'Grãos & Cereais', 'Mercearia', 'Laticínios'];
+const categorias = ['Todos', 'Carnes & Aves', 'Peixes', 'Grãos & Cereais', 'Mercearia'];
 
+// --- ATUALIZAÇÃO: CATÁLOGO BASEADO NA TABELA KORIN ---
 const initialProducts = [
-  { sku: 'HORT-001', category: 'Hortifruti', name: 'Tomate Orgânico (kg)', description: 'Tomates frescos colhidos no dia. Excelentes para saladas e molhos.', price: 8.50, minOrderQuantity: 20, stockLocal: 5, image: '🍅' },
-  { sku: 'HORT-002', category: 'Hortifruti', name: 'Alface Crespa (un)', description: 'Maço grande de alface crespa hidropônica.', price: 3.00, minOrderQuantity: 30, stockLocal: 0, image: '🥬' },
-  { sku: 'GRAO-001', category: 'Grãos & Cereais', name: 'Arroz Agulhinha (5kg)', description: 'Arroz branco tipo 1, safra nova.', price: 24.50, minOrderQuantity: 10, stockLocal: 2, image: '🍚' },
-  { sku: 'CARN-001', category: 'Carnes & Aves', name: 'Peito de Frango (kg)', description: 'Peito de frango resfriado sem osso e sem pele.', price: 19.90, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
-  { sku: 'CARN-002', category: 'Carnes & Aves', name: 'Coração de Frango (kg)', description: 'Coração de frango limpo e resfriado.', price: 22.50, minOrderQuantity: 10, stockLocal: 0, image: '❤️' },
-  { sku: 'MERC-001', category: 'Mercearia', name: 'Mel Silvestre (500g)', description: 'Mel puro de abelhas silvestres da região.', price: 35.00, minOrderQuantity: 12, stockLocal: 1, image: '🍯' },
+  { sku: '1423', category: 'Carnes & Aves', name: 'Coxa NGMO Cong Pct 1kg', description: 'Coxa de frango sem antibióticos.', price: 11.50, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
+  { sku: '1563', category: 'Carnes & Aves', name: 'Coxinha Asa NGMO Cong Pct 1kg', description: 'Coxinha da asa sem antibióticos.', price: 14.04, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
+  { sku: '1408', category: 'Carnes & Aves', name: 'Filé Peito NGMO Cong BD 600g', description: 'Filé de peito de frango Korin.', price: 30.81, minOrderQuantity: 15, stockLocal: 0, image: '🍗' },
+  { sku: '41013', category: 'Carnes & Aves', name: 'Hamburguer Bovino Org Cong Pct 340g', description: 'Hambúrguer orgânico de alta qualidade.', price: 34.44, minOrderQuantity: 12, stockLocal: 0, image: '🍔' },
+  { sku: '56005', category: 'Peixes', name: 'Filé de Tilápia s/Pele Korin Cong Pct 450g', description: 'Tilápia sustentável Korin.', price: 40.82, minOrderQuantity: 10, stockLocal: 0, image: '🐟' },
+  { sku: '57501', category: 'Grãos & Cereais', name: 'Arroz Agulhinha Polido Org Vácuo 1kg', description: 'Arroz branco orgânico tipo 1.', price: 19.50, minOrderQuantity: 20, stockLocal: 0, image: '🍚' },
+  { sku: '58009', category: 'Grãos & Cereais', name: 'Feijão Carioca Org 500g', description: 'Feijão carioca 100% orgânico.', price: 13.65, minOrderQuantity: 20, stockLocal: 0, image: '🫘' },
+  { sku: '57010', category: 'Mercearia', name: 'Extrato de Própolis Verde Org 30ml', description: 'Própolis verde puro.', price: 23.14, minOrderQuantity: 12, stockLocal: 0, image: '🍯' },
 ];
 
 export default function App() {
@@ -59,8 +62,9 @@ export default function App() {
   const [registerRole, setRegisterRole] = useState('cliente');
   const [secretCode, setSecretCode] = useState('');
   
-  // --- ESTADOS DE PAGAMENTO ---
-  const [pendingOrder, setPendingOrder] = useState(null); // Guarda a encomenda que está a aguardar pagamento
+  // --- ESTADOS DE PAGAMENTO E GESTÃO ---
+  const [pendingOrder, setPendingOrder] = useState(null);
+  const [missingItemsModal, setMissingItemsModal] = useState({ open: false, order: null, missingItems: [], refundType: 'credit' });
   // -------------------------------------
 
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -93,13 +97,14 @@ export default function App() {
         
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
+          // Garante que o walletBalance é lido do BD
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, walletBalance: userData.walletBalance || 0, ...userData });
           
           if (userData.role === 'consolidador') setCurrentScreen('dashboard_admin');
           else if (userData.role === 'representante') setCurrentScreen('dashboard_rep');
           else setCurrentScreen('shop');
         } else {
-          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Utilizador' });
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, role: 'cliente', name: 'Utilizador', walletBalance: 0 });
           setCurrentScreen('shop');
         }
       } else {
@@ -170,7 +175,8 @@ export default function App() {
     setAuthLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
-      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole };
+      // Cria a estrutura com a carteira digital zerada
+      const newUserProfile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0 };
       await setDoc(doc(db, "users", userCredential.user.uid), newUserProfile);
       await addDoc(collection(db, "customers"), newUserProfile);
       showToast('Conta criada com sucesso!', 'success');
@@ -219,7 +225,7 @@ export default function App() {
         method: 'dinheiro/pix direto',
         status: 'pago',
         date: new Date().toISOString(),
-        items: manualCart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd }))
+        items: manualCart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd, price: item.price }))
       };
       
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
@@ -233,11 +239,8 @@ export default function App() {
     }
   };
 
-  const processGatewayPayment = async () => {
+  const processGatewayPayment = async (finalTotal, walletDiscount) => {
     setIsProcessingPayment(true);
-    const hasFee = paymentMethod === 'credit';
-    const finalTotal = hasFee ? cartTotal * 1.05 : cartTotal;
-
     try {
       const newOrderData = {
         customer: user.name,
@@ -245,20 +248,30 @@ export default function App() {
         whatsapp: user.whatsapp,
         polo: user.polo,
         total: finalTotal,
-        method: paymentMethod,
-        status: 'aguardando_pagamento',
+        method: finalTotal <= 0 ? 'saldo_carteira' : paymentMethod,
+        status: finalTotal <= 0 ? 'pago' : 'aguardando_pagamento',
+        walletDiscountApplied: walletDiscount,
         date: new Date().toISOString(),
-        items: cart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd }))
+        items: cart.map(item => ({ id: item.id, name: item.name, qtd: item.qtd, price: item.price }))
       };
       
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
       const savedOrder = { id: orderRef.id, ...newOrderData };
       
       setOrders([...orders, savedOrder]);
-      setPendingOrder(savedOrder);
       setCart([]);
-      setIsProcessingPayment(false);
       
+      // Se a carteira pagou 100% do pedido, não precisa de banco
+      if (finalTotal <= 0 && walletDiscount > 0) {
+          await updateDoc(doc(db, "users", user.uid), { walletBalance: user.walletBalance - walletDiscount });
+          setUser({...user, walletBalance: user.walletBalance - walletDiscount});
+          setIsProcessingPayment(false);
+          setCurrentScreen('success');
+          return;
+      }
+      
+      setPendingOrder(savedOrder);
+      setIsProcessingPayment(false);
       if (paymentMethod === 'pix') setCurrentScreen('gateway_pix');
       else setCurrentScreen('gateway_credit');
       
@@ -273,11 +286,61 @@ export default function App() {
     try {
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' });
       setOrders(orders.map(o => o.id === pendingOrder.id ? { ...o, status: 'pago' } : o));
+      
+      // Abate o saldo da carteira apenas quando o banco confirma o valor restante
+      if (pendingOrder.walletDiscountApplied > 0) {
+         await updateDoc(doc(db, "users", user.uid), { walletBalance: user.walletBalance - pendingOrder.walletDiscountApplied });
+         setUser({...user, walletBalance: user.walletBalance - pendingOrder.walletDiscountApplied});
+      }
+      
       setCurrentScreen('success');
     } catch (err) {
       showToast('Erro ao simular webhook.', 'error');
     }
   };
+
+  // --- FUNÇÃO PARA PROCESSAR FALTAS / CRÉDITOS ---
+  const handleConfirmFaltas = async (missingTotal) => {
+    if (missingTotal <= 0) return;
+    
+    // Novo array descontando o que faltou
+    const newItems = missingItemsModal.missingItems.map(i => ({...i, qtd: i.qtd - i.removedQtd})).filter(i => i.qtd > 0);
+    const newTotal = missingItemsModal.order.total - missingTotal;
+    const refundStatus = missingItemsModal.refundType === 'pix' ? 'pendente_estorno' : 'credito_gerado';
+
+    try {
+        await updateDoc(doc(db, "orders", missingItemsModal.order.id), {
+            items: newItems,
+            total: Math.max(0, newTotal),
+            refundStatus: refundStatus,
+            refundAmount: missingTotal
+        });
+
+        // Se escolheu gerar crédito para a carteira
+        if (missingItemsModal.refundType === 'credit') {
+            const q = query(collection(db, "users"), where("email", "==", missingItemsModal.order.email));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                const userDoc = querySnapshot.docs[0];
+                const currentWallet = userDoc.data().walletBalance || 0;
+                await updateDoc(doc(db, "users", userDoc.id), { walletBalance: currentWallet + missingTotal });
+                // Se for a conta do gestor simulando falta na própria encomenda:
+                if (user.uid === userDoc.id) setUser({...user, walletBalance: currentWallet + missingTotal});
+            } else {
+                if (missingItemsModal.order.method === 'dinheiro/pix direto') {
+                    showToast("Nota: Para clientes avulsos sem conta, o crédito é simbólico. Registe manualmente.", "success");
+                }
+            }
+        }
+
+        setOrders(orders.map(o => o.id === missingItemsModal.order.id ? { ...o, items: newItems, total: Math.max(0, newTotal), refundStatus, refundAmount: missingTotal } : o));
+        setMissingItemsModal({open: false, order: null, missingItems: [], refundType: 'credit'});
+        showToast("Falta registrada e cliente compensado!", "success");
+    } catch(e) {
+        showToast("Erro ao processar falta e crédito.", "error");
+    }
+  }
 
   // --- FUNÇÕES DE INTEGRAÇÃO COM WHATSAPP ---
   const handleSendWhatsApp = (order) => {
@@ -287,9 +350,15 @@ export default function App() {
     }
     let phone = order.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
+    
+    // Adiciona informação de crédito se houve falta
+    let refundInfo = '';
+    if (order.refundStatus === 'credito_gerado') refundInfo = `\n🎁 *Adicionamos R$ ${order.refundAmount.toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra!`;
+    else if (order.refundStatus === 'pendente_estorno') refundInfo = `\n⚠️ Tivemos a falta de um item. Nossa equipa entrará em contacto para o estorno de R$ ${order.refundAmount.toFixed(2)}.`;
+
     const itemsList = order.items.map(i => `▫️ ${i.qtd}x ${i.name}`).join('\n');
     const total = `R$ ${order.total.toFixed(2).replace('.', ',')}`;
-    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${order.id.slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! 💚`;
+    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${order.id.slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! 💚`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -375,7 +444,7 @@ export default function App() {
 
   const downloadCSVTemplate = () => {
     const headers = "SKU,Categoria,Nome,Descricao,Preco,QtdMinimaFornecedor,EstoqueAtual,Imagem_URL_ou_Emoji\n";
-    const sample = "HORT-001,Hortifruti,Tomate Orgânico (kg),Tomates frescos colhidos no dia.,8.50,20,5,🍅\n";
+    const sample = "1423,Carnes & Aves,Coxa NGMO Cong Pct 1kg,Coxa de frango.,11.50,15,5,🍗\n";
     const blob = new Blob([headers + sample], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -408,7 +477,7 @@ export default function App() {
       <div className="bg-white p-8 rounded-[2rem] shadow-xl w-full max-w-md text-center border border-gray-100">
         <Leaf className="text-emerald-700 w-16 h-16 mx-auto mb-4 drop-shadow-sm" />
         <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tight">Clube de Compras</h1>
-        <p className="text-gray-500 mb-8 text-sm font-medium">Alimentos frescos diretos para si</p>
+        <p className="text-gray-500 mb-8 text-sm font-medium">Alimentos saudáveis diretos para si</p>
         
         {authMode === 'login' ? (
           <form onSubmit={handleLogin} className="text-left space-y-4">
@@ -553,7 +622,11 @@ export default function App() {
   const renderCheckout = () => {
     const hasFee = paymentMethod === 'credit';
     const feeAmount = hasFee ? cartTotal * 0.05 : 0;
-    const finalTotal = cartTotal + feeAmount;
+    const subTotalWithFee = cartTotal + feeAmount;
+    
+    // Logica da Carteira (Wallet)
+    const walletDiscount = (user?.walletBalance || 0) > 0 ? Math.min(user.walletBalance, subTotalWithFee) : 0;
+    const finalTotal = subTotalWithFee - walletDiscount;
 
     return (
       <div className="p-4 max-w-2xl mx-auto pb-24 pt-8">
@@ -577,11 +650,17 @@ export default function App() {
           </div>
           <div className="bg-slate-50 rounded-xl p-5 mt-6">
             <div className="flex justify-between text-gray-600 mb-3 font-medium"><span>Subtotal dos Produtos</span><span>R$ {cartTotal.toFixed(2).replace('.', ',')}</span></div>
-            {hasFee ? (
+            {hasFee && (
               <div className="flex justify-between text-orange-600 mb-3 text-sm font-bold"><span>Taxa de Cartão (5%)</span><span>+ R$ {feeAmount.toFixed(2).replace('.', ',')}</span></div>
-            ) : (
-              <div className="flex justify-between text-emerald-600 mb-3 text-sm font-bold"><span>Desconto PIX</span><span>Aplicado na hora</span></div>
             )}
+            
+            {walletDiscount > 0 && (
+              <div className="flex justify-between text-emerald-600 mb-3 text-sm font-bold bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                <span className="flex items-center"><Wallet className="w-4 h-4 mr-2"/> Saldo da Carteira Aplicado</span>
+                <span>- R$ {walletDiscount.toFixed(2).replace('.', ',')}</span>
+              </div>
+            )}
+            
             <div className="flex justify-between items-end border-t border-gray-200 pt-4 mt-2">
               <span className="font-bold text-gray-500 uppercase tracking-widest text-xs">Total a Pagar</span>
               <span className="font-black text-3xl text-emerald-700 tracking-tighter">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
@@ -589,24 +668,28 @@ export default function App() {
           </div>
         </div>
 
-        <h3 className="font-black text-emerald-800 mb-4 text-sm uppercase tracking-widest pl-2">Forma de Pagamento</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-          <label className={`flex flex-col items-center p-6 border-2 rounded-2xl cursor-pointer transition-all ${paymentMethod === 'pix' ? 'border-emerald-600 bg-emerald-50 shadow-md' : 'border-gray-200 bg-white hover:border-emerald-200'}`}>
-            <input type="radio" name="payment" value="pix" checked={paymentMethod === 'pix'} onChange={() => setPaymentMethod('pix')} className="hidden" />
-            <QrCode className={`w-10 h-10 mb-3 ${paymentMethod === 'pix' ? 'text-emerald-600' : 'text-gray-400'}`} />
-            <p className="font-black text-gray-800 mb-1">Pagar com PIX</p>
-            <p className="text-xs text-emerald-600 font-bold bg-emerald-100/50 px-2 py-1 rounded-md">Recomendado</p>
-          </label>
-          <label className={`flex flex-col items-center p-6 border-2 rounded-2xl cursor-pointer transition-all ${paymentMethod === 'credit' ? 'border-emerald-600 bg-emerald-50 shadow-md' : 'border-gray-200 bg-white hover:border-emerald-200'}`}>
-            <input type="radio" name="payment" value="credit" checked={paymentMethod === 'credit'} onChange={() => setPaymentMethod('credit')} className="hidden" />
-            <CreditCard className={`w-10 h-10 mb-3 ${paymentMethod === 'credit' ? 'text-emerald-600' : 'text-gray-400'}`} />
-            <p className="font-black text-gray-800 mb-1">Cartão de Crédito</p>
-            <p className="text-xs text-gray-400 font-medium">+ 5% de taxa</p>
-          </label>
-        </div>
+        {finalTotal > 0 && (
+          <>
+            <h3 className="font-black text-emerald-800 mb-4 text-sm uppercase tracking-widest pl-2">Forma de Pagamento</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+              <label className={`flex flex-col items-center p-6 border-2 rounded-2xl cursor-pointer transition-all ${paymentMethod === 'pix' ? 'border-emerald-600 bg-emerald-50 shadow-md' : 'border-gray-200 bg-white hover:border-emerald-200'}`}>
+                <input type="radio" name="payment" value="pix" checked={paymentMethod === 'pix'} onChange={() => setPaymentMethod('pix')} className="hidden" />
+                <QrCode className={`w-10 h-10 mb-3 ${paymentMethod === 'pix' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <p className="font-black text-gray-800 mb-1">Pagar com PIX</p>
+                <p className="text-xs text-emerald-600 font-bold bg-emerald-100/50 px-2 py-1 rounded-md">Recomendado</p>
+              </label>
+              <label className={`flex flex-col items-center p-6 border-2 rounded-2xl cursor-pointer transition-all ${paymentMethod === 'credit' ? 'border-emerald-600 bg-emerald-50 shadow-md' : 'border-gray-200 bg-white hover:border-emerald-200'}`}>
+                <input type="radio" name="payment" value="credit" checked={paymentMethod === 'credit'} onChange={() => setPaymentMethod('credit')} className="hidden" />
+                <CreditCard className={`w-10 h-10 mb-3 ${paymentMethod === 'credit' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                <p className="font-black text-gray-800 mb-1">Cartão de Crédito</p>
+                <p className="text-xs text-gray-400 font-medium">+ 5% de taxa</p>
+              </label>
+            </div>
+          </>
+        )}
 
-        <button onClick={processGatewayPayment} disabled={isProcessingPayment} className={`w-full text-white font-black text-lg py-5 rounded-2xl shadow-xl flex items-center justify-center transition-all ${isProcessingPayment ? 'bg-emerald-400 cursor-wait' : 'bg-emerald-700 hover:bg-emerald-800 hover:shadow-emerald-700/30 hover:-translate-y-1'}`}>
-          {isProcessingPayment ? <span className="animate-pulse flex items-center">A processar o seu pedido...</span> : `Gerar Pagamento Seguro`}
+        <button onClick={() => processGatewayPayment(finalTotal, walletDiscount)} disabled={isProcessingPayment} className={`w-full text-white font-black text-lg py-5 rounded-2xl shadow-xl flex items-center justify-center transition-all ${isProcessingPayment ? 'bg-emerald-400 cursor-wait' : 'bg-emerald-700 hover:bg-emerald-800 hover:shadow-emerald-700/30 hover:-translate-y-1'}`}>
+          {isProcessingPayment ? <span className="animate-pulse flex items-center">A processar o seu pedido...</span> : finalTotal <= 0 ? 'Pagar Usando Saldo' : `Gerar Pagamento Seguro`}
         </button>
       </div>
     );
@@ -691,9 +774,19 @@ export default function App() {
     const myOrders = orders.filter(o => o.customer === user.name && o.email === user.email);
     return (
       <div className="p-4 max-w-4xl mx-auto pt-8 pb-24">
-        <div className="flex items-center mb-8">
-          <button onClick={() => setCurrentScreen('shop')} className="mr-4 flex items-center text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition text-sm shadow-sm"><ArrowLeft className="w-4 h-4 mr-2" /> Loja</button>
-          <h2 className="text-3xl font-black text-gray-800 tracking-tight">As Minhas Encomendas</h2>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center">
+            <button onClick={() => setCurrentScreen('shop')} className="mr-4 flex items-center text-gray-500 bg-white border border-gray-200 px-4 py-2 rounded-xl font-bold hover:bg-gray-50 transition text-sm shadow-sm"><ArrowLeft className="w-4 h-4 mr-2" /> Loja</button>
+            <h2 className="text-3xl font-black text-gray-800 tracking-tight">As Minhas Encomendas</h2>
+          </div>
+          
+          <div className="bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-lg border border-emerald-800 flex items-center gap-2">
+             <Wallet className="w-5 h-5 text-emerald-300"/>
+             <div>
+               <p className="text-[9px] uppercase tracking-widest font-bold text-emerald-200">Saldo na Carteira</p>
+               <p className="font-black">R$ {(user?.walletBalance || 0).toFixed(2).replace('.',',')}</p>
+             </div>
+          </div>
         </div>
 
         {myOrders.length === 0 ? (
@@ -720,6 +813,19 @@ export default function App() {
                   )}
                   
                 </div>
+                
+                {order.refundStatus && (
+                  <div className="mb-4 bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm text-orange-800 flex items-start gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <div>
+                      <p className="font-bold">Atenção ao seu pedido</p>
+                      <p className="text-xs mt-1">
+                        {order.refundStatus === 'credito_gerado' ? `Um item faltou e R$ ${order.refundAmount.toFixed(2)} foram adicionados como crédito à sua carteira!` : `Um item faltou. Entraremos em contacto para realizar o estorno de R$ ${order.refundAmount.toFixed(2)}.`}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-3 mb-6">
                   {order.items.map((item, idx) => (<div key={idx} className="flex items-center text-sm text-gray-600"><span className="w-8 h-8 bg-gray-50 text-emerald-700 font-black rounded-lg flex items-center justify-center mr-3 border border-gray-100">{item.qtd}x</span> <span className="font-medium">{item.name}</span></div>))}
                 </div>
@@ -816,14 +922,25 @@ export default function App() {
                               {order.items.map((item, idx) => (<span key={idx} className="bg-white text-gray-600 text-[10px] px-2.5 py-1 rounded-md border border-gray-200 uppercase font-bold shadow-sm">{item.qtd}x {item.name.split(' ')[0]}</span>))}
                             </div>
                           </div>
-                          <div className="mt-4 md:mt-0 flex flex-col items-end">
-                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest mb-3 ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                          <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
+                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
                               {order.method === 'dinheiro/pix direto' ? 'S/ CAIXA' : 'APP'}
                             </span>
                             
-                            <button onClick={() => handleSendWhatsApp(order)} className="flex items-center text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
-                              <MessageCircle className="w-3 h-3 mr-1.5" /> Enviar Recibo
-                            </button>
+                            <div className="flex gap-2">
+                                {order.refundStatus === 'pendente_estorno' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 shadow-sm">Estorno Pend.</span>}
+                                {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
+                                
+                                {(!order.refundStatus || order.refundStatus === '') && order.status === 'pago' && (
+                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: order.items.map(i=>({...i, removedQtd:0})), refundType: 'credit'})} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
+                                      Faltas
+                                   </button>
+                                )}
+                                
+                                <button onClick={() => handleSendWhatsApp(order)} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
+                                  <MessageCircle className="w-3 h-3 mr-1.5" /> Recibo
+                                </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -835,8 +952,9 @@ export default function App() {
           )}
         </div>
 
+        {/* MODAL DE PEDIDO RÁPIDO */}
         {isManualOrderModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
             <div className="bg-white rounded-[2rem] p-8 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
               <h3 className="text-2xl font-black text-gray-800 mb-6 tracking-tight">Pedido Rápido</h3>
               <form onSubmit={confirmManualOrder}>
@@ -985,19 +1103,20 @@ export default function App() {
                         </div>
                       </div>
                       
-                      <div className="flex-1 flex gap-3">
-                        <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
+                      {/* --- FIX MOBILE OVERFLOW AQUI: DE FLEX PARA GRID --- */}
+                      <div className="flex-1 grid grid-cols-2 lg:grid-cols-4 gap-3 w-full">
+                        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Vendido</p><p className="text-3xl font-black text-slate-800">{totalVendidos}</p>
                         </div>
-                        <div className="flex-1 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
+                        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm text-center">
                           <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Local</p><p className="text-3xl font-black text-slate-800">{estoqueLocalAtual}</p>
                         </div>
-                        <div className="flex-1 bg-emerald-700 border border-emerald-800 rounded-2xl p-4 shadow-lg text-center relative text-white transform hover:scale-105 transition">
+                        <div className="bg-emerald-700 border border-emerald-800 rounded-2xl p-4 shadow-lg text-center relative text-white transform hover:scale-105 transition">
                           <p className="text-[10px] text-emerald-200 font-black uppercase tracking-widest mb-1">Comprar (Cx)</p>
                           <p className="text-3xl font-black">{caixasParaComprar}</p>
                           {caixasParaComprar > 0 && <span className="absolute -top-3 -right-3 bg-orange-500 text-white text-[10px] font-black px-2 py-1 rounded-lg shadow-md border-2 border-white">+{totalCompradoDoFornecedor} un</span>}
                         </div>
-                        <div className="flex-1 bg-emerald-50 border border-emerald-100 rounded-2xl p-4 shadow-sm text-center">
+                        <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 shadow-sm text-center">
                           <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest mb-1">Sobra Futura</p>
                           <p className="text-3xl font-black text-emerald-800">{novoEstoqueLocal}</p>
                         </div>
@@ -1236,7 +1355,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans relative selection:bg-emerald-200">
-      {toast && <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 bg-slate-800 text-white rounded-2xl shadow-xl font-bold">{toast.msg}</div>}
+      {toast && (
+        <div className={`fixed top-5 left-1/2 transform -translate-x-1/2 z-[100] px-6 py-3.5 rounded-2xl shadow-xl font-black text-white transition-all flex items-center tracking-wide ${toast.type === 'error' ? 'bg-red-500 shadow-red-500/30' : 'bg-slate-800 shadow-slate-800/30'}`}>
+          {toast.type === 'error' ? <span className="mr-3 text-xl">⚠️</span> : <CheckCircle className="w-5 h-5 mr-3 text-emerald-400" />}
+          {toast.msg}
+        </div>
+      )}
 
       {currentScreen !== 'login' && currentScreen !== 'print_rep' && currentScreen !== 'print_admin' && (
         <header className="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-100">
@@ -1279,8 +1403,8 @@ export default function App() {
                 <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user.role === 'consolidador' ? 'Gestor Master' : user.role}</span>
                 <span className="text-sm font-black text-slate-800">{user.name}</span>
               </div>
-              <button onClick={handleLogout} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm border border-red-100">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              <button onClick={handleLogout} className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center hover:bg-red-100 transition-colors shadow-sm border border-red-100" title="Sair">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               </button>
             </div>
           </div>
@@ -1314,16 +1438,90 @@ export default function App() {
             <div className="w-32 h-32 bg-emerald-50 rounded-full flex items-center justify-center mb-8 border-4 border-emerald-100">
                <CheckCircle className="w-16 h-16 text-emerald-600" />
             </div>
-            <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Pedido Confirmado!</h2>
-            <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">Tudo certo com a sua compra. O seu pedido foi registado na nossa base com segurança.</p>
+            <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tighter">Tudo Certo!</h2>
+            <p className="text-gray-500 font-medium mb-10 text-lg max-w-sm">O seu pedido foi registado na nossa base com segurança e a operação foi concluída.</p>
             <button onClick={() => setCurrentScreen(user?.role === 'cliente' ? 'my_orders' : 'dashboard_rep')} className="bg-emerald-700 text-white font-black py-4 px-10 rounded-2xl hover:bg-emerald-800 shadow-xl shadow-emerald-700/20 transition-all hover:-translate-y-1">Continuar</button>
           </div>
         )}
       </main>
 
+      {/* --- MODAL DE GESTÃO DE FALTAS / CRÉDITOS --- */}
+      {missingItemsModal.open && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="bg-white rounded-[2rem] p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            <h3 className="text-2xl font-black mb-2 text-slate-800 tracking-tight">Registrar Falta / Compensação</h3>
+            <p className="text-sm text-gray-500 mb-6 font-medium">Pedido #{missingItemsModal.order.id.slice(0,5)} - {missingItemsModal.order.customer}</p>
+
+            <div className="space-y-3 mb-6">
+              {missingItemsModal.missingItems.map((item, idx) => {
+                 const price = item.price || products.find(p => p.id === item.id)?.price || 0;
+                 return (
+                   <div key={idx} className="flex justify-between items-center bg-slate-50 p-4 rounded-2xl border border-gray-100">
+                      <div className="pr-4">
+                        <p className="font-black text-sm text-slate-800 leading-tight mb-1">{item.name}</p>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Comprou: {item.qtd} • R$ {price.toFixed(2).replace('.', ',')}/un</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Faltou:</span>
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl shadow-sm">
+                          <button onClick={() => {
+                             const newArr = [...missingItemsModal.missingItems];
+                             newArr[idx].removedQtd = Math.max(0, (newArr[idx].removedQtd || 0) - 1);
+                             setMissingItemsModal({...missingItemsModal, missingItems: newArr});
+                          }} className="w-8 h-8 flex items-center justify-center font-black text-red-600 hover:bg-red-50 rounded-l-xl">-</button>
+                          <span className="w-6 text-center font-black text-slate-800">{item.removedQtd || 0}</span>
+                          <button onClick={() => {
+                             const newArr = [...missingItemsModal.missingItems];
+                             newArr[idx].removedQtd = Math.min(item.qtd, (newArr[idx].removedQtd || 0) + 1);
+                             setMissingItemsModal({...missingItemsModal, missingItems: newArr});
+                          }} className="w-8 h-8 flex items-center justify-center font-black text-emerald-600 hover:bg-emerald-50 rounded-r-xl">+</button>
+                        </div>
+                      </div>
+                   </div>
+                 )
+              })}
+            </div>
+
+            {(() => {
+               const missingTotal = missingItemsModal.missingItems.reduce((sum, i) => sum + ((i.price || products.find(p=>p.id === i.id)?.price || 0) * (i.removedQtd || 0)), 0);
+               return (
+                 <>
+                   <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 mb-6">
+                     <p className="text-xs font-black uppercase tracking-widest text-orange-800 mb-3">Valor a ser compensado ao cliente:</p>
+                     <p className="text-3xl font-black text-orange-600 tracking-tighter mb-5">R$ {missingTotal.toFixed(2).replace('.', ',')}</p>
+                     
+                     <div className="flex flex-col gap-3">
+                       <label className={`flex items-center gap-3 cursor-pointer p-3 border-2 rounded-xl transition-all ${missingItemsModal.refundType === 'credit' ? 'border-emerald-600 bg-white shadow-sm' : 'border-transparent hover:bg-orange-100/50'}`}>
+                          <input type="radio" name="refundType" checked={missingItemsModal.refundType === 'credit'} onChange={() => setMissingItemsModal({...missingItemsModal, refundType: 'credit'})} className="hidden" />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${missingItemsModal.refundType === 'credit' ? 'border-emerald-600' : 'border-orange-300'}`}>
+                             {missingItemsModal.refundType === 'credit' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full"></div>}
+                          </div>
+                          <span className="text-sm font-black text-slate-800">Gerar Crédito na Carteira (Automático)</span>
+                       </label>
+                       
+                       <label className={`flex items-center gap-3 cursor-pointer p-3 border-2 rounded-xl transition-all ${missingItemsModal.refundType === 'pix' ? 'border-emerald-600 bg-white shadow-sm' : 'border-transparent hover:bg-orange-100/50'}`}>
+                          <input type="radio" name="refundType" checked={missingItemsModal.refundType === 'pix'} onChange={() => setMissingItemsModal({...missingItemsModal, refundType: 'pix'})} className="hidden" />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${missingItemsModal.refundType === 'pix' ? 'border-emerald-600' : 'border-orange-300'}`}>
+                             {missingItemsModal.refundType === 'pix' && <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full"></div>}
+                          </div>
+                          <span className="text-sm font-black text-slate-800">Marcar para Estorno (Devolução PIX)</span>
+                       </label>
+                     </div>
+                   </div>
+                   <div className="flex gap-3">
+                      <button onClick={() => setMissingItemsModal({open: false, order: null, missingItems: [], refundType: 'credit'})} className="flex-1 py-4 bg-gray-100 text-gray-500 font-black rounded-xl hover:bg-gray-200 transition-colors">Cancelar</button>
+                      <button onClick={() => handleConfirmFaltas(missingTotal)} disabled={missingTotal === 0} className={`flex-[2] py-4 text-white font-black rounded-xl shadow-lg transition-all ${missingTotal === 0 ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-700 hover:bg-emerald-800 hover:-translate-y-1'}`}>Confirmar Ação</button>
+                   </div>
+                 </>
+               )
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Barra Inferior de Compras (Modo Loja para qualquer papel) */}
       {currentScreen === 'shop' && cart.length > 0 && (
-        <div className="fixed bottom-0 w-full p-4 z-50 bg-white/80 backdrop-blur-md border-t border-gray-200">
+        <div className="fixed bottom-0 w-full p-4 z-40 bg-white/80 backdrop-blur-md border-t border-gray-200">
           <button onClick={() => setCurrentScreen('checkout')} className="max-w-md mx-auto w-full bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-xl shadow-emerald-700/30 flex justify-between px-8 items-center hover:bg-emerald-800 hover:-translate-y-1 transition-all">
             <span className="flex items-center"><ShoppingCart className="w-5 h-5 mr-3"/> Finalizar Cesta</span>
             <span className="bg-white text-emerald-700 px-3 py-1 rounded-lg text-xs">{cart.reduce((sum, i) => sum + i.qtd, 0)} itens</span>
