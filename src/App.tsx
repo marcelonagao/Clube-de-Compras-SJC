@@ -30,7 +30,7 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
 }
 
 // Dados iniciais
-const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba'];
+const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba', 'Caçapava', 'Vila Adyana'];
 
 // --- LEITOR INTELIGENTE DE CSV ---
 const parseCSVLine = (text) => {
@@ -393,7 +393,7 @@ export default function App() {
       setOrders(orders.map(o => o.email === user.email && o.refundStatus === 'credito_gerado' ? { ...o, refundStatus: 'pendente_estorno' } : o));
       
       setPixRefundModal({ open: false, key: '' });
-      showToast("Solicitação de PIX enviada à equipe financeira!", "success");
+      showToast("Solicitação de PIX enviada à equipa financeira!", "success");
     } catch(err) {
       showToast("Erro ao solicitar PIX", "error");
     }
@@ -461,7 +461,7 @@ export default function App() {
 
   const handleSendCRMWhatsApp = (customer) => {
     if (!customer.whatsapp) {
-      showToast('O cliente não tem WhatsApp registrado.', 'error');
+      showToast('O cliente não tem WhatsApp registado.', 'error');
       return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
@@ -472,14 +472,14 @@ export default function App() {
 
   const handleSendPixWhatsApp = (customer, amount) => {
     if (!customer.whatsapp) {
-        showToast('O cliente não tem WhatsApp registrado.', 'error');
+        showToast('O cliente não tem WhatsApp registado.', 'error');
         return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
     
     const chaveInfor = customer.pixKey ? customer.pixKey : customer.whatsapp;
-    const text = `Olá, ${customer.name}!\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contato para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado!`;
+    const text = `Olá, ${customer.name}!\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contacto para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado!`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -833,7 +833,7 @@ export default function App() {
           {filteredProducts.map(product => {
             const cartItem = cart.find(c => c.id === product.id);
             const isImageUrl = product.image && product.image.length > 5; 
-            const isPromo = product.promotionalPrice && product.promotionalPrice > 0 && product.promotionalPrice < product.price;
+            const isPromo = Boolean(product.promotionalPrice && product.promotionalPrice > 0 && product.promotionalPrice < product.price);
             const activePrice = isPromo ? product.promotionalPrice : product.price;
 
             return (
@@ -1690,7 +1690,7 @@ export default function App() {
               <div className="divide-y divide-gray-50">
                 {products.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(p => {
                   const isImageUrl = p.image && p.image.length > 5;
-                  const isPromo = p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                  const isPromo = Boolean(p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price);
 
                   return (
                     <div key={p.id} className="p-5 flex justify-between items-center hover:bg-slate-50 transition-colors group">
