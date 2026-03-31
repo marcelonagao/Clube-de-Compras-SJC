@@ -91,10 +91,11 @@ export default function App() {
   const [manualCustomerWhatsapp, setManualCustomerWhatsapp] = useState('');
   const [manualCart, setManualCart] = useState([]);
 
-  const [adminTab, setAdminTab] = useState('pedidos');
+  // NOVO: Adicionado aba 'vendas' como opção inicial do admin
+  const [adminTab, setAdminTab] = useState('vendas');
   const [editingProduct, setEditingProduct] = useState(null);
   const [shopCategory, setShopCategory] = useState('Todos');
-  const [searchTerm, setSearchTerm] = useState(''); // NOVO: Pesquisa
+  const [searchTerm, setSearchTerm] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [toast, setToast] = useState(null);
 
@@ -431,7 +432,6 @@ export default function App() {
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
     let refundInfo = '';
-    // Emojis removidos para garantir legibilidade e não quebrar URLs
     if (order.refundStatus === 'credito_gerado') refundInfo = `\n*Aviso:* Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
 
     const itemsList = (order.items || []).map(i => `- ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
@@ -1181,7 +1181,10 @@ export default function App() {
                         <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 rounded-xl transition-colors m-2 border border-transparent hover:border-gray-100 text-left">
                           <div>
                             <p className="font-bold text-gray-800 text-base mb-1">{order.customer}</p>
-                            <p className="text-xs text-gray-500 mb-2 font-medium">#{(order.id || '').slice(0,5)}... • <span className="font-bold text-gray-700">R$ {(order.total || 0).toFixed(2).replace('.', ',')}</span></p>
+                            <p className="text-xs text-gray-500 mb-2 font-medium">
+                              <span className="font-bold text-gray-600 mr-2">{new Date(order.date || new Date()).toLocaleDateString('pt-BR')}</span>
+                              #{(order.id || '').slice(0,5)}... • <span className="font-bold text-gray-700 ml-1">R$ {(order.total || 0).toFixed(2).replace('.', ',')}</span>
+                            </p>
                             <div className="flex flex-wrap gap-1.5 mt-3">
                               {(order.items || []).map((item, idx) => (<span key={idx} className="bg-white text-gray-600 text-[10px] px-2.5 py-1 rounded-md border border-gray-200 uppercase font-semibold shadow-sm">{item.qtd}x {(item.name || '').split(' ')[0]}</span>))}
                             </div>
@@ -1295,12 +1298,74 @@ export default function App() {
 
     return (
       <div className="p-4 max-w-6xl mx-auto pt-8 pb-24">
-        <div className="flex flex-wrap gap-2 mb-8 bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm">
-          <button onClick={() => setAdminTab('pedidos')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'pedidos' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Painel de Compras</button>
-          <button onClick={() => setAdminTab('catalogo')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'catalogo' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Gestão de Catálogo</button>
-          <button onClick={() => setAdminTab('crm')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'crm' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>CRM de Clientes</button>
-          <button onClick={() => setAdminTab('financeiro')} className={`flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'financeiro' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Financeiro & Reembolsos</button>
+        <div className="flex overflow-x-auto gap-2 mb-8 bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm scrollbar-hide">
+          <button onClick={() => setAdminTab('vendas')} className={`shrink-0 flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'vendas' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Histórico de Vendas</button>
+          <button onClick={() => setAdminTab('pedidos')} className={`shrink-0 flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'pedidos' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Inteligência de Compras</button>
+          <button onClick={() => setAdminTab('catalogo')} className={`shrink-0 flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'catalogo' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Gestão de Catálogo</button>
+          <button onClick={() => setAdminTab('crm')} className={`shrink-0 flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'crm' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>CRM de Clientes</button>
+          <button onClick={() => setAdminTab('financeiro')} className={`shrink-0 flex-1 py-3 px-4 rounded-xl font-black text-sm transition-all ${adminTab === 'financeiro' ? 'bg-emerald-700 text-white shadow-md' : 'text-gray-400 hover:text-emerald-700 hover:bg-emerald-50'}`}>Financeiro & Reembolsos</button>
         </div>
+
+        {/* --- NOVA ABA: HISTÓRICO GERAL DE VENDAS --- */}
+        {adminTab === 'vendas' && (
+          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
+             <div className="bg-emerald-700 p-6 font-bold text-white flex justify-between items-center border-b-4 border-emerald-800">
+              <span className="flex items-center text-xl font-black tracking-tight"><ShoppingCart className="w-6 h-6 mr-3 text-emerald-200" /> Histórico de Vendas</span>
+              <span className="bg-emerald-900/40 px-4 py-1.5 rounded-xl text-sm font-black border border-emerald-600/50 shadow-inner">{orders.length} Vendas</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                   <tr className="bg-slate-50 text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-gray-100">
+                      <th className="p-5">Data / Pedido</th>
+                      <th className="p-5">Polo</th>
+                      <th className="p-5">Cliente</th>
+                      <th className="p-5">Produtos (Resumo)</th>
+                      <th className="p-5 text-right">Valor Total</th>
+                      <th className="p-5 text-center">Status</th>
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {orders.slice().sort((a,b) => new Date(b.date || new Date()) - new Date(a.date || new Date())).reverse().map(o => (
+                    <tr key={o.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="p-5">
+                         <p className="font-black text-slate-800 text-sm">{new Date(o.date || new Date()).toLocaleDateString('pt-BR')}</p>
+                         <p className="text-[10px] text-gray-400 font-bold uppercase mt-0.5">#{ (o.id || '').slice(0,5) }</p>
+                      </td>
+                      <td className="p-5 text-xs font-bold text-emerald-700"><span className="bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">{o.polo || 'Sede'}</span></td>
+                      <td className="p-5 text-sm font-bold text-gray-700">{o.customer}</td>
+                      <td className="p-5">
+                         <div className="flex flex-wrap gap-1 max-w-[250px]">
+                           {(o.items || []).slice(0,3).map((item, idx) => (
+                             <span key={idx} className="text-[9px] bg-white border border-gray-200 px-1.5 py-0.5 rounded text-gray-600 font-bold uppercase shadow-sm">
+                               {item.qtd}x {(item.name || '').split(' ')[0]}
+                             </span>
+                           ))}
+                           {(o.items || []).length > 3 && <span className="text-[9px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">+{o.items.length - 3}</span>}
+                         </div>
+                      </td>
+                      <td className="p-5 text-right">
+                         <p className="text-base font-black text-emerald-800">R$ {(o.total || 0).toFixed(2).replace('.', ',')}</p>
+                         {o.method === 'dinheiro/pix direto' && <span className="text-[8px] uppercase tracking-widest font-bold text-orange-500 block mt-0.5">S/ Caixa</span>}
+                      </td>
+                      <td className="p-5 text-center">
+                         {o.refundStatus === 'estornado' ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">Estornado</span>
+                         ) : o.refundStatus === 'credito_gerado' ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-orange-50 text-orange-600 px-2 py-1 rounded-lg border border-orange-100">C/ Crédito</span>
+                         ) : o.status === 'pago' ? (
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg border border-emerald-100">Pago</span>
+                         ) : (
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 px-2 py-1 rounded-lg border border-gray-200">{o.status}</span>
+                         )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* --- PAINEL FINANCEIRO INTERATIVO --- */}
         {adminTab === 'financeiro' && (
@@ -1720,7 +1785,7 @@ export default function App() {
         </div>
       )}
 
-      {currentScreen !== 'login' && currentScreen !== 'print_rep' && currentScreen !== 'print_admin' && (
+      {currentScreen !== 'login' && !['print_rep', 'print_admin'].includes(currentScreen) && (
         <header className="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-100">
           <div className="max-w-5xl mx-auto px-4 h-20 flex items-center justify-between">
             <div className="flex items-center space-x-3 cursor-pointer" onClick={() => {
@@ -1769,7 +1834,7 @@ export default function App() {
         </header>
       )}
 
-      <main>
+      <main className="md:pb-0 pb-16">
         {currentScreen === 'login' && renderLogin()}
         {currentScreen === 'shop' && renderShop()}
         {currentScreen === 'checkout' && renderCheckout()}
@@ -1792,15 +1857,16 @@ export default function App() {
         )}
       </main>
 
-      {/* --- MENU INFERIOR FIXO PARA O APLICATIVO (APP STYLE) --- */}
-      {currentScreen !== 'login' && ['shop', 'my_orders', 'checkout'].includes(currentScreen) && (
-        <div className="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+      {/* --- MENU INFERIOR FIXO PARA O APLICATIVO (APP STYLE - APENAS MOBILE) --- */}
+      {currentScreen !== 'login' && !['print_rep', 'print_admin'].includes(currentScreen) && (
+        <div className="md:hidden fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
           <button onClick={() => setCurrentScreen('shop')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'shop' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
             <Home className="w-6 h-6 mb-1" />
             <span className="text-[10px] font-bold">Início</span>
           </button>
           
-          {(!user?.role || user?.role?.toLowerCase().includes('cliente')) && (
+          {/* Botão de Pedidos: visível para todos mas apenas útil se comprarem */}
+          {(!user?.role || user?.role?.toLowerCase().includes('cliente') || currentScreen === 'shop' || currentScreen === 'my_orders') && (
             <button onClick={() => setCurrentScreen('my_orders')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'my_orders' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
               <Package className="w-6 h-6 mb-1" />
               <span className="text-[10px] font-bold">Pedidos</span>
@@ -1818,9 +1884,16 @@ export default function App() {
           </button>
 
           {(user?.role === 'consolidador' || user?.role === 'representante') && (
-            <button onClick={() => setCurrentScreen('dashboard_rep')} className="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-emerald-500 transition-colors">
+            <button onClick={() => setCurrentScreen('dashboard_rep')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'dashboard_rep' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
               <LayoutDashboard className="w-6 h-6 mb-1" />
               <span className="text-[10px] font-bold">Painel</span>
+            </button>
+          )}
+
+          {user?.role === 'consolidador' && (
+            <button onClick={() => setCurrentScreen('dashboard_admin')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'dashboard_admin' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
+              <ClipboardList className="w-6 h-6 mb-1" />
+              <span className="text-[10px] font-bold">Gestão</span>
             </button>
           )}
         </div>
