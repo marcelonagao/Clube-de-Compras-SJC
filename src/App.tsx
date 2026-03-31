@@ -426,35 +426,36 @@ export default function App() {
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
     let refundInfo = '';
-    if (order.refundStatus === 'credito_gerado') refundInfo = `\n🎁 *Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX no nosso aplicativo!`;
+    // Utilizando escapes Unicode (\uD83C\uDF81 = 🎁, \uD83C\uDF3F = 🌿, \uD83D\uDC9A = 💚) para garantir o funcionamento correto noutros dispositivos e codificações.
+    if (order.refundStatus === 'credito_gerado') refundInfo = `\n\uD83C\uDF81 *Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
 
     const itemsList = (order.items || []).map(i => `▫️ ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
     const total = `R$ ${(order.total || 0).toFixed(2).replace('.', ',')}`;
-    const text = `Olá, ${order.customer}! 🌿\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para retirada. Obrigado! 💚`;
+    const text = `Olá, ${order.customer}! \uD83C\uDF3F\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! \uD83D\uDC9A`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendCRMWhatsApp = (customer) => {
     if (!customer.whatsapp) {
-      showToast('O cliente não tem WhatsApp registrado.', 'error');
+      showToast('O cliente não tem WhatsApp registado.', 'error');
       return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
-    const text = `Olá, ${customer.name}! 🌿 Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
+    const text = `Olá, ${customer.name}! \uD83C\uDF3F Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendPixWhatsApp = (customer, amount) => {
     if (!customer.whatsapp) {
-        showToast('O cliente não tem WhatsApp registrado.', 'error');
+        showToast('O cliente não tem WhatsApp registado.', 'error');
         return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
     
     const chaveInfor = customer.pixKey ? customer.pixKey : customer.whatsapp;
-    const text = `Olá, ${customer.name}! 🌿\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contato para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado! 💚`;
+    const text = `Olá, ${customer.name}! \uD83C\uDF3F\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contacto para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado! \uD83D\uDC9A`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -999,17 +1000,21 @@ export default function App() {
                   
                 </div>
                 
+                {/* --- AVISO DE ESTORNO ATUALIZADO --- */}
                 {order.refundStatus && (
-                  <div className="mb-4 bg-orange-50 border border-orange-100 rounded-xl p-3 text-sm text-orange-800 flex items-start gap-2">
-                    <span className="text-lg">⚠️</span>
+                  <div className={`mb-4 border rounded-xl p-3 text-sm flex items-start gap-2 ${order.refundStatus === 'estornado' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-orange-50 border-orange-100 text-orange-800'}`}>
+                    <span className="text-lg">{order.refundStatus === 'estornado' ? '✅' : '⚠️'}</span>
                     <div>
-                      <p className="font-bold">Atenção ao seu pedido</p>
+                      <p className="font-bold">{order.refundStatus === 'estornado' ? 'Estorno Realizado' : 'Atenção à sua encomenda'}</p>
                       <p className="text-xs mt-1">
-                        {order.refundStatus === 'credito_gerado' ? `Um item faltou e R$ ${(order.refundAmount || 0).toFixed(2)} foram adicionados como crédito à sua carteira!` : `Um item faltou. Entraremos em contacto para realizar o estorno de R$ ${(order.refundAmount || 0).toFixed(2)}.`}
+                        {order.refundStatus === 'credito_gerado' ? `Um item faltou e R$ ${(order.refundAmount || 0).toFixed(2)} foram adicionados como crédito à sua carteira!` : 
+                         order.refundStatus === 'estornado' ? `O valor de R$ ${(order.refundAmount || 0).toFixed(2)} referente aos itens em falta foi transferido para a sua conta com sucesso.` :
+                         `Um item faltou. Entraremos em contacto para realizar o estorno de R$ ${(order.refundAmount || 0).toFixed(2)}.`}
                       </p>
                     </div>
                   </div>
                 )}
+                {/* ---------------------------------- */}
                 
                 <div className="space-y-3 mb-6">
                   {(order.items || []).map((item, idx) => (<div key={idx} className="flex items-center text-sm text-gray-600"><span className="w-8 h-8 bg-gray-50 text-emerald-700 font-black rounded-lg flex items-center justify-center mr-3 border border-gray-100">{item.qtd}x</span> <span className="font-medium">{item.name || 'Produto'}</span></div>))}
@@ -1117,6 +1122,7 @@ export default function App() {
                             <div className="flex gap-2">
                                 {order.refundStatus === 'pendente_estorno' && <span className="flex items-center justify-center text-[9px] font-bold uppercase text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 shadow-sm">Estorno Pend.</span>}
                                 {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-bold uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
+                                {order.refundStatus === 'estornado' && <span className="flex items-center justify-center text-[9px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 shadow-sm">Estornado</span>}
                                 
                                 {(!order.refundStatus || order.refundStatus === '') && order.status === 'pago' && (
                                    <button onClick={() => setMissingItemsModal({open: true, order, missingItems: (order.items || []).map(i=>({...i, removedQtd:0})), refundType: 'credit'})} className="flex items-center justify-center text-[10px] font-bold uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
