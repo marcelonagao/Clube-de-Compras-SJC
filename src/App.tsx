@@ -323,6 +323,7 @@ export default function App() {
   const handleConfirmFaltas = async (missingTotal) => {
     if (missingTotal <= 0) return;
     
+    // Calcula itens faltantes para salvar no histórico do pedido
     const missingItemsToSave = (missingItemsModal.missingItems || [])
       .filter(i => (i.removedQtd || 0) > 0)
       .map(i => ({ name: i.name || 'Produto', qtd: i.removedQtd }));
@@ -426,36 +427,36 @@ export default function App() {
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
     let refundInfo = '';
-    // Utilizando escapes Unicode (\uD83C\uDF81 = 🎁, \uD83C\uDF3F = 🌿, \uD83D\uDC9A = 💚) para garantir o funcionamento correto noutros dispositivos e codificações.
-    if (order.refundStatus === 'credito_gerado') refundInfo = `\n\uD83C\uDF81 *Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO* na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
+    // Emojis removidos para garantir legibilidade e não quebrar URLs
+    if (order.refundStatus === 'credito_gerado') refundInfo = `\n*Aviso:* Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
 
-    const itemsList = (order.items || []).map(i => `▫️ ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
+    const itemsList = (order.items || []).map(i => `- ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
     const total = `R$ ${(order.total || 0).toFixed(2).replace('.', ',')}`;
-    const text = `Olá, ${order.customer}! \uD83C\uDF3F\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado! \uD83D\uDC9A`;
+    const text = `Olá, ${order.customer}!\n\nAqui é do *Clube de Compras*.\nA sua encomenda (Nº ${(order.id || '').slice(0,5)}) está confirmada!\n\n*Resumo da sua Cesta:*\n${itemsList}\n\n*Total:* ${total}\n*Polo de Retirada:* ${order.polo}${refundInfo}\n\nAvisaremos por aqui quando estiver pronta para recolha. Obrigado!`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendCRMWhatsApp = (customer) => {
     if (!customer.whatsapp) {
-      showToast('O cliente não tem WhatsApp registado.', 'error');
+      showToast('O cliente não tem WhatsApp registrado.', 'error');
       return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
-    const text = `Olá, ${customer.name}! \uD83C\uDF3F Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
+    const text = `Olá, ${customer.name}! Aqui é do Clube de Compras. Em que podemos ajudar hoje?`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendPixWhatsApp = (customer, amount) => {
     if (!customer.whatsapp) {
-        showToast('O cliente não tem WhatsApp registado.', 'error');
+        showToast('O cliente não tem WhatsApp registrado.', 'error');
         return;
     }
     let phone = customer.whatsapp.replace(/\D/g, '');
     if (phone.length === 10 || phone.length === 11) phone = '55' + phone;
     
     const chaveInfor = customer.pixKey ? customer.pixKey : customer.whatsapp;
-    const text = `Olá, ${customer.name}! \uD83C\uDF3F\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contacto para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado! \uD83D\uDC9A`;
+    const text = `Olá, ${customer.name}!\n\nAqui é do *Clube de Compras*.\nEstamos a entrar em contato para confirmar o seu estorno no valor de *R$ ${(amount || 0).toFixed(2).replace('.', ',')}* referente à falta de produtos na sua encomenda.\n\nA chave PIX que informou foi: *${chaveInfor}*.\n\nA transferência será realizada em breve. Obrigado!`;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
