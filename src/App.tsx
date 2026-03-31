@@ -323,7 +323,6 @@ export default function App() {
   const handleConfirmFaltas = async (missingTotal) => {
     if (missingTotal <= 0) return;
     
-    // Calcula itens faltantes para salvar no histórico do pedido
     const missingItemsToSave = (missingItemsModal.missingItems || [])
       .filter(i => (i.removedQtd || 0) > 0)
       .map(i => ({ name: i.name || 'Produto', qtd: i.removedQtd }));
@@ -377,10 +376,9 @@ export default function App() {
       await updateDoc(doc(db, "users", user.uid), {
         walletBalance: 0,
         pendingPixRefund: currentPending + amountToRefund,
-        pixKey: pixRefundModal.key // Guarda a chave que o cliente informou
+        pixKey: pixRefundModal.key 
       });
       
-      // Atualizar os pedidos para "pendente_estorno" para o Gestor saber de onde veio
       const userOrdersWithCredit = orders.filter(o => o.email === user.email && o.refundStatus === 'credito_gerado');
       for (const o of userOrdersWithCredit) {
          await updateDoc(doc(db, "orders", o.id), { refundStatus: 'pendente_estorno' });
@@ -402,7 +400,6 @@ export default function App() {
     try {
        await updateDoc(doc(db, "users", userId), { pendingPixRefund: 0 });
        
-       // Marca pedidos como resolvidos (estornado)
        const targetUser = allUsers.find(u => u.id === userId);
        if (targetUser) {
            const userOrdersWithPending = orders.filter(o => o.email === targetUser.email && o.refundStatus === 'pendente_estorno');
@@ -1058,37 +1055,37 @@ export default function App() {
     const toggleMonth = (month) => setExpandedMonths(prev => ({ ...prev, [month]: !prev[month] }));
 
     return (
-      <div className="p-4 max-w-4xl mx-auto pt-8 pb-24">
+      <div className="p-4 max-w-4xl mx-auto pt-8 pb-24 text-left">
         <div className="mb-8">
-          <h2 className="text-3xl font-black text-gray-800 tracking-tight">Painel Representante</h2>
-          <p className="text-emerald-700 font-bold mt-1">Gestão da unidade de <strong>{user?.polo || 'Sede'}</strong></p>
+          <h2 className="text-2xl font-bold text-gray-800 tracking-tight">Painel Representante</h2>
+          <p className="text-emerald-700 font-medium mt-1">Gestão da unidade de <strong className="font-bold">{user?.polo || 'Sede'}</strong></p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors">
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Pelo App (Confirmados)</span>
-            <span className="text-4xl font-black text-gray-800 tracking-tighter">{appOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
-            <span className="text-sm text-emerald-600 font-black mt-2 bg-emerald-50 self-start px-2 py-1 rounded-md">R$ {sumTotal(appOrders).toFixed(2).replace('.', ',')}</span>
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-start justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors text-left">
+            <span className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-2">Pelo App (Confirmados)</span>
+            <span className="text-3xl font-bold text-gray-800 tracking-tight">{appOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
+            <span className="text-sm text-emerald-600 font-semibold mt-2 bg-emerald-50 px-2 py-1 rounded-md">R$ {sumTotal(appOrders).toFixed(2).replace('.', ',')}</span>
           </div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors">
-            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-2">Seus Lançamentos</span>
-            <span className="text-4xl font-black text-gray-800 tracking-tighter">{manualOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
-            <span className="text-sm text-orange-600 font-black mt-2 bg-orange-50 self-start px-2 py-1 rounded-md">R$ {sumTotal(manualOrders).toFixed(2).replace('.', ',')}</span>
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col items-start justify-center relative overflow-hidden group hover:border-emerald-200 transition-colors text-left">
+            <span className="text-xs text-gray-500 font-semibold uppercase tracking-widest mb-2">Seus Lançamentos</span>
+            <span className="text-3xl font-bold text-gray-800 tracking-tight">{manualOrders.length} <span className="text-sm font-medium text-gray-400 ml-1 tracking-normal">pedidos</span></span>
+            <span className="text-sm text-orange-600 font-semibold mt-2 bg-orange-50 px-2 py-1 rounded-md">R$ {sumTotal(manualOrders).toFixed(2).replace('.', ',')}</span>
           </div>
-          <div className="bg-emerald-800 p-6 rounded-[2rem] shadow-lg shadow-emerald-800/20 text-white flex flex-col justify-center relative overflow-hidden">
+          <div className="bg-emerald-800 p-6 rounded-[2rem] shadow-lg shadow-emerald-800/20 text-white flex flex-col items-start justify-center relative overflow-hidden text-left">
             <div className="absolute -right-6 -top-6 w-24 h-24 bg-white opacity-5 rounded-full"></div>
-            <span className="text-xs text-emerald-200 font-bold uppercase tracking-widest mb-2">Volume da Unidade</span>
-            <span className="text-5xl font-black tracking-tighter">{myPoloOrders.length}</span>
-            <span className="text-lg font-black text-emerald-300 mt-2">R$ {sumTotal(myPoloOrders).toFixed(2).replace('.', ',')}</span>
+            <span className="text-xs text-emerald-200 font-semibold uppercase tracking-widest mb-2">Volume da Unidade</span>
+            <span className="text-3xl font-bold tracking-tight">{myPoloOrders.length} <span className="text-sm font-medium text-emerald-300 ml-1 tracking-normal">pedidos</span></span>
+            <span className="text-lg font-bold text-emerald-300 mt-2">R$ {sumTotal(myPoloOrders).toFixed(2).replace('.', ',')}</span>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
-          <button onClick={() => setIsManualOrderModalOpen(true)} className="flex-1 bg-white text-emerald-700 border-2 border-emerald-100 font-black py-4 rounded-2xl flex items-center justify-center hover:bg-emerald-50 hover:border-emerald-200 transition-colors shadow-sm"><Plus className="w-5 h-5 mr-2" /> Novo Pedido Avulso</button>
-          <button onClick={() => setCurrentScreen('print_rep')} className="flex-1 bg-slate-800 text-white font-black py-4 rounded-2xl flex items-center justify-center hover:bg-slate-900 transition-colors shadow-lg"><Printer className="w-5 h-5 mr-2" /> Gerar Lista de Separação</button>
+          <button onClick={() => setIsManualOrderModalOpen(true)} className="flex-1 bg-white text-emerald-700 border border-emerald-200 font-bold py-4 rounded-2xl flex items-center justify-center hover:bg-emerald-50 hover:border-emerald-300 transition-colors shadow-sm"><Plus className="w-5 h-5 mr-2" /> Novo Pedido Avulso</button>
+          <button onClick={() => setCurrentScreen('print_rep')} className="flex-1 bg-slate-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center hover:bg-slate-900 transition-colors shadow-lg"><Printer className="w-5 h-5 mr-2" /> Gerar Lista de Separação</button>
         </div>
 
-        <h3 className="font-black text-emerald-800 mb-5 uppercase tracking-widest text-sm pl-2 flex items-center"><ClipboardList className="w-4 h-4 mr-2"/> Histórico Mensal</h3>
+        <h3 className="font-bold text-emerald-800 mb-5 uppercase tracking-widest text-sm pl-2 flex items-center"><ClipboardList className="w-4 h-4 mr-2"/> Histórico Mensal</h3>
         <div className="space-y-4">
           {Object.entries(ordersByMonth).length === 0 ? (
             <p className="text-gray-500 text-center py-10 bg-white rounded-[2rem] border border-gray-100">Nenhum pedido processado ainda.</p>
@@ -1097,37 +1094,37 @@ export default function App() {
               const isExpanded = expandedMonths[month] !== false; 
               return (
                 <div key={month} className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden transition-all">
-                  <button onClick={() => toggleMonth(month)} className="w-full flex items-center justify-between p-6 bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-gray-50">
-                    <div className="text-left"><p className="font-black text-gray-800 capitalize text-lg">{month}</p><p className="text-sm text-gray-500 font-medium mt-1"><span className="text-emerald-700 font-bold">{data.count}</span> pedidos • R$ {(data.total || 0).toFixed(2).replace('.', ',')}</p></div>
+                  <button onClick={() => toggleMonth(month)} className="w-full flex items-center justify-between p-6 bg-slate-50/50 hover:bg-slate-50 transition-colors border-b border-gray-50 text-left">
+                    <div><p className="font-bold text-gray-800 capitalize text-lg">{month}</p><p className="text-sm text-gray-500 font-medium mt-1"><span className="text-emerald-700 font-bold">{data.count}</span> pedidos • R$ {(data.total || 0).toFixed(2).replace('.', ',')}</p></div>
                     <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-gray-100">{isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}</div>
                   </button>
                   {isExpanded && (
                     <div className="divide-y divide-gray-50 p-2">
                       {data.orders.slice().reverse().map(order => (
-                        <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 rounded-xl transition-colors m-2 border border-transparent hover:border-gray-100">
+                        <div key={order.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between hover:bg-slate-50 rounded-xl transition-colors m-2 border border-transparent hover:border-gray-100 text-left">
                           <div>
-                            <p className="font-black text-gray-800 text-lg mb-1">{order.customer}</p>
+                            <p className="font-bold text-gray-800 text-base mb-1">{order.customer}</p>
                             <p className="text-xs text-gray-500 mb-2 font-medium">#{(order.id || '').slice(0,5)}... • <span className="font-bold text-gray-700">R$ {(order.total || 0).toFixed(2).replace('.', ',')}</span></p>
                             <div className="flex flex-wrap gap-1.5 mt-3">
-                              {(order.items || []).map((item, idx) => (<span key={idx} className="bg-white text-gray-600 text-[10px] px-2.5 py-1 rounded-md border border-gray-200 uppercase font-bold shadow-sm">{item.qtd}x {(item.name || '').split(' ')[0]}</span>))}
+                              {(order.items || []).map((item, idx) => (<span key={idx} className="bg-white text-gray-600 text-[10px] px-2.5 py-1 rounded-md border border-gray-200 uppercase font-semibold shadow-sm">{item.qtd}x {(item.name || '').split(' ')[0]}</span>))}
                             </div>
                           </div>
-                          <div className="mt-4 md:mt-0 flex flex-col items-end gap-2">
-                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                          <div className="mt-4 md:mt-0 flex flex-col items-start md:items-end gap-2">
+                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest ${order.method === 'dinheiro/pix direto' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
                               {order.method === 'dinheiro/pix direto' ? 'S/ CAIXA' : 'APP'}
                             </span>
                             
                             <div className="flex gap-2">
-                                {order.refundStatus === 'pendente_estorno' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 shadow-sm">Estorno Pend.</span>}
-                                {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
+                                {order.refundStatus === 'pendente_estorno' && <span className="flex items-center justify-center text-[9px] font-bold uppercase text-red-600 bg-red-50 px-2 py-1 rounded-lg border border-red-100 shadow-sm">Estorno Pend.</span>}
+                                {order.refundStatus === 'credito_gerado' && <span className="flex items-center justify-center text-[9px] font-bold uppercase text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 shadow-sm">Crédito Gerado</span>}
                                 
                                 {(!order.refundStatus || order.refundStatus === '') && order.status === 'pago' && (
-                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: (order.items || []).map(i=>({...i, removedQtd:0})), refundType: 'credit'})} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
+                                   <button onClick={() => setMissingItemsModal({open: true, order, missingItems: (order.items || []).map(i=>({...i, removedQtd:0})), refundType: 'credit'})} className="flex items-center justify-center text-[10px] font-bold uppercase tracking-widest bg-orange-100 text-orange-800 px-3 py-2 rounded-lg hover:bg-orange-200 transition-colors shadow-sm">
                                       Faltas
                                    </button>
                                 )}
                                 
-                                <button onClick={() => handleSendWhatsApp(order)} className="flex items-center justify-center text-[10px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
+                                <button onClick={() => handleSendWhatsApp(order)} className="flex items-center justify-center text-[10px] font-bold uppercase tracking-widest bg-emerald-100 text-emerald-800 px-3 py-2 rounded-lg hover:bg-emerald-200 transition-colors shadow-sm">
                                   <MessageCircle className="w-3 h-3 mr-1.5" /> Recibo
                                 </button>
                             </div>
@@ -1144,29 +1141,29 @@ export default function App() {
 
         {/* MODAL DE PEDIDO RÁPIDO */}
         {isManualOrderModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] text-left">
             <div className="bg-white rounded-[2rem] p-8 w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-              <h3 className="text-2xl font-black mb-6">Venda via WhatsApp</h3>
+              <h3 className="text-xl font-bold mb-6 text-gray-800">Venda via WhatsApp</h3>
               <div className="space-y-4 mb-6">
-                <input value={manualCustomerName} onChange={(e) => setManualCustomerName(e.target.value)} placeholder="Nome do Cliente" className="w-full border-b-2 p-3 outline-none" />
-                <input value={manualCustomerWhatsapp} onChange={(e) => setManualCustomerWhatsapp(e.target.value)} placeholder="WhatsApp" className="w-full border-b-2 p-3 outline-none" />
+                <input value={manualCustomerName} onChange={(e) => setManualCustomerName(e.target.value)} placeholder="Nome do Cliente" className="w-full border-b-2 border-gray-200 p-3 outline-none focus:border-emerald-500 transition-colors" />
+                <input value={manualCustomerWhatsapp} onChange={(e) => setManualCustomerWhatsapp(e.target.value)} placeholder="WhatsApp" className="w-full border-b-2 border-gray-200 p-3 outline-none focus:border-emerald-500 transition-colors" />
               </div>
-              <div className="max-h-48 overflow-y-auto space-y-2 mb-6 border rounded-xl p-2 bg-slate-50">
+              <div className="max-h-48 overflow-y-auto space-y-2 mb-6 border border-gray-100 rounded-xl p-2 bg-slate-50">
                  {products.map(p => (
-                   <div key={p.id} className="flex justify-between items-center p-2 bg-white rounded-lg border">
-                     <span className="text-sm font-bold">{p.name}</span>
+                   <div key={p.id} className="flex justify-between items-center p-2 bg-white rounded-lg border border-gray-100 shadow-sm">
+                     <span className="text-sm font-medium text-gray-700">{p.name}</span>
                      <button onClick={() => {
                        const existing = manualCart.find(i => i.id === p.id);
                        if (existing) setManualCart(manualCart.map(i => i.id === p.id ? {...i, qtd: i.qtd + 1} : i));
                        else setManualCart([...manualCart, {...p, qtd: 1}]);
-                     }} className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-md text-xs font-black">+ ADD</button>
+                     }} className="bg-emerald-50 text-emerald-700 border border-emerald-100 px-3 py-1 rounded-md text-xs font-bold hover:bg-emerald-100 transition-colors">+ ADD</button>
                    </div>
                  ))}
               </div>
-              {manualCart.length > 0 && <p className="mb-6 font-black text-emerald-700">Itens na cesta: {manualCart.length}</p>}
-              <div className="flex gap-2">
-                 <button onClick={() => setIsManualOrderModalOpen(false)} className="flex-1 py-4 font-bold text-gray-400">Cancelar</button>
-                 <button onClick={confirmManualOrder} className="flex-1 py-4 bg-emerald-700 text-white font-black rounded-xl">Salvar Venda</button>
+              {manualCart.length > 0 && <p className="mb-6 font-bold text-emerald-700">Itens na cesta: {manualCart.length}</p>}
+              <div className="flex gap-3">
+                 <button onClick={() => setIsManualOrderModalOpen(false)} className="flex-1 py-3 font-semibold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
+                 <button onClick={confirmManualOrder} className="flex-1 py-3 bg-emerald-700 text-white font-bold rounded-xl hover:bg-emerald-800 shadow-md transition-all">Salvar Venda</button>
               </div>
             </div>
           </div>
