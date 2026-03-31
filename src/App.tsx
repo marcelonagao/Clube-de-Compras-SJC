@@ -91,7 +91,6 @@ export default function App() {
   const [manualCustomerWhatsapp, setManualCustomerWhatsapp] = useState('');
   const [manualCart, setManualCart] = useState([]);
 
-  // NOVO: Adicionado aba 'vendas' como opção inicial do admin
   const [adminTab, setAdminTab] = useState('vendas');
   const [editingProduct, setEditingProduct] = useState(null);
   const [shopCategory, setShopCategory] = useState('Todos');
@@ -106,7 +105,7 @@ export default function App() {
 
   const activeCategories = ['Todos', ...Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort()];
 
-  // FUNÇÃO AUXILIAR DE PREÇO (Retorna o preço promocional se existir)
+  // FUNÇÃO AUXILIAR DE PREÇO
   const getActivePrice = (p) => (p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price) ? p.promotionalPrice : p.price;
 
   // --- ESCUTADOR DE AUTENTICAÇÃO ---
@@ -328,7 +327,6 @@ export default function App() {
   const handleConfirmFaltas = async (missingTotal) => {
     if (missingTotal <= 0) return;
     
-    // Calcula itens faltantes para salvar no histórico do pedido
     const missingItemsToSave = (missingItemsModal.missingItems || [])
       .filter(i => (i.removedQtd || 0) > 0)
       .map(i => ({ name: i.name || 'Produto', qtd: i.removedQtd }));
@@ -422,6 +420,27 @@ export default function App() {
     }
   };
 
+  // --- FUNÇÕES DE EXCLUSÃO DE TESTES ---
+  const deleteOrder = async (id) => {
+    if(window.confirm('Excluir este pedido permanentemente do sistema?')) {
+      try {
+        await deleteDoc(doc(db, "orders", id));
+        setOrders(orders.filter(o => o.id !== id));
+        showToast('Pedido apagado com sucesso.', 'success');
+      } catch(err) { showToast('Erro ao apagar pedido.', 'error'); }
+    }
+  };
+
+  const deleteCustomer = async (id) => {
+    if(window.confirm('Excluir este cliente do CRM permanentemente?')) {
+      try {
+        await deleteDoc(doc(db, "customers", id));
+        setCustomers(customers.filter(c => c.id !== id));
+        showToast('Cliente apagado com sucesso.', 'success');
+      } catch(err) { showToast('Erro ao apagar cliente.', 'error'); }
+    }
+  };
+
   // --- FUNÇÕES DE INTEGRAÇÃO COM WHATSAPP ---
   const handleSendWhatsApp = (order) => {
     if (!order.whatsapp) {
@@ -477,7 +496,7 @@ export default function App() {
       name: formData.get('name'),
       description: formData.get('description'),
       price: parseFloat(formData.get('price').replace(',', '.')),
-      promotionalPrice: promotionalPrice, // NOVO: Preço Promocional salvo no DB
+      promotionalPrice: promotionalPrice, 
       minOrderQuantity: parseInt(formData.get('minOrderQuantity')) || 1,
       stockLocal: parseInt(formData.get('stockLocal')) || 0,
       image: imagePreview || editingProduct?.image || formData.get('imageFallback') || '📦',
@@ -731,7 +750,6 @@ export default function App() {
 
     return (
       <div className="pb-28 pt-4 px-4 max-w-5xl mx-auto">
-        {/* --- CABEÇALHO E PESQUISA --- */}
         <div className="bg-emerald-700 -mx-4 -mt-4 p-6 pb-8 mb-6 rounded-b-[2rem] shadow-md relative">
           <div className="flex items-center justify-between text-emerald-100 mb-4">
             <div className="flex items-center">
@@ -758,7 +776,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- CARROSSEL DE PROMOÇÕES (DINÂMICO) --- */}
         {promoProducts.length > 0 && (
           <div className="mb-8">
             <h3 className="text-lg font-black text-gray-800 mb-4 flex items-center"><span className="text-orange-500 mr-2">🔥</span> Promoções Especiais</h3>
@@ -794,7 +811,6 @@ export default function App() {
           </div>
         )}
 
-        {/* --- FILTRO DE CATEGORIA SUSPENSO --- */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-black text-gray-800 tracking-tight">Catálogo</h2>
           <div className="relative w-40 sm:w-48">
@@ -813,7 +829,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- GRID DE PRODUTOS (ESTILO APP/ML) --- */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
           {filteredProducts.map(product => {
             const cartItem = cart.find(c => c.id === product.id);
@@ -1322,7 +1337,7 @@ export default function App() {
                       <th className="p-5">Cliente</th>
                       <th className="p-5">Produtos (Resumo)</th>
                       <th className="p-5 text-right">Valor Total</th>
-                      <th className="p-5 text-center">Status</th>
+                      <th className="p-5 text-center">Status / Ações</th>
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
@@ -1349,15 +1364,22 @@ export default function App() {
                          {o.method === 'dinheiro/pix direto' && <span className="text-[8px] uppercase tracking-widest font-bold text-orange-500 block mt-0.5">S/ Caixa</span>}
                       </td>
                       <td className="p-5 text-center">
-                         {o.refundStatus === 'estornado' ? (
-                            <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">Estornado</span>
-                         ) : o.refundStatus === 'credito_gerado' ? (
-                            <span className="text-[10px] font-black uppercase tracking-widest bg-orange-50 text-orange-600 px-2 py-1 rounded-lg border border-orange-100">C/ Crédito</span>
-                         ) : o.status === 'pago' ? (
-                            <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg border border-emerald-100">Pago</span>
-                         ) : (
-                            <span className="text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 px-2 py-1 rounded-lg border border-gray-200">{o.status}</span>
-                         )}
+                         <div className="flex flex-col items-center gap-2">
+                           {o.refundStatus === 'estornado' ? (
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-blue-50 text-blue-600 px-2 py-1 rounded-lg border border-blue-100">Estornado</span>
+                           ) : o.refundStatus === 'credito_gerado' ? (
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-orange-50 text-orange-600 px-2 py-1 rounded-lg border border-orange-100">C/ Crédito</span>
+                           ) : o.status === 'pago' ? (
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-600 px-2 py-1 rounded-lg border border-emerald-100">Pago</span>
+                           ) : (
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-gray-50 text-gray-500 px-2 py-1 rounded-lg border border-gray-200">{o.status}</span>
+                           )}
+                           
+                           {/* BOTAO PARA EXCLUIR PEDIDO DE TESTE */}
+                           <button onClick={() => deleteOrder(o.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1" title="Apagar Pedido (Teste)">
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                         </div>
                       </td>
                     </tr>
                   ))}
@@ -1566,9 +1588,14 @@ export default function App() {
                       <td className="p-5 text-sm font-black text-emerald-600">{c.whatsapp || '---'}</td>
                       <td className="p-5 text-sm font-medium text-gray-400">{c.email || '---'}</td>
                       <td className="p-5 text-right">
-                        <button onClick={() => handleSendCRMWhatsApp(c)} className="inline-flex items-center text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm border border-emerald-200">
-                          <MessageCircle className="w-4 h-4 mr-2" /> Falar
-                        </button>
+                        <div className="flex justify-end gap-2">
+                           <button onClick={() => handleSendCRMWhatsApp(c)} className="inline-flex items-center text-[10px] font-black uppercase tracking-widest bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg hover:bg-emerald-100 transition-colors shadow-sm border border-emerald-200">
+                             <MessageCircle className="w-4 h-4 mr-2" /> Falar
+                           </button>
+                           <button onClick={() => deleteCustomer(c.id)} className="inline-flex items-center text-[10px] font-black uppercase tracking-widest bg-red-50 text-red-600 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm border border-red-200" title="Apagar Cliente">
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
