@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet, Landmark, Loader2 } from 'lucide-react';
+import { ShoppingCart, Leaf, User, MapPin, CheckCircle, ClipboardList, Package, Users, CreditCard, QrCode, Plus, Edit2, Trash2, ArrowLeft, ChevronDown, ChevronUp, Printer, Upload, FileSpreadsheet, Image as ImageIcon, Download, Copy, Clock, MessageCircle, LayoutDashboard, Store, Eye, Wallet, Landmark, Loader2, Home, Search } from 'lucide-react';
 
 // --- IMPORTAÇÕES DO FIREBASE ---
 import { initializeApp } from "firebase/app";
@@ -94,6 +94,7 @@ export default function App() {
   const [adminTab, setAdminTab] = useState('pedidos');
   const [editingProduct, setEditingProduct] = useState(null);
   const [shopCategory, setShopCategory] = useState('Todos');
+  const [searchTerm, setSearchTerm] = useState(''); // NOVO: Pesquisa
   const [imagePreview, setImagePreview] = useState('');
   const [toast, setToast] = useState(null);
 
@@ -427,7 +428,6 @@ export default function App() {
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
     let refundInfo = '';
-    // Emojis removidos para garantir legibilidade e não quebrar URLs
     if (order.refundStatus === 'credito_gerado') refundInfo = `\n*Aviso:* Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
 
     const itemsList = (order.items || []).map(i => `- ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
@@ -713,68 +713,109 @@ export default function App() {
   );
 
   const renderShop = () => {
-    const filteredProducts = shopCategory === 'Todos' ? products : products.filter(p => p.category === shopCategory);
+    const filteredProducts = products.filter(p => {
+      const matchesCategory = shopCategory === 'Todos' || p.category === shopCategory;
+      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+
     return (
-      <div className="pb-24 pt-6 px-4 max-w-5xl mx-auto">
-        <div className="bg-white border border-emerald-100 text-emerald-900 p-4 rounded-2xl mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4">
-          <div className="flex items-center"><MapPin className="w-5 h-5 mr-3 text-emerald-600" /><span>Polo de Retirada: <strong className="font-black text-emerald-800">{user?.polo || 'Sede'}</strong></span></div>
-          {/* --- EXIBIÇÃO DE CRÉDITO DIRETO NA LOJA --- */}
-          {(user?.walletBalance || 0) > 0 && (
-            <div className="flex items-center bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200 w-full sm:w-auto">
-              <Wallet className="w-5 h-5 text-emerald-600 mr-2"/>
-              <span className="text-sm font-medium text-emerald-800">Crédito Disponível: <strong className="font-black">R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')}</strong></span>
+      <div className="pb-28 pt-4 px-4 max-w-5xl mx-auto">
+        {/* --- CABEÇALHO E PESQUISA --- */}
+        <div className="bg-emerald-700 -mx-4 -mt-4 p-6 pb-8 mb-6 rounded-b-[2rem] shadow-md relative">
+          <div className="flex items-center justify-between text-emerald-100 mb-4">
+            <div className="flex items-center">
+              <MapPin className="w-4 h-4 mr-1.5" />
+              <span className="text-xs font-medium">Enviar para <strong className="text-white">{user?.polo || 'Sede'}</strong></span>
             </div>
-          )}
-        </div>
-        
-        <div className="flex overflow-x-auto space-x-3 mb-10 pb-2 scrollbar-hide">
-          {activeCategories.map(cat => (
-            <button key={cat} onClick={() => setShopCategory(cat)} className={`whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-200 ${shopCategory === cat ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20 transform scale-105' : 'bg-white text-gray-500 border border-gray-200 hover:border-emerald-300 hover:text-emerald-700'}`}>
-              {cat}
-            </button>
-          ))}
-        </div>
-        
-        <div className="mb-6 flex justify-between items-end">
-          <h2 className="text-2xl font-black text-gray-800 tracking-tight">Seleção da Semana</h2>
-          <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">{filteredProducts.length} itens</span>
+            {(user?.walletBalance || 0) > 0 && (
+              <div className="flex items-center bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                <Wallet className="w-3.5 h-3.5 text-white mr-1.5"/>
+                <span className="text-xs font-medium text-white">R$ {(user.walletBalance || 0).toFixed(2).replace('.', ',')}</span>
+              </div>
+            )}
+          </div>
+          
+          <div className="relative">
+            <input 
+              type="text" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Estou buscando..." 
+              className="w-full bg-white border-none text-gray-800 py-3.5 pl-12 pr-4 rounded-full shadow-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 placeholder-gray-400 font-medium"
+            />
+            <Search className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {/* --- CARROSSEL DE PROMOÇÕES --- */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 mb-8 pb-2 scrollbar-hide">
+          <div className="snap-center shrink-0 w-[85%] sm:w-[400px] h-32 bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-5 text-white flex flex-col justify-center shadow-sm relative overflow-hidden">
+            <div className="relative z-10">
+              <span className="bg-white/20 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">Clube Promo</span>
+              <h3 className="font-black text-2xl mb-1">Ofertas da Semana</h3>
+              <p className="text-xs opacity-90 font-medium">Até 30% OFF em itens selecionados</p>
+            </div>
+            <Leaf className="absolute -right-4 -bottom-4 w-28 h-28 text-white opacity-20 transform -rotate-12 pointer-events-none" />
+          </div>
+          <div className="snap-center shrink-0 w-[85%] sm:w-[400px] h-32 bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 text-white flex flex-col justify-center shadow-sm relative overflow-hidden">
+            <div className="relative z-10">
+              <span className="bg-white/20 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">Benefício</span>
+              <h3 className="font-black text-2xl mb-1">Entregas no Polo</h3>
+              <p className="text-xs opacity-90 font-medium">Toda a frescura com frete grátis</p>
+            </div>
+            <Package className="absolute -right-2 -bottom-2 w-24 h-24 text-white opacity-20 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* --- FILTRO DE CATEGORIA SUSPENSO --- */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black text-gray-800 tracking-tight">Catálogo</h2>
+          <div className="relative w-40 sm:w-48">
+            <select 
+              value={shopCategory} 
+              onChange={(e) => setShopCategory(e.target.value)}
+              className="w-full appearance-none bg-gray-100 border-none text-gray-700 font-semibold py-2 pl-4 pr-10 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm cursor-pointer"
+            >
+              {activeCategories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+              <ChevronDown className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* --- GRID DE PRODUTOS (ESTILO APP/ML) --- */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
           {filteredProducts.map(product => {
             const cartItem = cart.find(c => c.id === product.id);
             const isImageUrl = product.image && product.image.length > 5; 
             return (
-              <div key={product.id} className="bg-white rounded-[1.5rem] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-gray-100 flex flex-col h-full overflow-hidden group">
-                <div className="h-48 bg-gray-50 flex items-center justify-center relative overflow-hidden p-6">
+              <div key={product.id} className="bg-white rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 flex flex-col overflow-hidden group">
+                <div className="aspect-square bg-white flex items-center justify-center p-4 relative border-b border-gray-50">
                   {isImageUrl ? (
-                    <img src={product.image} alt={product.name || 'Produto'} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-110" />
+                    <img src={product.image} alt={product.name || 'Produto'} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105" />
                   ) : (
-                    <span className="text-6xl drop-shadow-md transition-transform duration-500 group-hover:scale-110">{product.image || '📦'}</span>
+                    <span className="text-5xl sm:text-6xl drop-shadow-sm transition-transform duration-500 group-hover:scale-105">{product.image || '📦'}</span>
                   )}
-                  <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-[9px] uppercase font-black text-emerald-800 px-2 py-1 rounded-full shadow-sm">{product.category || 'Outros'}</span>
                 </div>
                 
-                <div className="p-5 flex flex-col flex-grow">
-                  <h3 className="font-bold text-gray-800 leading-snug mb-2 text-lg">{product.name || 'Sem nome'}</h3>
-                  <p className="text-xs text-gray-500 line-clamp-2 mb-4 flex-grow">{product.description || ''}</p>
-                  
-                  <div className="flex items-end justify-between mt-auto mb-4">
-                    <div>
-                      <span className="text-[10px] text-gray-400 font-bold uppercase block mb-0.5">Por Apenas</span>
-                      <p className="text-2xl text-emerald-700 font-black tracking-tight">R$ {(product.price || 0).toFixed(2).replace('.', ',')}</p>
-                    </div>
-                  </div>
+                <div className="p-3 sm:p-4 flex flex-col flex-grow">
+                  <p className="text-xl sm:text-2xl text-gray-900 font-normal mb-1">R$ {(product.price || 0).toFixed(2).replace('.', ',')}</p>
+                  <p className="text-[10px] text-emerald-600 font-semibold mb-2">Chega ao polo em breve</p>
+                  <h3 className="text-xs sm:text-sm text-gray-500 leading-snug mb-4 flex-grow line-clamp-2">{product.name || 'Sem nome'}</h3>
 
                   {cartItem ? (
-                     <div className="flex items-center justify-between w-full bg-emerald-50 border border-emerald-200 rounded-xl p-1.5 shadow-inner">
-                       <button onClick={() => setCart(cart.map(i => i.id === product.id ? {...i, qtd: Math.max(0, i.qtd - 1)} : i).filter(i => i.qtd > 0))} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm text-emerald-800 font-black hover:bg-emerald-100 transition">-</button>
-                       <span className="font-black text-emerald-800 text-lg w-10 text-center">{cartItem.qtd}</span>
-                       <button onClick={() => addToCart(product)} className="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-sm text-emerald-700 font-black hover:bg-emerald-100 transition">+</button>
+                     <div className="flex items-center justify-between w-full bg-emerald-50 border border-emerald-200 rounded-lg p-1">
+                       <button onClick={() => setCart(cart.map(i => i.id === product.id ? {...i, qtd: Math.max(0, i.qtd - 1)} : i).filter(i => i.qtd > 0))} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-white rounded-md shadow-sm text-emerald-800 font-bold hover:bg-emerald-100 transition">-</button>
+                       <span className="font-semibold text-emerald-800 text-sm w-8 text-center">{cartItem.qtd}</span>
+                       <button onClick={() => addToCart(product)} className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-white rounded-md shadow-sm text-emerald-700 font-bold hover:bg-emerald-100 transition">+</button>
                      </div>
                   ) : (
-                    <button onClick={() => addToCart(product)} className="w-full bg-white text-emerald-700 py-3.5 rounded-xl font-bold hover:bg-emerald-700 hover:text-white transition-colors border-2 border-emerald-100 flex items-center justify-center gap-2">
-                      Adicionar <Plus className="w-4 h-4" />
+                    <button onClick={() => addToCart(product)} className="w-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-colors">
+                      Adicionar
                     </button>
                   )}
                 </div>
@@ -1672,11 +1713,6 @@ export default function App() {
             )}
 
             <div className="flex items-center space-x-4">
-              {(!user?.role || user?.role?.toLowerCase() === 'cliente' || currentScreen === 'shop' || currentScreen === 'my_orders') && (
-                <button onClick={() => setCurrentScreen(currentScreen === 'my_orders' ? 'shop' : 'my_orders')} className="hidden sm:flex text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition-colors shadow-sm">
-                  {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'Minhas Encomendas'}
-                </button>
-              )}
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user?.role === 'consolidador' ? 'Gestor Master' : user?.role}</span>
                 <span className="text-sm font-black text-slate-800">{user?.name}</span>
@@ -1685,23 +1721,6 @@ export default function App() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               </button>
             </div>
-          </div>
-          
-          {/* Menu Mobile para TODOS */}
-          <div className="sm:hidden flex justify-around p-3 border-t bg-slate-50">
-            <button onClick={() => setCurrentScreen('shop')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'shop' ? 'text-emerald-700' : 'text-gray-400'}`}><Store className="w-5 h-5"/> Loja</button>
-            
-            {(!user?.role || user?.role?.toLowerCase() === 'cliente' || currentScreen === 'shop' || currentScreen === 'my_orders') && (
-              <button onClick={() => setCurrentScreen('my_orders')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'my_orders' ? 'text-emerald-700' : 'text-gray-400'}`}><ClipboardList className="w-5 h-5"/> Pedidos</button>
-            )}
-
-            {(user?.role === 'consolidador' || user?.role === 'representante') && (
-              <button onClick={() => setCurrentScreen('dashboard_rep')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_rep' ? 'text-emerald-700' : 'text-gray-400'}`}><LayoutDashboard className="w-5 h-5"/> {user?.role === 'consolidador' ? 'Rep' : 'Unidade'}</button>
-            )}
-            
-            {user?.role === 'consolidador' && (
-              <button onClick={() => setCurrentScreen('dashboard_admin')} className={`text-[10px] font-black uppercase flex flex-col items-center gap-1 ${currentScreen === 'dashboard_admin' ? 'text-emerald-700' : 'text-gray-400'}`}><Package className="w-5 h-5"/> Admin</button>
-            )}
           </div>
         </header>
       )}
@@ -1728,6 +1747,40 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* --- MENU INFERIOR FIXO PARA O APLICATIVO (APP STYLE) --- */}
+      {currentScreen !== 'login' && ['shop', 'my_orders', 'checkout'].includes(currentScreen) && (
+        <div className="fixed bottom-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-16 z-50 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+          <button onClick={() => setCurrentScreen('shop')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'shop' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
+            <Home className="w-6 h-6 mb-1" />
+            <span className="text-[10px] font-bold">Início</span>
+          </button>
+          
+          {(!user?.role || user?.role?.toLowerCase().includes('cliente')) && (
+            <button onClick={() => setCurrentScreen('my_orders')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen === 'my_orders' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
+              <Package className="w-6 h-6 mb-1" />
+              <span className="text-[10px] font-bold">Pedidos</span>
+            </button>
+          )}
+          
+          <button onClick={() => { if (cart.length > 0) setCurrentScreen('checkout'); else showToast('Seu carrinho está vazio!', 'error'); }} className={`flex flex-col items-center justify-center w-full h-full relative ${currentScreen === 'checkout' ? 'text-emerald-600' : 'text-gray-400 hover:text-emerald-500 transition-colors'}`}>
+            <ShoppingCart className="w-6 h-6 mb-1" />
+            <span className="text-[10px] font-bold">Carrinho</span>
+            {cart.length > 0 && (
+              <span className="absolute top-1 right-[25%] sm:right-[35%] md:right-[40%] bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {cart.reduce((sum, i) => sum + (i.qtd || 0), 0)}
+              </span>
+            )}
+          </button>
+
+          {(user?.role === 'consolidador' || user?.role === 'representante') && (
+            <button onClick={() => setCurrentScreen('dashboard_rep')} className="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-emerald-500 transition-colors">
+              <LayoutDashboard className="w-6 h-6 mb-1" />
+              <span className="text-[10px] font-bold">Painel</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* --- MODAL DE GESTÃO DE FALTAS / CRÉDITOS --- */}
       {missingItemsModal.open && (
@@ -1802,16 +1855,6 @@ export default function App() {
                </div>
              </form>
           </div>
-        </div>
-      )}
-
-      {/* Barra Inferior de Compras (Modo Loja para qualquer papel) */}
-      {currentScreen === 'shop' && cart.length > 0 && (
-        <div className="fixed bottom-0 w-full p-4 z-40 bg-white/80 backdrop-blur-md border-t border-gray-200">
-          <button onClick={() => setCurrentScreen('checkout')} className="max-w-md mx-auto w-full bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-xl shadow-emerald-700/30 flex justify-between px-8 items-center hover:bg-emerald-800 hover:-translate-y-1 transition-all">
-            <span className="flex items-center"><ShoppingCart className="w-5 h-5 mr-3"/> Finalizar Cesta</span>
-            <span className="bg-white text-emerald-700 px-3 py-1 rounded-lg text-xs">{cart.reduce((sum, i) => sum + (i.qtd || 0), 0)} itens</span>
-          </button>
         </div>
       )}
     </div>
