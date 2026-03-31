@@ -105,6 +105,9 @@ export default function App() {
 
   const activeCategories = ['Todos', ...Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort()];
 
+  // FUNÇÃO AUXILIAR DE PREÇO (Retorna o preço promocional se existir)
+  const getActivePrice = (p) => (p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price) ? p.promotionalPrice : p.price;
+
   // --- ESCUTADOR DE AUTENTICAÇÃO ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -220,7 +223,7 @@ export default function App() {
     else setCart([...cart, { ...product, qtd: 1 }]);
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + ((item.price || 0) * item.qtd), 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (getActivePrice(item) * item.qtd), 0);
 
   const addToManualCart = (product) => {
     const existing = manualCart.find(item => item.id === product.id);
@@ -228,7 +231,7 @@ export default function App() {
     else setManualCart([...manualCart, { ...product, qtd: 1 }]);
   };
 
-  const manualCartTotal = manualCart.reduce((sum, item) => sum + ((item.price || 0) * item.qtd), 0);
+  const manualCartTotal = manualCart.reduce((sum, item) => sum + (getActivePrice(item) * item.qtd), 0);
 
   const confirmManualOrder = async (e) => {
     e.preventDefault();
@@ -244,7 +247,7 @@ export default function App() {
         method: 'dinheiro/pix direto',
         status: 'pago',
         date: new Date().toISOString(),
-        items: manualCart.map(item => ({ id: item.id, name: item.name || 'Produto', qtd: item.qtd, price: item.price || 0 }))
+        items: manualCart.map(item => ({ id: item.id, name: item.name || 'Produto', qtd: item.qtd, price: getActivePrice(item) }))
       };
       
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
@@ -271,7 +274,7 @@ export default function App() {
         status: finalTotal <= 0 ? 'pago' : 'aguardando_pagamento',
         walletDiscountApplied: walletDiscount,
         date: new Date().toISOString(),
-        items: cart.map(item => ({ id: item.id, name: item.name || 'Produto', qtd: item.qtd, price: item.price || 0 }))
+        items: cart.map(item => ({ id: item.id, name: item.name || 'Produto', qtd: item.qtd, price: getActivePrice(item) }))
       };
       
       const orderRef = await addDoc(collection(db, "orders"), newOrderData);
@@ -428,6 +431,7 @@ export default function App() {
     if (phone.length === 10 || phone.length === 11) { phone = '55' + phone; }
     
     let refundInfo = '';
+    // Emojis removidos para garantir legibilidade e não quebrar URLs
     if (order.refundStatus === 'credito_gerado') refundInfo = `\n*Aviso:* Adicionamos R$ ${(order.refundAmount || 0).toFixed(2)} de CRÉDITO na sua Carteira Digital por um item não entregue pelo fornecedor. Pode usá-lo na próxima compra ou solicitar o PIX na nossa plataforma!`;
 
     const itemsList = (order.items || []).map(i => `- ${i.qtd}x ${i.name || 'Produto'}`).join('\n');
@@ -464,12 +468,16 @@ export default function App() {
   const saveProduct = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
+    const promPriceRaw = formData.get('promotionalPrice');
+    const promotionalPrice = promPriceRaw ? parseFloat(promPriceRaw.replace(',', '.')) : 0;
+    
     const newProdData = {
       sku: formData.get('sku'),
       category: formData.get('category') || 'Outros',
       name: formData.get('name'),
       description: formData.get('description'),
-      price: parseFloat(formData.get('price')),
+      price: parseFloat(formData.get('price').replace(',', '.')),
+      promotionalPrice: promotionalPrice, // NOVO: Preço Promocional salvo no DB
       minOrderQuantity: parseInt(formData.get('minOrderQuantity')) || 1,
       stockLocal: parseInt(formData.get('stockLocal')) || 0,
       image: imagePreview || editingProduct?.image || formData.get('imageFallback') || '📦',
@@ -542,7 +550,7 @@ export default function App() {
           if (!name) continue;
 
           newProducts.push({
-            sku, category, name, description, price, minOrderQuantity, stockLocal, image
+            sku, category, name, description, price, promotionalPrice: 0, minOrderQuantity, stockLocal, image
           });
         }
       }
@@ -719,6 +727,8 @@ export default function App() {
       return matchesCategory && matchesSearch;
     });
 
+    const promoProducts = products.filter(p => p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price);
+
     return (
       <div className="pb-28 pt-4 px-4 max-w-5xl mx-auto">
         {/* --- CABEÇALHO E PESQUISA --- */}
@@ -748,25 +758,41 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- CARROSSEL DE PROMOÇÕES --- */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 mb-8 pb-2 scrollbar-hide">
-          <div className="snap-center shrink-0 w-[85%] sm:w-[400px] h-32 bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-5 text-white flex flex-col justify-center shadow-sm relative overflow-hidden">
-            <div className="relative z-10">
-              <span className="bg-white/20 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">Clube Promo</span>
-              <h3 className="font-black text-2xl mb-1">Ofertas da Semana</h3>
-              <p className="text-xs opacity-90 font-medium">Até 30% OFF em itens selecionados</p>
+        {/* --- CARROSSEL DE PROMOÇÕES (DINÂMICO) --- */}
+        {promoProducts.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-lg font-black text-gray-800 mb-4 flex items-center"><span className="text-orange-500 mr-2">🔥</span> Promoções Especiais</h3>
+            <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 scrollbar-hide">
+              {promoProducts.map(product => {
+                const cartItem = cart.find(c => c.id === product.id);
+                const isImageUrl = product.image && product.image.length > 5;
+                const discountPercent = Math.round((1 - (product.promotionalPrice / product.price)) * 100);
+                return (
+                  <div key={`promo-${product.id}`} className="snap-start shrink-0 w-36 sm:w-44 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden group hover:shadow-md transition-shadow relative">
+                    <span className="absolute top-2 left-2 bg-emerald-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm z-10">-{discountPercent}%</span>
+                    <div className="aspect-square bg-white flex items-center justify-center p-3 relative border-b border-gray-50">
+                      {isImageUrl ? <img src={product.image} className="w-full h-full object-contain mix-blend-multiply transition-transform duration-500 group-hover:scale-105" /> : <span className="text-4xl transition-transform duration-500 group-hover:scale-105">{product.image || '📦'}</span>}
+                    </div>
+                    <div className="p-3 flex flex-col flex-grow">
+                      <p className="text-[10px] text-gray-400 line-through mb-0.5">R$ {(product.price || 0).toFixed(2).replace('.', ',')}</p>
+                      <p className="text-lg text-emerald-600 font-bold leading-none mb-2">R$ {(product.promotionalPrice).toFixed(2).replace('.', ',')}</p>
+                      <h3 className="text-[11px] sm:text-xs text-gray-600 leading-tight mb-3 flex-grow line-clamp-2">{product.name}</h3>
+                      {cartItem ? (
+                        <div className="flex items-center justify-between w-full bg-emerald-50 border border-emerald-200 rounded-lg p-1 mt-auto">
+                          <button onClick={() => setCart(cart.map(i => i.id === product.id ? {...i, qtd: Math.max(0, i.qtd - 1)} : i).filter(i => i.qtd > 0))} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-emerald-800 font-bold">-</button>
+                          <span className="font-semibold text-emerald-800 text-xs">{cartItem.qtd}</span>
+                          <button onClick={() => addToCart(product)} className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-emerald-700 font-bold">+</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addToCart(product)} className="w-full bg-emerald-100 text-emerald-700 py-1.5 rounded-lg font-semibold text-[11px] transition-colors hover:bg-emerald-200 mt-auto">Adicionar</button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-            <Leaf className="absolute -right-4 -bottom-4 w-28 h-28 text-white opacity-20 transform -rotate-12 pointer-events-none" />
           </div>
-          <div className="snap-center shrink-0 w-[85%] sm:w-[400px] h-32 bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 text-white flex flex-col justify-center shadow-sm relative overflow-hidden">
-            <div className="relative z-10">
-              <span className="bg-white/20 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest mb-2 inline-block">Benefício</span>
-              <h3 className="font-black text-2xl mb-1">Entregas no Polo</h3>
-              <p className="text-xs opacity-90 font-medium">Toda a frescura com frete grátis</p>
-            </div>
-            <Package className="absolute -right-2 -bottom-2 w-24 h-24 text-white opacity-20 pointer-events-none" />
-          </div>
-        </div>
+        )}
 
         {/* --- FILTRO DE CATEGORIA SUSPENSO --- */}
         <div className="flex items-center justify-between mb-6">
@@ -792,6 +818,9 @@ export default function App() {
           {filteredProducts.map(product => {
             const cartItem = cart.find(c => c.id === product.id);
             const isImageUrl = product.image && product.image.length > 5; 
+            const isPromo = product.promotionalPrice && product.promotionalPrice > 0 && product.promotionalPrice < product.price;
+            const activePrice = isPromo ? product.promotionalPrice : product.price;
+
             return (
               <div key={product.id} className="bg-white rounded-xl sm:rounded-2xl shadow-sm hover:shadow-md transition-shadow border border-gray-100 flex flex-col overflow-hidden group">
                 <div className="aspect-square bg-white flex items-center justify-center p-4 relative border-b border-gray-50">
@@ -803,7 +832,8 @@ export default function App() {
                 </div>
                 
                 <div className="p-3 sm:p-4 flex flex-col flex-grow">
-                  <p className="text-xl sm:text-2xl text-gray-900 font-normal mb-1">R$ {(product.price || 0).toFixed(2).replace('.', ',')}</p>
+                  {isPromo && <p className="text-[10px] text-gray-400 line-through mb-0.5">R$ {(product.price || 0).toFixed(2).replace('.', ',')}</p>}
+                  <p className="text-xl sm:text-2xl text-gray-900 font-normal mb-1">R$ {(activePrice || 0).toFixed(2).replace('.', ',')}</p>
                   <p className="text-[10px] text-emerald-600 font-semibold mb-2">Chega ao polo em breve</p>
                   <h3 className="text-xs sm:text-sm text-gray-500 leading-snug mb-4 flex-grow line-clamp-2">{product.name || 'Sem nome'}</h3>
 
@@ -851,7 +881,7 @@ export default function App() {
                   <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center font-black text-emerald-700 border border-gray-100">{item.qtd}x</div>
                   <span className="font-bold">{item.name || 'Produto'}</span>
                 </div>
-                <span className="font-bold text-gray-500">R$ {((item.price || 0) * item.qtd).toFixed(2).replace('.', ',')}</span>
+                <span className="font-bold text-gray-500">R$ {(getActivePrice(item) * item.qtd).toFixed(2).replace('.', ',')}</span>
               </div>
             ))}
           </div>
@@ -1542,10 +1572,16 @@ export default function App() {
                     </datalist>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Preço (R$)</label><input name="price" type="number" step="0.01" defaultValue={editingProduct?.price || ''} required placeholder="0.00" className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-black text-emerald-700 transition-colors" /></div>
-                    <div><label className="block text-xs font-black text-orange-600 mb-2 uppercase tracking-widest">Sobra (Local)</label><input name="stockLocal" type="number" min="0" defaultValue={editingProduct?.stockLocal || 0} required className="w-full bg-orange-50/50 border-2 border-orange-100 rounded-xl p-3 focus:border-orange-500 focus:bg-white outline-none font-black text-orange-700 transition-colors" /></div>
+                    <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Preço Original (R$)</label><input name="price" type="number" step="0.01" defaultValue={editingProduct?.price || ''} required placeholder="0.00" className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-black text-emerald-700 transition-colors" /></div>
+                    
+                    {/* --- NOVO: CAMPO DE PREÇO PROMOCIONAL --- */}
+                    <div><label className="block text-xs font-black text-emerald-600 mb-2 uppercase tracking-widest">Preço Promo (R$)</label><input name="promotionalPrice" type="number" step="0.01" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Opcional" className="w-full bg-emerald-50/50 border-2 border-emerald-100 rounded-xl p-3 focus:border-emerald-500 focus:bg-white outline-none font-black text-emerald-700 transition-colors placeholder-emerald-300" /></div>
                   </div>
-                  <div><label className="block text-xs font-black text-blue-600 mb-2 uppercase tracking-widest">Caixa do Fornecedor (Un)</label><input name="minOrderQuantity" type="number" min="1" defaultValue={editingProduct?.minOrderQuantity || 1} required placeholder="Ex: 20" className="w-full bg-blue-50/50 border-2 border-blue-100 rounded-xl p-3 focus:border-blue-500 focus:bg-white outline-none font-black text-blue-700 transition-colors" /></div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-black text-orange-600 mb-2 uppercase tracking-widest">Sobra (Local)</label><input name="stockLocal" type="number" min="0" defaultValue={editingProduct?.stockLocal || 0} required className="w-full bg-orange-50/50 border-2 border-orange-100 rounded-xl p-3 focus:border-orange-500 focus:bg-white outline-none font-black text-orange-700 transition-colors" /></div>
+                    <div><label className="block text-xs font-black text-blue-600 mb-2 uppercase tracking-widest">Cx. Fornecedor</label><input name="minOrderQuantity" type="number" min="1" defaultValue={editingProduct?.minOrderQuantity || 1} required placeholder="Ex: 20" className="w-full bg-blue-50/50 border-2 border-blue-100 rounded-xl p-3 focus:border-blue-500 focus:bg-white outline-none font-black text-blue-700 transition-colors" /></div>
+                  </div>
                 </div>
                 <div><label className="block text-xs font-black text-gray-500 mb-2 uppercase tracking-widest">Descrição</label><textarea name="description" defaultValue={editingProduct?.description || ''} placeholder="Destaque as qualidades do produto..." className="w-full bg-slate-50 border-2 border-gray-100 rounded-xl p-4 focus:border-emerald-500 focus:bg-white outline-none font-medium text-gray-600 transition-colors" rows="2"></textarea></div>
                 <div className="flex justify-end gap-3 mt-4 pt-6 border-t border-gray-100">
@@ -1562,10 +1598,13 @@ export default function App() {
               <div className="divide-y divide-gray-50">
                 {products.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(p => {
                   const isImageUrl = p.image && p.image.length > 5;
+                  const isPromo = p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+
                   return (
                     <div key={p.id} className="p-5 flex justify-between items-center hover:bg-slate-50 transition-colors group">
                       <div className="flex items-center">
-                        <div className="w-14 h-14 bg-white rounded-xl border border-gray-100 flex items-center justify-center mr-5 overflow-hidden shadow-sm flex-shrink-0">
+                        <div className="w-14 h-14 bg-white rounded-xl border border-gray-100 flex items-center justify-center mr-5 overflow-hidden shadow-sm flex-shrink-0 relative">
+                          {isPromo && <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></span>}
                           {isImageUrl ? <img src={p.image} alt="" className="w-full h-full object-contain p-1"/> : <span className="text-2xl">{p.image}</span>}
                         </div>
                         <div>
@@ -1573,7 +1612,7 @@ export default function App() {
                           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                             <span>Cx: <span className="text-gray-600">{p.minOrderQuantity}</span></span> • 
                             <span>Local: <span className="text-orange-500">{p.stockLocal}</span></span> • 
-                            <span className="text-emerald-600">R$ {(p.price || 0).toFixed(2)}</span>
+                            <span className="text-emerald-600">R$ {isPromo ? p.promotionalPrice.toFixed(2) : (p.price || 0).toFixed(2)}</span>
                           </p>
                         </div>
                       </div>
@@ -1713,6 +1752,11 @@ export default function App() {
             )}
 
             <div className="flex items-center space-x-4">
+              {(!user?.role || user?.role?.toLowerCase() === 'cliente' || currentScreen === 'shop' || currentScreen === 'my_orders') && (
+                <button onClick={() => setCurrentScreen(currentScreen === 'my_orders' ? 'shop' : 'my_orders')} className="hidden sm:flex text-xs bg-white text-emerald-700 border-2 border-emerald-100 px-4 py-2 rounded-xl font-black hover:bg-emerald-50 transition-colors shadow-sm">
+                  {currentScreen === 'my_orders' ? 'Voltar à Loja' : 'Minhas Encomendas'}
+                </button>
+              )}
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-[9px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">{user?.role === 'consolidador' ? 'Gestor Master' : user?.role}</span>
                 <span className="text-sm font-black text-slate-800">{user?.name}</span>
