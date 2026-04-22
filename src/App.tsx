@@ -720,7 +720,10 @@ export default function App() {
                             )}
                             <button onClick={() => {
                                 let text = `Olá ${o.customer}! Aqui é do Clube de Compras. A sua caixa já está pronta para retirada no polo de ${o.polo}. O total é R$ ${(o.total||0).toFixed(2)}.`;
-                                if(temFalta) text += `\nAviso: Faltou algum item na entrega do fornecedor. O crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
+                                if(temFalta) {
+                                    const itensFaltantes = o.faltas.map(f => f.name).join(', ');
+                                    text += `\nAviso: Faltou o seguinte item na entrega do fornecedor: ${itensFaltantes}. O crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
+                                }
                                 window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
                             }} className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-emerald-200 transition-colors shadow-sm">
                               <MessageCircle className="w-3 h-3 mr-1.5"/> RECIBO
