@@ -376,7 +376,7 @@ export default function App() {
            <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                  <div className="w-8 h-8 bg-white text-emerald-800 flex items-center justify-center rounded-lg shadow-sm"><Store className="w-5 h-5"/></div>
-                 <h1 className="font-black text-xl tracking-tight">Clube de Compras</h1>
+                 <h1 className="font-black text-xl text-white tracking-tight">Clube de Compras</h1>
               </div>
               <div className="flex items-center">
                  {user?.role === 'admin' && <span className="bg-emerald-500/30 text-emerald-50 text-[10px] font-bold px-2 py-1 rounded-full mr-2 border border-emerald-500/50">GESTOR MASTER</span>}
