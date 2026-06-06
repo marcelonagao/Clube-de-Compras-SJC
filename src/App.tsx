@@ -1031,7 +1031,7 @@ export default function App() {
   };
 
   const renderAdminDashboard = () => {
-    const validOrders = orders.filter(o => o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && o.date);;
+    const validOrders = orders.filter(o => (o.status === 'pago' || o.status === 'confirmado') && o.date);
     const totalGross = validOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalOrdersCount = validOrders.length;
     const itemsSold = validOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (i.qtd || 0), 0), 0);
