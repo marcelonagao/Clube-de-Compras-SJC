@@ -94,9 +94,12 @@ export default function App() {
   // --- CHAVE DA FASE 1 (BETA) ---
   const CONFIG_APENAS_COLETA = true; // Mude para false no futuro para ativar o Mercado Pago!
 
-  // --- ESTADOS DO PEDIDO MANUAL (REP) ---
+  /// --- ESTADOS DO PEDIDO MANUAL (REP) ---
   const [showManualOrder, setShowManualOrder] = useState(false);
-  const [manualOrderData, setManualOrderData] = useState({ clientName: '', productId: '', qty: 1 });
+  const [manualClientName, setManualClientName] = useState('');
+  const [manualCart, setManualCart] = useState([]); // Agora é um mini-carrinho!
+  const [manualItemProduct, setManualItemProduct] = useState('');
+  const [manualItemQty, setManualItemQty] = useState(1);
   
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
@@ -740,22 +743,48 @@ export default function App() {
     }, {});
 
     // Função de Salvar Pedido Manual
-    const handleSaveManualOrder = async () => {
-      if (!manualOrderData.clientName || !manualOrderData.productId) return showToast('Preencha os dados!', 'error');
-      const prod = products.find(p => p.id === manualOrderData.productId);
+    // Função para adicionar item ao "mini-carrinho" do pedido manual
+    const handleAddToManualCart = () => {
+      if (!manualItemProduct) return showToast('Selecione um produto!', 'error');
+      const prod = products.find(p => String(p.id) === String(manualItemProduct));
       if (!prod) return;
+      
+      const existing = manualCart.find(i => i.id === prod.id);
+      if (existing) {
+        setManualCart(manualCart.map(i => i.id === prod.id ? { ...i, qty: i.qty + manualItemQty } : i));
+      } else {
+        setManualCart([...manualCart, { id: prod.id, name: prod.name, price: prod.price, qty: manualItemQty }]);
+      }
+      // Limpa os campos para o próximo item
+      setManualItemProduct('');
+      setManualItemQty(1);
+    };
+
+    const handleRemoveFromManualCart = (id) => {
+      setManualCart(manualCart.filter(i => i.id !== id));
+    };
+
+    // Função de Salvar Pedido Manual Completo
+    const handleSaveManualOrder = async () => {
+      if (!manualClientName) return showToast('Digite o nome do cliente!', 'error');
+      if (manualCart.length === 0) return showToast('Adicione pelo menos 1 produto à lista!', 'error');
+
+      const manualTotal = manualCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
       const manualOrder = {
-        customer: `${manualOrderData.clientName} (Manual)`, email: '', whatsapp: '', polo: viewingPolo, cpf: 'Não informado',
-        total: prod.price * manualOrderData.qty, method: 'manual', status: statusBusca, status_nfe: 'pendente',
-        date: new Date().toISOString(), items: [{ id: prod.id, name: prod.name, qtd: manualOrderData.qty, price: prod.price }], faltas: []
+        customer: `${manualClientName} (Manual)`, email: '', whatsapp: '', polo: viewingPolo, cpf: 'Não informado',
+        total: manualTotal, method: 'manual', status: statusBusca, status_nfe: 'pendente',
+        date: new Date().toISOString(), items: manualCart, faltas: []
       };
 
       try {
         await addDoc(collection(db, "orders"), manualOrder);
-        showToast('Pedido Manual Salvo!');
+        showToast('Pedido Manual Salvo com Sucesso!');
+        
+        // Limpa tudo e fecha a janela
         setShowManualOrder(false);
-        setManualOrderData({ clientName: '', productId: '', qty: 1 });
+        setManualClientName('');
+        setManualCart([]);
       } catch (e) { showToast('Erro ao salvar', 'error'); }
     };
 
@@ -789,15 +818,45 @@ export default function App() {
             <button onClick={() => setShowManualOrder(!showManualOrder)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl shadow mb-2 hover:bg-slate-900 transition">➕ Incluir Pedido Manual</button>
 
             {showManualOrder && (
-              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm mt-3">
-                <h3 className="font-bold text-slate-800 mb-3 text-sm">Novo Pedido Manual</h3>
-                <input type="text" placeholder="Nome do Cliente" value={manualOrderData.clientName} onChange={e => setManualOrderData({...manualOrderData, clientName: e.target.value})} className="w-full p-3 border rounded-lg mb-3 text-sm" />
-                <select value={manualOrderData.productId} onChange={e => setManualOrderData({...manualOrderData, productId: e.target.value})} className="w-full p-3 border rounded-lg mb-3 text-sm font-medium">
-                  <option value="">Selecione o Produto...</option>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price}</option>)}
-                </select>
-                <input type="number" min="1" placeholder="Quantidade" value={manualOrderData.qty} onChange={e => setManualOrderData({...manualOrderData, qty: parseInt(e.target.value)})} className="w-full p-3 border rounded-lg mb-3 text-sm" />
-                <button onClick={handleSaveManualOrder} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow hover:bg-emerald-700">Salvar Pedido</button>
+              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-lg mt-3 transition-all">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-slate-800 text-sm">Novo Pedido Manual</h3>
+                  <button onClick={() => setShowManualOrder(false)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
+                </div>
+                
+                <input type="text" placeholder="Nome do Cliente" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg mb-4 text-sm font-medium outline-none focus:border-emerald-500" />
+                
+                <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
+                  <div className="flex gap-2">
+                    <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="flex-1 p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none">
+                      <option value="">Selecione o Produto...</option>
+                      {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price.toFixed(2)}</option>)}
+                    </select>
+                    <input type="number" min="1" value={manualItemQty} onChange={e => setManualItemQty(parseInt(e.target.value))} className="w-16 p-3 border border-gray-200 rounded-lg text-sm outline-none text-center font-bold" />
+                    <button onClick={handleAddToManualCart} className="bg-emerald-100 text-emerald-800 px-4 rounded-lg font-bold hover:bg-emerald-200 transition text-sm">Add</button>
+                  </div>
+                </div>
+
+                {manualCart.length > 0 && (
+                  <div className="mb-5 space-y-2">
+                    {manualCart.map(item => (
+                      <div key={item.id} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-gray-100 text-sm shadow-sm">
+                        <span className="text-slate-700 font-medium"><span className="font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded mr-1">{item.qty}x</span> {item.name}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="font-black text-slate-800">R$ {(item.price * item.qty).toFixed(2)}</span>
+                          <button onClick={() => handleRemoveFromManualCart(item.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-right pt-3 border-t border-gray-100 mt-3">
+                      <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest mr-2">Total do Pedido:</span>
+                      <span className="font-black text-emerald-800 text-xl">R$ {manualCart.reduce((s,i)=>s+(i.price*i.qty),0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <button onClick={handleSaveManualOrder} className="w-full bg-emerald-600 text-white font-black py-3 rounded-xl shadow-md hover:bg-emerald-700">✅ Concluir e Salvar Pedido</button>
               </div>
             )}
           </div>
