@@ -78,6 +78,7 @@ export default function App() {
   const [adminTab, setAdminTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false); 
+  const [storeMode, setStoreMode] = useState('mensal'); // Fases da loja: 'mensal', 'estoque', 'pausado'
 
   const [checkoutCpf, setCheckoutCpf] = useState(''); 
   const [paymentMethod, setPaymentMethod] = useState('pix');
@@ -91,12 +92,10 @@ export default function App() {
   const [shortagePreview, setShortagePreview] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   
-  // Rep Manual Order States
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
   const [repManualItems, setRepManualItems] = useState([]);
 
-  // Blindagem de Segurança (Case Insensitive)
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
   const isRep = userRoleStr === 'representante';
@@ -128,14 +127,19 @@ export default function App() {
     if (currentScreen !== 'login' && !isPrintMode) {
       const fetchData = async () => {
         try {
-          const [pSnap, oSnap, uSnap] = await Promise.all([
+          const [pSnap, oSnap, uSnap, configSnap] = await Promise.all([
             getDocs(collection(db, "products")),
             getDocs(collection(db, "orders")),
-            getDocs(collection(db, "users"))
+            getDocs(collection(db, "users")),
+            getDoc(doc(db, "settings", "global"))
           ]);
           setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setAllUsers(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+          
+          if(configSnap.exists() && configSnap.data().storeMode) {
+             setStoreMode(configSnap.data().storeMode);
+          }
         } catch (e) { console.error("Erro ao ler DB", e); }
       };
       fetchData();
@@ -205,7 +209,6 @@ export default function App() {
   };
 
   const simulateMercadoPagoApproval = async () => {
-    // TODO: Mercado Pago API
     if(pendingOrder) { 
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' }); 
       showToast('Pagamento Aprovado!');
@@ -221,7 +224,6 @@ export default function App() {
      showToast('Reembolso Solicitado!');
   };
 
-  // Falta Global Lógica
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
     const ordersToUpdate = orders.filter(o => o.status === 'pago' && (o.items || []).some(i => i.id === shortageSelectedProduct));
@@ -265,7 +267,6 @@ export default function App() {
     } catch(e) { showToast('Erro ao processar', 'error'); }
   };
 
-  // Exportar Cross Docking CSV
   const exportSupplierCSV = () => {
     const validOrders = orders.filter(o => o.status === 'pago');
     const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "NOVA SOBRA PREVISTA"]];
@@ -326,7 +327,7 @@ export default function App() {
           const text = event.target.result;
           const rows = text.split('\n');
           for(let i=1; i<rows.length; i++){
-             const cols = rows[i].split(';'); // Usando ponto e vírgula que é comum no Brasil
+             const cols = rows[i].split(';'); 
              if(cols.length >= 4) {
                 const sku = cols[0]?.trim();
                 const name = cols[1]?.trim();
@@ -334,7 +335,6 @@ export default function App() {
                 const priceStr = cols[3]?.trim().replace('R$', '').replace(',', '.');
                 const price = parseFloat(priceStr);
                 if(sku && name && !isNaN(price)){
-                   // Verifica se já existe para atualizar ou criar novo
                    const existing = products.find(p => p.sku === sku);
                    if (existing) {
                        await updateDoc(doc(db,"products", existing.id), { price, name, category: cat || 'Geral' });
@@ -345,10 +345,35 @@ export default function App() {
              }
           }
           showToast(`Tabela processada com sucesso!`);
-          setCurrentScreen('dashboard_admin'); // Força reload
+          setCurrentScreen('dashboard_admin'); 
        };
        reader.readAsText(e.target.files[0]);
     }
+  };
+
+  const toggleStoreMode = async (mode) => {
+     try {
+        await setDoc(doc(db, "settings", "global"), { storeMode: mode }, { merge: true });
+        setStoreMode(mode);
+        showToast(`Status da loja atualizado!`);
+     } catch(e) {
+        showToast('Erro ao mudar o status', 'error');
+     }
+  };
+
+  const handleAddToCart = (p) => {
+     if (storeMode === 'pausado') return showToast('A loja encontra-se em balanço e fechada para novas compras.', 'error');
+     
+     const existing = cart.find(i => i.id === p.id);
+     const currentQtd = existing ? existing.qtd : 0;
+     
+     if (storeMode === 'estoque' && currentQtd >= (p.stock || 0)) {
+         return showToast(`Limite atingido! Temos apenas ${p.stock || 0} unidade(s) em estoque.`, 'error');
+     }
+     
+     if (existing) setCart(cart.map(i => i.id === p.id ? { ...i, qtd: i.qtd + 1 } : i));
+     else setCart([...cart, { ...p, qtd: 1 }]);
+     showToast(`Adicionado com sucesso!`);
   };
 
   // --- RENDERS ---
@@ -380,6 +405,26 @@ export default function App() {
           ))}
         </div>
 
+        {/* Banners Inteligentes das Fases da Loja */}
+        {storeMode === 'estoque' && (
+           <div className="bg-orange-50 border border-orange-200 p-4 rounded-2xl mb-6 shadow-sm flex items-start gap-3">
+              <Package className="w-6 h-6 text-orange-600 flex-shrink-0 mt-0.5" />
+              <div>
+                 <h4 className="font-black text-orange-900 text-sm mb-0.5">Modo Pronta Entrega</h4>
+                 <p className="text-xs text-orange-800 font-medium leading-snug">As encomendas do mês encerraram, mas aproveite a nossa Pronta Entrega! Mostrando apenas itens disponíveis no nosso estoque local.</p>
+              </div>
+           </div>
+        )}
+        {storeMode === 'pausado' && (
+           <div className="bg-red-50 border border-red-200 p-4 rounded-2xl mb-6 shadow-sm flex items-start gap-3">
+              <Clock className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                 <h4 className="font-black text-red-900 text-sm mb-0.5">Loja em Balanço / Vitrine</h4>
+                 <p className="text-xs text-red-800 font-medium leading-snug">O nosso próximo ciclo abre no dia 05. Prepare a sua lista e aproveite para verificar os seus créditos na aba Meus Pedidos!</p>
+              </div>
+           </div>
+        )}
+
         {promoProducts.length > 0 && !searchTerm && shopCategory === 'Todos' && (
           <div className="mb-10">
             <div className="flex justify-between items-end mb-4">
@@ -389,8 +434,11 @@ export default function App() {
             <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x">
               {promoProducts.map(p => {
                 const discount = Math.round((1 - (p.promotionalPrice / p.price)) * 100);
+                const isOutOfStock = storeMode === 'estoque' && (p.stock || 0) <= 0;
+                const isPaused = storeMode === 'pausado';
+
                 return (
-                  <div key={`promo-${p.id}`} className="snap-start shrink-0 w-48 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col relative overflow-hidden group">
+                  <div key={`promo-${p.id}`} className={`snap-start shrink-0 w-48 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col relative overflow-hidden group ${isOutOfStock ? 'opacity-70 grayscale-[50%]' : ''}`}>
                     <span className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-br-lg z-10">{discount}% OFF</span>
                     <div className="h-40 bg-gray-50 flex items-center justify-center p-4 relative">
                        {p.category && <span className="absolute top-2 right-2 text-[8px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded tracking-widest">{p.category}</span>}
@@ -400,12 +448,14 @@ export default function App() {
                       <h3 className="text-sm font-black text-slate-800 leading-tight mb-2 line-clamp-2">{p.name}</h3>
                       <p className="text-[10px] text-gray-400 line-through mb-0.5 font-bold">R$ {p.price.toFixed(2)}</p>
                       <p className="text-2xl text-slate-800 font-black leading-none mb-4">R$ {p.promotionalPrice.toFixed(2)}</p>
-                      <button onClick={() => {
-                        const existing = cart.find(i => i.id === p.id);
-                        if (existing) setCart(cart.map(i => i.id === p.id ? { ...i, qtd: i.qtd + 1 } : i));
-                        else setCart([...cart, { ...p, qtd: 1 }]);
-                        showToast(`Adicionado!`);
-                      }} className="w-full bg-emerald-100 text-emerald-800 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-200 transition-colors mt-auto">Adicionar</button>
+                      
+                      {isPaused ? (
+                          <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Pausado</button>
+                      ) : isOutOfStock ? (
+                          <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Esgotado</button>
+                      ) : (
+                          <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-100 text-emerald-800 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-200 transition-colors mt-auto">Adicionar</button>
+                      )}
                     </div>
                   </div>
                 )
@@ -418,9 +468,11 @@ export default function App() {
           {filteredProducts.map(p => {
             const isPromo = Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price);
             const activePrice = isPromo ? p.promotionalPrice : p.price;
+            const isOutOfStock = storeMode === 'estoque' && (p.stock || 0) <= 0;
+            const isPaused = storeMode === 'pausado';
 
             return (
-              <div key={p.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+              <div key={p.id} className={`bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden ${isOutOfStock ? 'opacity-70 grayscale-[50%]' : ''}`}>
                 <div className="aspect-square bg-gray-50 flex items-center justify-center p-4 relative">
                   {isPromo && <span className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-br-lg z-10">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
                   {p.image?.length > 50 ? <img src={p.image} className="h-full w-full object-cover rounded-lg" alt=""/> : <span className="text-4xl">{p.image || '📦'}</span>}
@@ -435,19 +487,21 @@ export default function App() {
                   ) : (
                     <p className="text-lg text-slate-800 font-black mb-3">R$ {activePrice.toFixed(2)}</p>
                   )}
-                  <button onClick={() => {
-                        const existing = cart.find(i => i.id === p.id);
-                        if (existing) setCart(cart.map(i => i.id === p.id ? { ...i, qtd: i.qtd + 1 } : i));
-                        else setCart([...cart, { ...p, qtd: 1 }]);
-                        showToast(`Adicionado!`);
-                  }} className="w-full bg-emerald-50 text-emerald-700 border border-emerald-100 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-100 transition-colors">Adicionar</button>
+                  
+                  {isPaused ? (
+                      <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Pausado</button>
+                  ) : isOutOfStock ? (
+                      <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Esgotado</button>
+                  ) : (
+                      <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-50 text-emerald-700 border border-emerald-100 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-100 transition-colors mt-auto">Adicionar</button>
+                  )}
                 </div>
               </div>
             )
           })}
         </div>
 
-        {cart.length > 0 && (
+        {cart.length > 0 && storeMode !== 'pausado' && (
            <div className="fixed bottom-16 left-0 w-full bg-white border-t border-gray-200 p-3 z-40 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] md:bottom-0">
               <div className="max-w-5xl mx-auto flex items-center justify-between">
                  <div>
@@ -846,6 +900,20 @@ export default function App() {
         return (
           <div className="space-y-6 text-left">
             <h2 className="text-2xl font-black text-slate-800 mb-2">Visão Geral</h2>
+            
+            {/* Controlador de Ciclo de Vendas */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
+               <h3 className="font-bold text-sm text-slate-800 mb-3">Ciclo de Vendas (Status da Loja)</h3>
+               <div className="flex flex-col md:flex-row gap-2">
+                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Ciclo Aberto (Encomendas)</button>
+                   <button onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega (Estoque)</button>
+                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Loja Pausada (Vitrine)</button>
+               </div>
+               <p className="text-[10px] font-medium text-gray-500 mt-3 leading-snug">
+                   {storeMode === 'mensal' ? 'Fase 1: O cliente visualiza todo o catálogo para encomendar o pedido do fornecedor.' : storeMode === 'estoque' ? 'Fase 2: O sistema desativa produtos esgotados. O cliente só compra itens com Estoque Sede > 0.' : 'Fase 3: A loja atua apenas como vitrine e os botões de compra estão bloqueados para todos os clientes.'}
+               </p>
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                  <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Vendas brutas</p>
@@ -1158,7 +1226,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modais omitidos por brevidade no snippet superior, mas incluídos aqui */}
       {pixRefundModal.open && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 text-left">
           <div className="bg-white p-6 rounded-2xl max-w-sm w-full shadow-2xl border border-gray-100">
@@ -1220,7 +1287,6 @@ export default function App() {
                  <span className="font-black text-white text-xl tracking-tight leading-none">Clube de Compras</span>
                </div>
                
-               {/* Desktop Top Menu */}
                <div className="hidden md:flex items-center gap-2 mx-auto">
                     <button onClick={() => setCurrentScreen('shop')} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'shop' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><Home className="w-4 h-4 mr-2"/> Loja</button>
                     <button onClick={() => setCurrentScreen('my_orders')} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'my_orders' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><Package className="w-4 h-4 mr-2"/> Pedidos</button>
@@ -1309,7 +1375,6 @@ export default function App() {
              )}
           </main>
 
-          {/* Mobile Footer Menu - Visível apenas se não for tela de gestão fullscreen */}
           {currentScreen !== 'login' && currentScreen !== 'dashboard_admin' && (
             <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 flex justify-around items-center h-14 z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.03)] md:hidden">
               <button onClick={() => setCurrentScreen('shop')} className={`flex flex-col items-center justify-center w-full h-full ${currentScreen==='shop'?'text-emerald-700':'text-gray-400'}`}><Home className="w-5 h-5 mb-0.5" /><span className="text-[9px] font-black uppercase">Comprar</span></button>
