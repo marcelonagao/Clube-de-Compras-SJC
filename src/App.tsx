@@ -885,13 +885,14 @@ export default function App() {
                            <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
                               #{o.id.slice(0,5)} • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
                            </p>
-                           <div className="flex flex-wrap gap-1.5">
+                           <div className="flex flex-col gap-1.5 mt-2">
                              {(o.items || []).map((i, idx) => {
                                const isFalta = o.faltas?.find(f=>f.productId===i.id);
                                return (
-                                 <span key={idx} className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center shadow-sm ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
-                                   <span className="mr-1">{i.qtd}x</span> {i.name.split(' ')[0]}
-                                 </span>
+                                 <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
+                                   <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{i.qtd}x</span> 
+                                   <span className="leading-tight">{i.name}</span>
+                                 </div>
                                )
                              })}
                            </div>
