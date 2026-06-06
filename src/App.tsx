@@ -91,6 +91,12 @@ export default function App() {
   const [shortageSelectedProduct, setShortageSelectedProduct] = useState('');
   const [shortagePreview, setShortagePreview] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
+  // --- CHAVE DA FASE 1 (BETA) ---
+  const CONFIG_APENAS_COLETA = true; // Mude para false no futuro para ativar o Mercado Pago!
+
+  // --- ESTADOS DO PEDIDO MANUAL (REP) ---
+  const [showManualOrder, setShowManualOrder] = useState(false);
+  const [manualOrderData, setManualOrderData] = useState({ clientName: '', productId: '', qty: 1 });
   
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
@@ -184,30 +190,41 @@ export default function App() {
         cpf: checkoutCpf || 'Não informado',
         total: finalTotal, 
         method: finalTotal <= 0 ? 'saldo' : paymentMethod, 
-        status: finalTotal <= 0 ? 'pago' : 'aguardando_pagamento', 
+        // FASE 1: Já nasce confirmado se for apenas coleta
+        status: CONFIG_APENAS_COLETA ? 'confirmado' : (finalTotal <= 0 ? 'pago' : 'aguardando_pagamento'), 
         status_nfe: 'pendente',
         walletDiscountApplied: walletDiscount, 
         date: new Date().toISOString(), 
         items: cart.map(i => ({ id: i.id, name: i.name, qtd: i.qtd, price: getActivePrice(i) })),
         faltas: []
       };
-      
+
       const orderRef = await addDoc(collection(db, "orders"), newOrder);
       
+      // Se usou saldo total
       if (finalTotal <= 0) {
         await updateDoc(doc(db,"users", user.uid), { walletBalance: Math.max(0, (user.walletBalance || 0) - walletDiscount) });
         setCart([]); setIsProcessingPayment(false); setCurrentScreen('success');
         return;
       }
       
-      setPendingOrder({ id: orderRef.id, ...newOrder }); 
+      // FASE 1: Se for apenas coleta, finaliza com sucesso direto e avisa!
+      if (CONFIG_APENAS_COLETA) {
+          setCart([]); 
+          setIsProcessingPayment(false); 
+          setCurrentScreen('success');
+          showToast('O pagamento será feito na retirada!', 'success');
+          return;
+      }
+
+      // FASE 2 (Futuro): Vai para a tela do PIX
+      setPendingOrder({ id: orderRef.id, ...newOrder });
       setCart([]); setIsProcessingPayment(false); 
       setCurrentScreen('gateway_pix'); 
     } catch(err) { 
       setIsProcessingPayment(false); showToast('Erro no pedido', 'error'); 
     }
-  };
-
+  }
   const simulateMercadoPagoApproval = async () => {
     if(pendingOrder) { 
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' }); 
@@ -699,8 +716,14 @@ export default function App() {
 
   const renderRepDashboard = () => {
     const viewingPolo = isGestor ? (adminTab === 'logistica_polo_view' || user?.polo || polos[0]) : user?.polo;
-    const repOrders = orders.filter(o => o.polo === viewingPolo && o.status === 'pago' && o.date);
     
+    // Na Fase 1, lê pedidos "confirmado". No futuro, volta a ler "pago"
+    const statusBusca = CONFIG_APENAS_COLETA ? 'confirmado' : 'pago';
+    const repOrders = orders.filter(o => o.polo === viewingPolo && o.status === statusBusca && o.date);
+    
+    // Soma o total que o Polo deve repassar ao Gestor
+    const totalRepassarGestor = repOrders.reduce((acc, order) => acc + (order.total || 0), 0);
+
     const ordersByMonth = repOrders.reduce((acc, order) => {
       const d = order.date ? new Date(order.date) : new Date();
       const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -711,8 +734,29 @@ export default function App() {
       acc[capMonth].orders.push(order);
       acc[capMonth].total += (order.total || 0);
       acc[capMonth].count += 1;
+      
       return acc;
     }, {});
+
+    // Função de Salvar Pedido Manual
+    const handleSaveManualOrder = async () => {
+      if (!manualOrderData.clientName || !manualOrderData.productId) return showToast('Preencha os dados!', 'error');
+      const prod = products.find(p => p.id === manualOrderData.productId);
+      if (!prod) return;
+
+      const manualOrder = {
+        customer: `${manualOrderData.clientName} (Manual)`, email: '', whatsapp: '', polo: viewingPolo, cpf: 'Não informado',
+        total: prod.price * manualOrderData.qty, method: 'manual', status: statusBusca, status_nfe: 'pendente',
+        date: new Date().toISOString(), items: [{ id: prod.id, name: prod.name, qtd: manualOrderData.qty, price: prod.price }], faltas: []
+      };
+
+      try {
+        await addDoc(collection(db, "orders"), manualOrder);
+        showToast('Pedido Manual Salvo!');
+        setShowManualOrder(false);
+        setManualOrderData({ clientName: '', productId: '', qty: 1 });
+      } catch (e) { showToast('Erro ao salvar', 'error'); }
+    };
 
     return (
       <div className="p-4 max-w-4xl mx-auto pt-6 pb-24 font-sans text-left">
@@ -731,6 +775,32 @@ export default function App() {
              </div>
            )}
         </div>
+
+        {/* CARD DO TOTAL E BOTÃO MANUAL (FASE 1) */}
+        {CONFIG_APENAS_COLETA && (
+          <div className="mb-6">
+            <div className="bg-emerald-100 border-2 border-emerald-500 rounded-2xl p-6 mb-4 text-center shadow-sm">
+              <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Total a Repassar à Sede</p>
+              <h1 className="text-4xl font-black text-emerald-900 mt-2">R$ {totalRepassarGestor.toFixed(2)}</h1>
+              <p className="text-xs text-emerald-700 mt-2">Soma de todos os pedidos deste polo.</p>
+            </div>
+
+            <button onClick={() => setShowManualOrder(!showManualOrder)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl shadow mb-2 hover:bg-slate-900 transition">➕ Incluir Pedido Manual</button>
+
+            {showManualOrder && (
+              <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm mt-3">
+                <h3 className="font-bold text-slate-800 mb-3 text-sm">Novo Pedido Manual</h3>
+                <input type="text" placeholder="Nome do Cliente" value={manualOrderData.clientName} onChange={e => setManualOrderData({...manualOrderData, clientName: e.target.value})} className="w-full p-3 border rounded-lg mb-3 text-sm" />
+                <select value={manualOrderData.productId} onChange={e => setManualOrderData({...manualOrderData, productId: e.target.value})} className="w-full p-3 border rounded-lg mb-3 text-sm font-medium">
+                  <option value="">Selecione o Produto...</option>
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price}</option>)}
+                </select>
+                <input type="number" min="1" placeholder="Quantidade" value={manualOrderData.qty} onChange={e => setManualOrderData({...manualOrderData, qty: parseInt(e.target.value)})} className="w-full p-3 border rounded-lg mb-3 text-sm" />
+                <button onClick={handleSaveManualOrder} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg shadow hover:bg-emerald-700">Salvar Pedido</button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="space-y-6">
            {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => (
