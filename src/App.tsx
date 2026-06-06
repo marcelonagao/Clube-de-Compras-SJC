@@ -536,7 +536,8 @@ export default function App() {
   };
 
   const renderCheckout = () => {
-    const hasFee = paymentMethod === 'credit';
+    // Na Fase 1, não há taxa de cartão, pois o pagamento é físico
+    const hasFee = paymentMethod === 'credit' && !CONFIG_APENAS_COLETA;
     const feeAmount = hasFee ? cartTotal * 0.05 : 0;
     const subTotalWithFee = cartTotal + feeAmount;
     const walletDiscount = (user?.walletBalance || 0) > 0 ? Math.min(user.walletBalance, subTotalWithFee) : 0;
@@ -569,7 +570,8 @@ export default function App() {
           </div>
         </div>
 
-        {finalTotal > 0 && (
+        {/* FASE 2: Só exibe opções de PIX/Cartão e CPF se NÃO estiver na Fase Beta */}
+        {finalTotal > 0 && !CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-5">
             <div>
               <p className="font-black text-xs text-slate-800 uppercase tracking-widest mb-2">Forma de Pagamento</p>
@@ -596,12 +598,11 @@ export default function App() {
         )}
 
         <button onClick={() => processOrder(finalTotal, paymentMethod, walletDiscount)} disabled={isProcessingPayment} className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-800 transition-all text-base flex items-center justify-center">
-          {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : (finalTotal <= 0 ? 'Concluir Pedido (Usar Saldo)' : 'Gerar Pagamento Seguro')}
+          {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : (CONFIG_APENAS_COLETA ? 'Concluir Pedido (Pagar na Retirada)' : (finalTotal <= 0 ? 'Concluir Pedido (Usar Saldo)' : 'Gerar Pagamento Seguro'))}
         </button>
       </div>
     );
-  };
-
+  }
   const renderGatewayPix = () => {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 bg-slate-50">
