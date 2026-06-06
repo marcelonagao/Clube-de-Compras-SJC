@@ -899,48 +899,53 @@ export default function App() {
                      const uRel = allUsers.find(u=>u.email===o.email);
                      const estornado = temFalta && (uRel?.pendingPixRefund === 0 && uRel?.walletBalance === 0);
                      return (
-                       <div key={o.id} className={`p-4 bg-white border rounded-xl shadow-sm flex flex-col md:flex-row justify-between gap-4 items-start transition-all ${temFalta ? 'border-orange-200' : 'border-gray-100'}`}>
-                         <div className="flex-1 w-full text-left">
-                           <div className="mb-1">
-                              <p className="font-bold text-slate-800 text-base">{o.customer}</p>
-                           </div>
-                           <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
-                              #{o.id.slice(0,5)} • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
-                           </p>
-                           <div className="flex flex-col gap-1.5 mt-2">
-                             {(o.items || []).map((i, idx) => {
-                               const isFalta = o.faltas?.find(f=>f.productId===i.id);
-                               return (
-                                 <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
-                                   <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{i.qtd}x</span> 
-                                   <span className="leading-tight">{i.name}</span>
-                                 </div>
-                               )
-                             })}
-                           </div>
-                         </div>
-                         <div className="flex gap-2 shrink-0 w-full md:w-auto mt-2 md:mt-0 items-center md:items-start justify-end">
-                            {temFalta && (
-                                <span className={`px-2 py-1 rounded font-black text-[9px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                                    {estornado ? 'ESTORNADO' : 'FALTAS'}
-                                </span>
-                            )}
-                            <button onClick={() => {
-                                let text = `Olá ${o.customer}! Aqui é do Clube de Compras. A sua caixa já está pronta para retirada no polo de ${o.polo}. O total é R$ ${(o.total||0).toFixed(2)}.`;
-                                if(temFalta) {
-                                    const itensFaltantes = o.faltas.map(f => f.name).join(', ');
-                                    if (CONFIG_APENAS_COLETA) {
-                                        text += `\nAviso: Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO valor a pagar na retirada já foi atualizado para menos!`;
-                                    } else {
-                                        text += `\nAviso: Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
-                                    }
-                                }
-                                window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
-                            }} className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-emerald-200 transition-colors shadow-sm">
-                              <MessageCircle className="w-3 h-3 mr-1.5"/> RECIBO
-                            </button>
-                         </div>
-                       </div>
+                      <div key={o.id} className={`p-4 bg-white border rounded-xl shadow-sm flex flex-col md:flex-row justify-between gap-4 items-start transition-all ${temFalta ? 'border-orange-200' : 'border-gray-100'}`}>
+                      <div className="flex-1 w-full text-left">
+                        <div className="mb-1">
+                           <p className="font-bold text-slate-800 text-base">{o.customer}</p>
+                        </div>
+                        <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
+                           {/* CÓDIGO DO PEDIDO MELHORADO */}
+                           <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono mr-1">#PED-{o.id.slice(-5).toUpperCase()}</span>
+                           • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
+                        </p>
+                        <div className="flex flex-col gap-1.5 mt-2">
+                          {(o.items || []).map((i, idx) => {
+                            const isFalta = o.faltas?.find(f=>f.productId===i.id);
+                            // CORREÇÃO DO "X": Lê tanto qtd (site) quanto qty (manual)
+                            const quantidade = i.qtd || i.qty || 1; 
+                            return (
+                              <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
+                                <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
+                                <span className="leading-tight">{i.name}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+      
+                      <div className="flex gap-2 shrink-0 w-full md:w-auto mt-2 md:mt-0 items-center md:items-start justify-end">
+                         {temFalta && (
+                             <span className={`px-2 py-1 rounded font-black text-[9px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                 {estornado ? 'ESTORNADO' : 'FALTAS'}
+                             </span>
+                         )}
+                         <button onClick={() => {
+                             let text = `Olá ${o.customer}!\nAqui é do Clube de Compras. A sua caixa do pedido *#PED-${o.id.slice(-5).toUpperCase()}* já está pronta para retirada no polo de ${o.polo}.\nO total é R$ ${(o.total||0).toFixed(2)}.`;
+                             if(temFalta) {
+                                 const itensFaltantes = o.faltas.map(f => f.name).join(', ');
+                                 if (CONFIG_APENAS_COLETA) {
+                                     text += `\n\n⚠️ *Aviso:* Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO valor a pagar na retirada já foi atualizado para menos!`;
+                                 } else {
+                                     text += `\n\n⚠️ *Aviso:* Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
+                                 }
+                             }
+                             window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                         }} className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-emerald-200 transition-colors shadow-sm">
+                           <MessageCircle className="w-3 h-3 mr-1.5"/> RECIBO
+                         </button>
+                      </div>
+                    </div>
                      );
                    })}
                 </div>
@@ -1054,80 +1059,121 @@ export default function App() {
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
+        // LÓGICA DE DADOS DO DASHBOARD
+        const now = new Date();
+        const currentMonthOrders = validOrders.filter(o => {
+            if(!o.date) return false;
+            const d = new Date(o.date);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+
+        const faturamentoMes = currentMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+        const impostosMes = faturamentoMes * 0.08; // 8% cravado
+
+        // Custo da Mercadoria (COGS)
+        let custoMercadoriaMes = 0;
+        currentMonthOrders.forEach(o => {
+            (o.items || []).forEach(i => {
+                const prod = products.find(p => p.id === i.id);
+                const itemCost = prod?.cost || 0; // Pega o custo que você cadastrou no catálogo
+                const quantidade = i.qtd || i.qty || 1;
+                custoMercadoriaMes += (itemCost * quantidade);
+            });
+        });
+
+        const lucroLiquidoMes = faturamentoMes - custoMercadoriaMes - impostosMes;
+        const margemLucroMes = faturamentoMes > 0 ? (lucroLiquidoMes / faturamentoMes) * 100 : 0;
+
+        // Faturamento por Polo
+        const faturamentoPorPolo = {};
+        currentMonthOrders.forEach(o => {
+            if (!faturamentoPorPolo[o.polo]) faturamentoPorPolo[o.polo] = 0;
+            faturamentoPorPolo[o.polo] += (o.total || 0);
+        });
+
+        // Gráfico Consertado (Fuso Horário ignorado, pega só dia e mês exatos)
+        const last7Days = Array.from({length: 7}).map((_, i) => { const d = new Date(); d.setDate(now.getDate() - (6 - i)); return d; });
+        const salesData = last7Days.map(date => {
+            return validOrders.filter(o => {
+               if(!o.date) return false;
+               const d = new Date(o.date);
+               return d.getDate() === date.getDate() && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
+            }).reduce((sum, o) => sum + (o.total || 0), 0);
+        });
+        const maxSale = Math.max(...salesData, 100);
+
         return (
           <div className="space-y-6 text-left">
-            <h2 className="text-2xl font-black text-slate-800 mb-2">Visão Geral</h2>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">DRE e Visão Geral (Mês Atual)</h2>
             
-            {/* Controlador de Ciclo de Vendas */}
+            {/* Controlador de Fases */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
                <h3 className="font-bold text-sm text-slate-800 mb-3">Ciclo de Vendas (Status da Loja)</h3>
                <div className="flex flex-col md:flex-row gap-2">
-                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Ciclo Aberto (Encomendas)</button>
-                   <button onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega (Estoque)</button>
-                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Loja Pausada (Vitrine)</button>
-               </div>
-               <p className="text-[10px] font-medium text-gray-500 mt-3 leading-snug">
-                   {storeMode === 'mensal' ? 'Fase 1: O cliente visualiza todo o catálogo para encomendar o pedido do fornecedor.' : storeMode === 'estoque' ? 'Fase 2: O sistema desativa produtos esgotados. O cliente só compra itens com Estoque Sede > 0.' : 'Fase 3: A loja atua apenas como vitrine e os botões de compra estão bloqueados para todos os clientes.'}
-               </p>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Vendas brutas</p>
-                 <p className="text-xl font-black text-slate-800">R$ {totalGross.toFixed(2)}</p>
-              </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Unidades vendidas</p>
-                 <p className="text-xl font-black text-slate-800">{itemsSold}</p>
-              </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Qtd de Vendas</p>
-                 <p className="text-xl font-black text-slate-800">{totalOrdersCount}</p>
-              </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                 <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase tracking-wider">Ticket Médio</p>
-                 <p className="text-xl font-black text-slate-800">R$ {avgTicket.toFixed(2)}</p>
-              </div>
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-orange-100 bg-orange-50/30 md:col-span-2">
-                 <p className="text-[10px] font-bold text-orange-600 mb-1 uppercase tracking-wider">Créditos Retidos</p>
-                 <p className="text-xl font-black text-orange-700">R$ {pendingCredits.toFixed(2)}</p>
-              </div>
-            </div>
-
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-               <h3 className="font-bold text-sm text-slate-800 mb-6">Tendência (7 Dias)</h3>
-               <div className="flex items-end justify-between h-40 gap-1">
-                 {salesData.map((val, i) => {
-                   const heightPercentage = Math.max((val / maxSale) * 100, 2); 
-                   return (
-                     <div key={i} className="flex flex-col items-center flex-1 group relative">
-                        <div className="opacity-0 group-hover:opacity-100 absolute -top-8 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10">R$ {val.toFixed(0)}</div>
-                        <div className="w-full max-w-[32px] bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors" style={{ height: `${heightPercentage}%` }}></div>
-                        <span className="text-[8px] font-bold text-gray-400 mt-2">{last7Days[i].getDate()}/{last7Days[i].getMonth()+1}</span>
-                     </div>
-                   );
-                 })}
+                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Ciclo Aberto</button>
+                   <button onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega</button>
+                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Loja Pausada</button>
                </div>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-              <h3 className="font-black text-lg text-slate-800 mb-4 text-center">Top 5 Produtos</h3>
-              <div className="space-y-2">
-                 {top5.map((item, idx) => (
-                   <div key={idx} className="bg-gray-50 p-3 rounded-xl border border-gray-100 flex items-center justify-between gap-3 hover:bg-white transition-colors">
-                     <div className="flex items-center gap-3 w-full overflow-hidden">
-                       <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-0.5 shadow-sm shrink-0 overflow-hidden border border-gray-200">
-                         {item.image?.length > 50 ? <img src={item.image} className="w-full h-full object-cover" alt=""/> : <span className="text-xl">📦</span>}
-                       </div>
-                       <div className="truncate">
-                         <p className="font-black text-slate-800 text-xs truncate">{item.name}</p>
-                         <p className="text-[10px] font-bold text-gray-500 mt-0.5">{item.qty} unidades</p>
-                       </div>
-                     </div>
-                     <p className="font-black text-emerald-700 text-sm shrink-0">R$ {item.val.toFixed(2)}</p>
-                   </div>
-                 ))}
-              </div>
+            {/* SUPER DASHBOARD FINANCEIRO */}
+            <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 text-white">
+                <p className="text-[10px] font-bold text-emerald-400 mb-1 uppercase tracking-wider">Faturamento Bruto (Mês)</p>
+                <p className="text-4xl font-black mb-6">R$ {faturamentoMes.toFixed(2)}</p>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-slate-700 pt-6">
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custo Mercadoria</p>
+                        <p className="text-xl font-black text-red-400">- R$ {custoMercadoriaMes.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos Estimados (8%)</p>
+                        <p className="text-xl font-black text-orange-400">- R$ {impostosMes.toFixed(2)}</p>
+                    </div>
+                    <div className="col-span-2 md:col-span-1 bg-emerald-900/50 p-3 rounded-xl border border-emerald-800">
+                        <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1">Lucro Líquido Esperado</p>
+                        <p className="text-2xl font-black text-emerald-400">R$ {lucroLiquidoMes.toFixed(2)}</p>
+                        <p className="text-[10px] font-bold text-emerald-500 mt-1">Margem: {margemLucroMes.toFixed(1)}%</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* GRÁFICO TENDÊNCIA CONSERTADO */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-sm text-slate-800 mb-6">Vendas (Últimos 7 Dias)</h3>
+                    <div className="flex items-end justify-between h-40 gap-1">
+                        {salesData.map((val, i) => {
+                        const heightPercentage = Math.max((val / maxSale) * 100, 2);
+                        return (
+                            <div key={i} className="flex flex-col items-center flex-1 group relative">
+                                <div className="opacity-0 group-hover:opacity-100 absolute -top-8 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10">R$ {val.toFixed(0)}</div>
+                                <div className="w-full max-w-[32px] bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors" style={{ height: `${heightPercentage}%` }}></div>
+                                <span className="text-[8px] font-bold text-gray-400 mt-2">{last7Days[i].getDate()}/{last7Days[i].getMonth()+1}</span>
+                            </div>
+                        );
+                        })}
+                    </div>
+                </div>
+
+                {/* FATURAMENTO POR POLO */}
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 className="font-bold text-sm text-slate-800 mb-4">Desempenho por Polo (Mês)</h3>
+                    <div className="space-y-3">
+                        {Object.entries(faturamentoPorPolo)
+                            .sort((a, b) => b[1] - a[1]) // Ordena do maior pro menor
+                            .map(([polo, valor]) => (
+                            <div key={polo} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-gray-100">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="w-4 h-4 text-emerald-600"/>
+                                    <span className="font-bold text-slate-700 text-xs">{polo}</span>
+                                </div>
+                                <span className="font-black text-emerald-800 text-sm">R$ {valor.toFixed(2)}</span>
+                            </div>
+                        ))}
+                        {Object.keys(faturamentoPorPolo).length === 0 && <p className="text-xs text-gray-400">Nenhum pedido neste mês ainda.</p>}
+                    </div>
+                </div>
             </div>
           </div>
         );
@@ -1213,6 +1259,7 @@ export default function App() {
                     name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
                     price: parseFloat(fd.get('price').replace(',','.')), 
                     promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
+                    cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
                     stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
                     image: editingProduct?.image || '📦' 
                  };
@@ -1237,6 +1284,7 @@ export default function App() {
                     <input name="category" defaultValue={editingProduct?.category} placeholder="Categoria (ex: Carnes)" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
                     <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
                     <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Preço Promoção (R$)" className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
+                    <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Seu Custo de Compra (R$)" required className="p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
                     <div className="grid grid-cols-2 gap-2">
                        <div><label className="text-[10px] font-bold ml-1 block text-gray-500">Qtd Cx Fornecedor</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm" /></div>
                        <div><label className="text-[10px] font-bold text-orange-600 ml-1 block">Estoque Sede (Sobra)</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
