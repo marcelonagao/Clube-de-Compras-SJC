@@ -246,9 +246,11 @@ export default function App() {
 
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
-    const ordersToUpdate = orders.filter(o => o.status === 'pago' && (o.items || []).some(i => i.id === shortageSelectedProduct));
+    const statusBusca = CONFIG_APENAS_COLETA ? 'confirmado' : 'pago';
     
-    if (ordersToUpdate.length === 0) return showToast('Nenhum pedido pago contém este item.', 'error');
+    // Procura o item apenas nos pedidos válidos
+    const ordersToUpdate = orders.filter(o => o.status === statusBusca && (o.items || []).some(i => i.id === shortageSelectedProduct));
+    if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => i.id === shortageSelectedProduct);
@@ -267,28 +269,48 @@ export default function App() {
       for (const imp of shortagePreview.impact) {
         const orderRef = doc(db, "orders", imp.orderId);
         const orderSnap = await getDoc(orderRef);
+        
         if(orderSnap.exists()){
            const orderData = orderSnap.data();
            const faltasAtualizadas = [...(orderData.faltas || []), { productId: shortagePreview.product.id, name: imp.itemData.name, refundValue: imp.refundValue }];
-           await updateDoc(orderRef, { faltas: faltasAtualizadas });
+           
+           let orderUpdates = { faltas: faltasAtualizadas };
 
-           const userQuery = query(collection(db, "users"), where("email", "==", imp.userEmail));
-           const uSnap = await getDocs(userQuery);
-           if (!uSnap.empty) {
-             const uDoc = uSnap.docs[0];
-             await updateDoc(doc(db, "users", uDoc.id), { walletBalance: (uDoc.data().walletBalance || 0) + imp.refundValue });
+           if (CONFIG_APENAS_COLETA) {
+               // FASE 1: Apenas reduz o total do pedido e remove o item. NENHUM crédito vai pra carteira.
+               const novosItens = orderData.items.filter(i => i.id !== shortagePreview.product.id);
+               const novoTotal = novosItens.reduce((s, i) => s + (i.price * i.qtd), 0);
+               orderUpdates.items = novosItens;
+               orderUpdates.total = novoTotal;
+           }
+
+           await updateDoc(orderRef, orderUpdates);
+
+           if (!CONFIG_APENAS_COLETA) {
+               // FASE 2 (Futuro): Deposita o crédito na carteira do cliente.
+               const userQuery = query(collection(db, "users"), where("email", "==", imp.userEmail));
+               const uSnap = await getDocs(userQuery);
+               if (!uSnap.empty) {
+                 const uDoc = uSnap.docs[0];
+                 await updateDoc(doc(db, "users", uDoc.id), { walletBalance: (uDoc.data().walletBalance || 0) + imp.refundValue });
+               }
            }
         }
       }
-      showToast(`Créditos gerados para ${shortagePreview.impact.length} clientes!`);
+      showToast(`Ajuste aplicado para ${shortagePreview.impact.length} pedidos!`);
       setFaltaGlobalModal(false); setShortagePreview(null); setShortageSelectedProduct('');
+      
       const oSnap = await getDocs(collection(db, "orders"));
       setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch(e) { showToast('Erro ao processar', 'error'); }
   };
 
   const exportSupplierCSV = () => {
-    const validOrders = orders.filter(o => o.status === 'pago');
+    // Puxa o status correto e filtra apenas os pedidos dos últimos 30 dias!
+    const validOrders = orders.filter(o => 
+      o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
+      new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000)
+   );
     const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "NOVA SOBRA PREVISTA"]];
     
     products.forEach(p => {
@@ -907,7 +929,11 @@ export default function App() {
                                 let text = `Olá ${o.customer}! Aqui é do Clube de Compras. A sua caixa já está pronta para retirada no polo de ${o.polo}. O total é R$ ${(o.total||0).toFixed(2)}.`;
                                 if(temFalta) {
                                     const itensFaltantes = o.faltas.map(f => f.name).join(', ');
-                                    text += `\nAviso: Faltou o seguinte item na entrega do fornecedor: ${itensFaltantes}. O crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
+                                    if (CONFIG_APENAS_COLETA) {
+                                        text += `\nAviso: Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO valor a pagar na retirada já foi atualizado para menos!`;
+                                    } else {
+                                        text += `\nAviso: Faltou o seguinte item no fornecedor: ${itensFaltantes}.\nO crédito de R$ ${o.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira no app!`;
+                                    }
                                 }
                                 window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
                             }} className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-emerald-200 transition-colors shadow-sm">
@@ -932,7 +958,7 @@ export default function App() {
   };
 
   const renderDispatchPDF = () => {
-    const validOrders = orders.filter(o => o.status === 'pago' && o.date);
+    const validOrders = orders.filter(o => o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && o.date);
     const summaryByPolo = {};
 
     validOrders.forEach(o => {
@@ -1000,7 +1026,7 @@ export default function App() {
   };
 
   const renderAdminDashboard = () => {
-    const validOrders = orders.filter(o => o.status === 'pago' && o.date);
+    const validOrders = orders.filter(o => o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && o.date);;
     const totalGross = validOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalOrdersCount = validOrders.length;
     const itemsSold = validOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (i.qtd || 0), 0), 0);
