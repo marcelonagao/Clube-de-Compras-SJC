@@ -736,13 +736,29 @@ export default function App() {
                  </div>
               )}
 
-              <div className="space-y-3 mb-5">
-                {(order.items || []).map((item, idx) => (
-                  <div key={idx} className="flex items-center text-sm text-slate-700 font-medium">
-                    <span className="w-6 h-6 bg-emerald-50 text-emerald-800 font-black text-[10px] rounded flex items-center justify-center mr-3 border border-emerald-100 shrink-0">{item.qtd}x</span>
-                    {item.name}
-                  </div>
-                ))}
+<div className="space-y-3 mb-5">
+                {(order.items || []).map((item, idx) => {
+                  const isFalta = order.faltas?.find(f => f.productId === item.id);
+                  const quantidade = item.qtd || item.qty || 1;
+                  
+                  return (
+                    <div key={idx} className={`flex items-center text-sm font-medium transition-all ${isFalta ? 'text-red-400 line-through opacity-70' : 'text-slate-700'}`}>
+                      <span className={`w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 ${isFalta ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
+                        {quantidade}x
+                      </span>
+                      {item.name}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                   {CONFIG_APENAS_COLETA ? 'Total a Pagar' : 'Total Pago'}
+                </span>
+                <div className="text-right">
+                  <span className="font-black text-xl text-emerald-800">R$ {(order.total || 0).toFixed(2)}</span>
+                </div>
               </div>
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Pago</span>
