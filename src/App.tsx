@@ -1540,10 +1540,19 @@ export default function App() {
              {!shortagePreview ? (
                <div className="space-y-4">
                  <div className="bg-slate-50 p-1.5 rounded-lg border border-gray-200">
-                   <select value={shortageSelectedProduct} onChange={e=>setShortageSelectedProduct(e.target.value)} className="w-full bg-transparent p-2 text-sm font-bold text-slate-800 outline-none cursor-pointer">
-                      <option value="">Selecione o produto ausente...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                   </select>
+                 <select 
+                value={shortageSelectedProduct} 
+                onChange={(e) => setShortageSelectedProduct(Number(e.target.value))}
+                className="w-full p-3 border border-gray-200 bg-white rounded-xl mb-4 outline-none focus:border-emerald-500 font-medium text-sm"
+              >
+                <option value="">Selecione o produto que faltou...</option>
+                {/* FILTRO INTELIGENTE: Mostra apenas produtos que constam nos pedidos válidos */}
+                {products
+                  .filter(p => validOrders.some(order => (order.items || []).some(item => item.id === p.id)))
+                  .map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
                  </div>
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
                </div>
