@@ -204,15 +204,22 @@ export default function App() {
 
       const orderRef = await addDoc(collection(db, "orders"), newOrder);
       
-      // Se usou saldo total
+      // Se usou saldo total (cobriu 100% do pedido)
       if (finalTotal <= 0) {
         await updateDoc(doc(db,"users", user.uid), { walletBalance: Math.max(0, (user.walletBalance || 0) - walletDiscount) });
+        setUser(prev => ({...prev, walletBalance: Math.max(0, (prev.walletBalance || 0) - walletDiscount)})); // Atualiza a tela na hora!
         setCart([]); setIsProcessingPayment(false); setCurrentScreen('success');
         return;
       }
       
-      // FASE 1: Se for apenas coleta, finaliza com sucesso direto e avisa!
+      // FASE 1: Se for apenas coleta, finaliza direto!
       if (CONFIG_APENAS_COLETA) {
+          // CORREÇÃO: Desconta o saldo da carteira mesmo se o pagamento for parcial!
+          if (walletDiscount > 0) {
+              await updateDoc(doc(db,"users", user.uid), { walletBalance: Math.max(0, (user.walletBalance || 0) - walletDiscount) });
+              setUser(prev => ({...prev, walletBalance: Math.max(0, (prev.walletBalance || 0) - walletDiscount)})); // Atualiza a tela na hora!
+          }
+
           setCart([]); 
           setIsProcessingPayment(false); 
           setCurrentScreen('success');
@@ -227,7 +234,7 @@ export default function App() {
     } catch(err) { 
       setIsProcessingPayment(false); showToast('Erro no pedido', 'error'); 
     }
-  }
+  };
   const simulateMercadoPagoApproval = async () => {
     if(pendingOrder) { 
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' }); 
