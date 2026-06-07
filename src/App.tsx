@@ -693,7 +693,15 @@ export default function App() {
 
               {order.faltas && order.faltas.length > 0 && (
                  <div className="bg-orange-50 p-3 rounded-xl text-xs font-medium text-orange-800 mb-4 border border-orange-200 flex items-start">
-                    {user?.pendingPixRefund > 0 || user?.walletBalance > 0 ? (
+                    {CONFIG_APENAS_COLETA ? (
+                        <>
+                            <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
+                            <div>
+                                <p className="font-black text-orange-900 mb-0.5">Pedido Atualizado</p>
+                                <p>Um item faltou no fornecedor. O valor que você pagará na retirada já foi reduzido em R$ {order.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)}.</p>
+                            </div>
+                        </>
+                    ) : (user?.pendingPixRefund > 0 || user?.walletBalance > 0 ? (
                         <>
                             <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
                             <div>
@@ -709,7 +717,7 @@ export default function App() {
                                 <p>O valor de R$ {order.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} foi reembolsado via PIX.</p>
                             </div>
                         </>
-                    )}
+                    ))}
                  </div>
               )}
 
@@ -1091,13 +1099,22 @@ export default function App() {
             faturamentoPorPolo[o.polo] += (o.total || 0);
         });
 
-        // Gráfico Consertado (Fuso Horário ignorado, pega só dia e mês exatos)
-        const last7Days = Array.from({length: 7}).map((_, i) => { const d = new Date(); d.setDate(now.getDate() - (6 - i)); return d; });
+        // Gráfico Definitivo (Zerando os relógios para ignorar fusos horários)
+        const baseDate = new Date();
+        baseDate.setHours(0, 0, 0, 0);
+
+        const last7Days = Array.from({length: 7}).map((_, i) => { 
+            const d = new Date(baseDate); 
+            d.setDate(d.getDate() - (6 - i)); 
+            return d; 
+        });
+
         const salesData = last7Days.map(date => {
             return validOrders.filter(o => {
                if(!o.date) return false;
-               const d = new Date(o.date);
-               return d.getDate() === date.getDate() && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
+               const orderDate = new Date(o.date);
+               orderDate.setHours(0, 0, 0, 0); // Zera o relógio do pedido também!
+               return orderDate.getTime() === date.getTime();
             }).reduce((sum, o) => sum + (o.total || 0), 0);
         });
         const maxSale = Math.max(...salesData, 100);
@@ -1470,13 +1487,18 @@ export default function App() {
                <div>
                  <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl mb-5">
                     <h4 className="font-bold text-orange-900 mb-1 text-sm">Resumo da Ação</h4>
-                    <p className="text-xs text-orange-800 mb-3">Irá devolver crédito a <strong>{shortagePreview.impact.length}</strong> clientes.</p>
+                    <p className="text-xs text-orange-800 mb-3">
+                      {CONFIG_APENAS_COLETA ? `Irá abater o valor na cobrança de ` : `Irá devolver crédito a `}
+                      <strong>{shortagePreview.impact.length}</strong> {CONFIG_APENAS_COLETA ? 'pedidos.' : 'clientes.'}
+                    </p>
                     <div className="flex justify-between items-center border-t border-orange-200 pt-3">
-                       <span className="font-bold text-orange-800 text-xs">Total Estornado:</span>
+                       <span className="font-bold text-orange-800 text-xs">{CONFIG_APENAS_COLETA ? 'Total Abatido:' : 'Total Estornado:'}</span>
                        <span className="font-black text-xl text-orange-600">R$ {shortagePreview.totalRefund.toFixed(2)}</span>
                     </div>
                  </div>
-                 <button onClick={confirmFaltaGlobal} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg shadow text-sm">CONFIRMAR E GERAR CRÉDITOS</button>
+                 <button onClick={confirmFaltaGlobal} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg shadow text-sm">
+                    {CONFIG_APENAS_COLETA ? 'CONFIRMAR FALTA E ABATER VALORES' : 'CONFIRMAR E GERAR CRÉDITOS'}
+                 </button>
                </div>
              )}
           </div>
