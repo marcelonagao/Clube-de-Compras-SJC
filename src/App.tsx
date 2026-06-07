@@ -253,9 +253,10 @@ export default function App() {
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
     const impact = ordersToUpdate.map(order => {
-       const item = order.items.find(i => i.id === shortageSelectedProduct);
-       return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: item.price * item.qtd, itemData: item };
-    });
+      const item = order.items.find(i => i.id === shortageSelectedProduct);
+      const quantidade = item.qtd || item.qty || 1;
+      return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item };
+   });
     
     setShortagePreview({ 
       product: products.find(p => p.id === shortageSelectedProduct), 
@@ -277,12 +278,15 @@ export default function App() {
            let orderUpdates = { faltas: faltasAtualizadas };
 
            if (CONFIG_APENAS_COLETA) {
-               // FASE 1: Apenas reduz o total do pedido e remove o item. NENHUM crédito vai pra carteira.
-               const novosItens = orderData.items.filter(i => i.id !== shortagePreview.product.id);
-               const novoTotal = novosItens.reduce((s, i) => s + (i.price * i.qtd), 0);
-               orderUpdates.items = novosItens;
-               orderUpdates.total = novoTotal;
-           }
+            // FASE 1: Apenas reduz o total do pedido e remove o item. NENHUM crédito vai pra carteira.
+            const novosItens = orderData.items.filter(i => i.id !== shortagePreview.product.id);
+            const novoTotal = novosItens.reduce((s, i) => {
+                const quantidade = i.qtd || i.qty || 1;
+                return s + ((i.price || 0) * quantidade);
+            }, 0);
+            orderUpdates.items = novosItens;
+            orderUpdates.total = novoTotal;
+        }
 
            await updateDoc(orderRef, orderUpdates);
 
