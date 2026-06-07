@@ -736,7 +736,7 @@ export default function App() {
                  </div>
               )}
 
-<div className="space-y-3 mb-5">
+              <div className="space-y-3 mb-5">
                 {(order.items || []).map((item, idx) => {
                   const isFalta = order.faltas?.find(f => f.productId === item.id);
                   const quantidade = item.qtd || item.qty || 1;
@@ -760,12 +760,7 @@ export default function App() {
                   <span className="font-black text-xl text-emerald-800">R$ {(order.total || 0).toFixed(2)}</span>
                 </div>
               </div>
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
-                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Pago</span>
-                <div className="text-right">
-                   <span className="font-black text-xl text-emerald-800">R$ {(order.total || 0).toFixed(2)}</span>
-                </div>
-              </div>
+              
             </div>
           ))}
           {myOrders.length === 0 && (
@@ -969,6 +964,18 @@ export default function App() {
                                  {estornado ? 'ESTORNADO' : 'FALTAS'}
                              </span>
                          )}
+                         {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
+                                <button onClick={async () => {
+                                    if(window.confirm(`Confirmar o recebimento de R$ ${(o.total||0).toFixed(2)} e a entrega da mercadoria?`)) {
+                                        await updateDoc(doc(db, "orders", o.id), { status: 'pago' });
+                                        showToast('Baixa realizada! Pedido concluído.');
+                                        // Remove o pedido da tela do representante instantaneamente
+                                        setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago' } : ord));
+                                    }
+                                }} className="bg-blue-100 text-blue-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-blue-200 transition-colors shadow-sm">
+                                  <CheckCircle className="w-3 h-3 mr-1.5"/> DAR BAIXA
+                                </button>
+                            )}
                          <button onClick={() => {
                              let text = `Olá ${o.customer}!\nAqui é do Clube de Compras. A sua caixa do pedido *#PED-${o.id.slice(-5).toUpperCase()}* já está pronta para retirada no polo de ${o.polo}.\nO total é R$ ${(o.total||0).toFixed(2)}.`;
                              if(temFalta) {
