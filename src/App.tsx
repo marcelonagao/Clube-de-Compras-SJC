@@ -285,13 +285,17 @@ export default function App() {
            let orderUpdates = { faltas: faltasAtualizadas };
 
            if (CONFIG_APENAS_COLETA) {
-            // FASE 1: Apenas reduz o total do pedido e remove o item. NENHUM crédito vai pra carteira.
-            const novosItens = orderData.items.filter(i => i.id !== shortagePreview.product.id);
-            const novoTotal = novosItens.reduce((s, i) => {
+            // FASE 1: Mantém o item na tela (para ficar riscado), mas zera ele na matemática da conta final!
+            const novoTotal = orderData.items.reduce((s, i) => {
+                // Se o item estiver na lista de faltas, ignoramos o valor dele na soma
+                const isFaltante = faltasAtualizadas.some(f => f.productId === i.id);
+                if (isFaltante) return s; 
+                
                 const quantidade = i.qtd || i.qty || 1;
                 return s + ((i.price || 0) * quantidade);
             }, 0);
-            orderUpdates.items = novosItens;
+            
+            // Repare que NÃO estamos mais alterando o orderUpdates.items!
             orderUpdates.total = novoTotal;
         }
 
