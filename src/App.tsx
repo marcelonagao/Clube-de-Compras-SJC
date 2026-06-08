@@ -914,7 +914,9 @@ export default function App() {
                   <div className="flex gap-2">
                     <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="flex-1 p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none">
                       <option value="">Selecione o Produto...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name} - R$ {p.price.toFixed(2)}</option>)}
+                      {[...products]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
                     </select>
                     <input type="number" min="1" value={manualItemQty} onChange={e => setManualItemQty(parseInt(e.target.value))} className="w-16 p-3 border border-gray-200 rounded-lg text-sm outline-none text-center font-bold" />
                     <button onClick={handleAddToManualCart} className="bg-emerald-100 text-emerald-800 px-4 rounded-lg font-bold hover:bg-emerald-200 transition text-sm">Add</button>
@@ -972,13 +974,18 @@ export default function App() {
                               • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
                            </p>
                            <div className="flex flex-col gap-1.5 mt-2">
-                             {(o.items || []).map((i, idx) => {
+                           {(o.items || []).map((i, idx) => {
                                const isFalta = o.faltas?.find(f=>f.productId===i.id);
                                const quantidade = i.qtd || i.qty || 1; 
+                               const totalDoItem = (i.price || 0) * quantidade;
+                               
                                return (
-                                 <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
-                                   <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
-                                   <span className="leading-tight">{i.name}</span>
+                                 <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
+                                   <div className="flex items-center truncate">
+                                     <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
+                                     <span className="leading-tight truncate">{i.name}</span>
+                                   </div>
+                                   <span className="shrink-0 ml-2 font-black">R$ {totalDoItem.toFixed(2)}</span>
                                  </div>
                                )
                              })}
