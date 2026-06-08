@@ -1287,17 +1287,30 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* GRÁFICO TENDÊNCIA CONSERTADO */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+              {/* GRÁFICO TENDÊNCIA BLINDADO (CSS CORRIGIDO) */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-sm text-slate-800 mb-6">Vendas (Últimos 7 Dias)</h3>
                     <div className="flex items-end justify-between h-40 gap-1">
                         {salesData.map((val, i) => {
-                        const heightPercentage = Math.max((val / maxSale) * 100, 2);
+                        // Limitamos a 75% para a coluna mais alta não vazar por cima do gráfico!
+                        const heightPercentage = Math.max((val / maxSale) * 75, 2);
+                        
                         return (
-                            <div key={i} className="flex flex-col items-center flex-1 group relative">
-                                <div className="opacity-0 group-hover:opacity-100 absolute -top-8 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10">R$ {val.toFixed(0)}</div>
+                            // A MÁGICA AQUI: h-full adicionado para dar altura real à coluna
+                            <div key={i} className="flex flex-col justify-end items-center flex-1 group relative h-full">
+                                
+                                {/* Tooltip inteligente que flutua exatamente acima do tamanho da coluna */}
+                                <div className="opacity-0 group-hover:opacity-100 absolute text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10" style={{ bottom: `calc(${heightPercentage}% + 28px)` }}>
+                                    R$ {val.toFixed(0)}
+                                </div>
+                                
+                                {/* A Coluna Verde */}
                                 <div className="w-full max-w-[32px] bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors" style={{ height: `${heightPercentage}%` }}></div>
-                                <span className="text-[8px] font-bold text-gray-400 mt-2">{last7Days[i].getDate()}/{last7Days[i].getMonth()+1}</span>
+                                
+                                {/* A Data */}
+                                <span className="text-[8px] font-bold text-gray-400 mt-2 h-4 shrink-0">
+                                    {last7Days[i].getDate()}/{last7Days[i].getMonth()+1}
+                                </span>
                             </div>
                         );
                         })}
