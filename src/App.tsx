@@ -253,20 +253,21 @@ export default function App() {
 
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
-    const statusBusca = CONFIG_APENAS_COLETA ? 'confirmado' : 'pago';
-    
-    // Procura o item apenas nos pedidos válidos
-    const ordersToUpdate = orders.filter(o => o.status === statusBusca && (o.items || []).some(i => i.id === shortageSelectedProduct));
+        // CORREÇÃO: Procura o item nos pedidos com qualquer status válido da Fase Beta!
+    const ordersToUpdate = orders.filter(o => 
+       ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
+       (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct))
+    );
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
     const impact = ordersToUpdate.map(order => {
-      const item = order.items.find(i => i.id === shortageSelectedProduct);
-      const quantidade = item.qtd || item.qty || 1;
-      return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item };
-   });
+       const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
+       const quantidade = item.qtd || item.qty || 1;
+       return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item };
+    });
     
     setShortagePreview({ 
-      product: products.find(p => p.id === shortageSelectedProduct), 
+      product: products.find(p => String(p.id) === String(shortageSelectedProduct)), 
       impact, 
       totalRefund: impact.reduce((sum, imp) => sum + imp.refundValue, 0) 
     });
@@ -1541,21 +1542,21 @@ export default function App() {
                <div className="space-y-4">
                  <div className="bg-slate-50 p-1.5 rounded-lg border border-gray-200">
                  <select 
-                value={shortageSelectedProduct} 
-                onChange={(e) => setShortageSelectedProduct(Number(e.target.value))}
-                className="w-full p-3 border border-gray-200 bg-white rounded-xl mb-4 outline-none focus:border-emerald-500 font-medium text-sm"
-              >
-                <option value="">Selecione o produto que faltou...</option>
-                {/* FILTRO INTELIGENTE CONSERTADO: Usa a lista global e garante que a tela não fique branca */}
-                {products
-                  .filter(p => orders.some(order => 
-                     ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
-                     (order.items || []).some(item => String(item.id) === String(p.id))
-                  ))
-                  .map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+                    value={shortageSelectedProduct} 
+                    onChange={(e) => setShortageSelectedProduct(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500"
+                  >
+                    <option value="">Selecione o produto ausente...</option>
+                    {/* FILTRO INTELIGENTE CONSERTADO */}
+                    {products
+                      .filter(p => orders.some(order => 
+                         ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
+                         (order.items || []).some(item => String(item.id) === String(p.id))
+                      ))
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
                  </div>
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
                </div>
