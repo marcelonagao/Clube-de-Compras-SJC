@@ -1141,51 +1141,72 @@ export default function App() {
   };
 
   const renderAdminDashboard = () => {
-    const validOrders = orders.filter(o => (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo') && o.date);
+    // 1. FILTRO GLOBAL CONSERTADO: Lendo todos os status da Fase 1 e 2
+    const validOrders = orders.filter(o => ['pago', 'confirmado', 'pago_polo'].includes(o.status) && o.date);
+    
     const totalGross = validOrders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalOrdersCount = validOrders.length;
-    const itemsSold = validOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (i.qtd || 0), 0), 0);
+    // 2. CORREÇÃO DE QTD MISTA (Site vs Manual)
+    const itemsSold = validOrders.reduce((sum, o) => sum + (o.items || []).reduce((s, i) => s + (i.qtd || i.qty || 0), 0), 0);
     const avgTicket = totalOrdersCount > 0 ? totalGross / totalOrdersCount : 0;
     const pendingCredits = allUsers.reduce((sum, u) => sum + (u.pendingPixRefund || 0), 0);
 
     const productStats = {};
     validOrders.forEach(o => (o.items || []).forEach(i => {
       if (!productStats[i.id]) {
-         const pData = products.find(p => p.id === i.id) || {};
+         const pData = products.find(p => String(p.id) === String(i.id)) || {};
          productStats[i.id] = { name: i.name, qty: 0, val: 0, image: pData.image };
       }
-      productStats[i.id].qty += (i.qtd || 0);
-      productStats[i.id].val += ((i.price || 0) * (i.qtd || 0));
+      productStats[i.id].qty += (i.qtd || i.qty || 0);
+      productStats[i.id].val += ((i.price || 0) * (i.qtd || i.qty || 0));
     }));
     const top5 = Object.values(productStats).sort((a,b) => b.val - a.val).slice(0, 5);
 
-    // Sales Chart Data
-    const today = new Date();
-    const last7Days = Array.from({length: 7}).map((_, i) => { const d = new Date(); d.setDate(today.getDate() - (6 - i)); return d; }).reverse();
-    const salesData = last7Days.map(date => {
-        return validOrders.filter(o => o.date && new Date(o.date).toDateString() === date.toDateString()).reduce((sum, o) => sum + (o.total || 0), 0);
-    });
-    const maxSale = Math.max(...salesData, 100);
-
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // LÓGICA DE DADOS DO DASHBOARD
         const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+
+        // Cálculo Dinâmico do Mês Anterior
+        let prevMonth = currentMonth - 1;
+        let prevYear = currentYear;
+        if (prevMonth < 0) {
+            prevMonth = 11;
+            prevYear--;
+        }
+
+        // SEPARAÇÃO: MÊS ATUAL VS MÊS ANTERIOR
         const currentMonthOrders = validOrders.filter(o => {
             if(!o.date) return false;
             const d = new Date(o.date);
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        const prevMonthOrders = validOrders.filter(o => {
+            if(!o.date) return false;
+            const d = new Date(o.date);
+            return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
         });
 
         const faturamentoMes = currentMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-        const impostosMes = faturamentoMes * 0.08; // 8% cravado
+        const faturamentoAnterior = prevMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+        
+        // CÁLCULO DE CRESCIMENTO (MoM %)
+        let crescimento = 0;
+        if (faturamentoAnterior > 0) {
+            crescimento = ((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100;
+        } else if (faturamentoMes > 0) {
+            crescimento = 100; // Crescimento puro
+        }
 
-        // Custo da Mercadoria (COGS)
+        const impostosMes = faturamentoMes * 0.08;
+
         let custoMercadoriaMes = 0;
         currentMonthOrders.forEach(o => {
             (o.items || []).forEach(i => {
-                const prod = products.find(p => p.id === i.id);
-                const itemCost = prod?.cost || 0; // Pega o custo que você cadastrou no catálogo
+                const prod = products.find(p => String(p.id) === String(i.id));
+                const itemCost = prod?.cost || 0; 
                 const quantidade = i.qtd || i.qty || 1;
                 custoMercadoriaMes += (itemCost * quantidade);
             });
@@ -1194,29 +1215,19 @@ export default function App() {
         const lucroLiquidoMes = faturamentoMes - custoMercadoriaMes - impostosMes;
         const margemLucroMes = faturamentoMes > 0 ? (lucroLiquidoMes / faturamentoMes) * 100 : 0;
 
-        // Faturamento por Polo
         const faturamentoPorPolo = {};
         currentMonthOrders.forEach(o => {
             if (!faturamentoPorPolo[o.polo]) faturamentoPorPolo[o.polo] = 0;
             faturamentoPorPolo[o.polo] += (o.total || 0);
         });
 
-        // Gráfico Definitivo (Zerando os relógios para ignorar fusos horários)
-        const baseDate = new Date();
-        baseDate.setHours(0, 0, 0, 0);
-
-        const last7Days = Array.from({length: 7}).map((_, i) => { 
-            const d = new Date(baseDate); 
-            d.setDate(d.getDate() - (6 - i)); 
-            return d; 
-        });
-
+        // GRÁFICO 100% BLINDADO CONTRA FUSO HORÁRIO
+        const last7Days = Array.from({length: 7}).map((_, i) => { const d = new Date(); d.setDate(now.getDate() - (6 - i)); return d; });
         const salesData = last7Days.map(date => {
+            const dateString = date.toLocaleDateString('pt-BR'); // Ex: 08/06/2026
             return validOrders.filter(o => {
                if(!o.date) return false;
-               const orderDate = new Date(o.date);
-               orderDate.setHours(0, 0, 0, 0); // Zera o relógio do pedido também!
-               return orderDate.getTime() === date.getTime();
+               return new Date(o.date).toLocaleDateString('pt-BR') === dateString;
             }).reduce((sum, o) => sum + (o.total || 0), 0);
         });
         const maxSale = Math.max(...salesData, 100);
@@ -1235,10 +1246,17 @@ export default function App() {
                </div>
             </div>
 
-            {/* SUPER DASHBOARD FINANCEIRO */}
+            {/* SUPER DASHBOARD FINANCEIRO (Com Comparativo) */}
             <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 text-white">
                 <p className="text-[10px] font-bold text-emerald-400 mb-1 uppercase tracking-wider">Faturamento Bruto (Mês)</p>
-                <p className="text-4xl font-black mb-6">R$ {faturamentoMes.toFixed(2)}</p>
+                <div className="flex items-center gap-3 mb-6">
+                   <p className="text-4xl font-black">R$ {faturamentoMes.toFixed(2)}</p>
+                   {(faturamentoAnterior > 0 || crescimento > 0) && (
+                       <span className={`px-2.5 py-1 rounded-lg border font-black text-[10px] flex items-center shadow-sm ${crescimento >= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
+                           {crescimento >= 0 ? '↗' : '↘'} {Math.abs(crescimento).toFixed(1)}% vs mês passado
+                       </span>
+                   )}
+                </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-slate-700 pt-6">
                     <div>
@@ -1297,7 +1315,7 @@ export default function App() {
           </div>
         );
       }
-
+   
       if (adminTab === 'vendas') {
          const ordersByMonth = validOrders.reduce((acc, order) => {
            const d = new Date(order.date);
