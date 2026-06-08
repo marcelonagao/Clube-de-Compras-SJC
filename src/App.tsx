@@ -949,8 +949,14 @@ export default function App() {
                         .map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
                     </select>
                     <div className="flex gap-2 justify-end">
-                       <input type="number" min="1" value={manualItemQty} onChange={e => setManualItemQty(parseInt(e.target.value))} className="w-20 p-3 border border-gray-200 rounded-lg text-sm outline-none text-center font-bold" />
-                       <button onClick={handleAddToManualCart} className="flex-1 sm:flex-none bg-emerald-100 text-emerald-800 px-6 rounded-lg font-bold hover:bg-emerald-200 transition text-sm">Adicionar</button>
+                       {/* NOVO CONTROLADOR DE QUANTIDADE COM BOTÕES + E - */}
+                       <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
+                          <button onClick={() => setManualItemQty(Math.max(1, manualItemQty - 1))} className="w-12 py-2.5 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors font-black text-lg leading-none">-</button>
+                          <span className="w-10 text-center font-black text-slate-800 text-sm">{manualItemQty}</span>
+                          <button onClick={() => setManualItemQty(manualItemQty + 1)} className="w-12 py-2.5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors font-black text-lg leading-none">+</button>
+                       </div>
+                       
+                       <button onClick={handleAddToManualCart} className="flex-1 sm:flex-none bg-emerald-100 text-emerald-800 px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-200 transition shadow-sm text-sm">Adicionar</button>
                     </div>
                   </div>
                 </div>
