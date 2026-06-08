@@ -1221,16 +1221,27 @@ export default function App() {
             faturamentoPorPolo[o.polo] += (o.total || 0);
         });
 
-        // GRÁFICO 100% BLINDADO CONTRA FUSO HORÁRIO
-        const last7Days = Array.from({length: 7}).map((_, i) => { const d = new Date(); d.setDate(now.getDate() - (6 - i)); return d; });
-        const salesData = last7Days.map(date => {
-            const dateString = date.toLocaleDateString('pt-BR'); // Ex: 08/06/2026
-            return validOrders.filter(o => {
-               if(!o.date) return false;
-               return new Date(o.date).toLocaleDateString('pt-BR') === dateString;
-            }).reduce((sum, o) => sum + (o.total || 0), 0);
-        });
-        const maxSale = Math.max(...salesData, 100);
+        // GRÁFICO 100% BLINDADO CONTRA NAVEGADORES E FUSOS
+        const last7Days = Array.from({length: 7}).map((_, i) => { 
+          const d = new Date(); 
+          d.setDate(now.getDate() - (6 - i)); 
+          return d; 
+      });
+
+      const salesData = last7Days.map(date => {
+          // Criamos uma "chave" única infalível (Ex: "2026-5-8")
+          const targetKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+          
+          return validOrders.filter(o => {
+             if(!o.date) return false;
+             const d = new Date(o.date);
+             const orderKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+             
+             return targetKey === orderKey;
+          }).reduce((sum, o) => sum + (o.total || 0), 0);
+      });
+      
+      const maxSale = Math.max(...salesData, 100);
 
         return (
           <div className="space-y-6 text-left">
