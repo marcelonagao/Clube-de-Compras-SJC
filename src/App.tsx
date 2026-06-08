@@ -420,19 +420,27 @@ export default function App() {
   };
 
   const handleAddToCart = (p) => {
-     if (storeMode === 'pausado') return showToast('A loja encontra-se em balanço e fechada para novas compras.', 'error');
-     
-     const existing = cart.find(i => i.id === p.id);
-     const currentQtd = existing ? existing.qtd : 0;
-     
-     if (storeMode === 'estoque' && currentQtd >= (p.stock || 0)) {
-         return showToast(`Limite atingido! Temos apenas ${p.stock || 0} unidade(s) em estoque.`, 'error');
-     }
-     
-     if (existing) setCart(cart.map(i => i.id === p.id ? { ...i, qtd: i.qtd + 1 } : i));
-     else setCart([...cart, { ...p, qtd: 1 }]);
-     showToast(`Adicionado com sucesso!`);
-  };
+    if (storeMode === 'pausado') return showToast('A loja encontra-se em balanço e fechada para novas compras.', 'error');
+    const existing = cart.find(i => i.id === p.id);
+    const currentQtd = existing ? existing.qtd : 0;
+    if (storeMode === 'estoque' && currentQtd >= (p.stock || 0)) {
+        return showToast(`Limite atingido! Temos apenas ${p.stock || 0} unidade(s) em estoque.`, 'error');
+    }
+    
+    if (existing) setCart(cart.map(i => i.id === p.id ? { ...i, qtd: i.qtd + 1 } : i));
+    else setCart([...cart, { ...p, qtd: 1 }]);
+    // Removido o showToast daqui para o cliente poder clicar no [+] rápido sem travar a tela
+ };
+
+ const handleDecreaseFromCart = (productId) => {
+    const existing = cart.find(i => i.id === productId);
+    if (!existing) return;
+    if (existing.qtd === 1) {
+       setCart(cart.filter(i => i.id !== productId));
+    } else {
+       setCart(cart.map(i => i.id === productId ? { ...i, qtd: i.qtd - 1 } : i));
+    }
+ };
 
   // --- RENDERS ---
 
@@ -490,13 +498,14 @@ export default function App() {
                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg">{promoProducts.length} itens</span>
             </div>
             <div className="flex overflow-x-auto gap-4 pb-4 scrollbar-hide snap-x">
-              {promoProducts.map(p => {
+            {promoProducts.map(p => {
                 const discount = Math.round((1 - (p.promotionalPrice / p.price)) * 100);
                 const isOutOfStock = storeMode === 'estoque' && (p.stock || 0) <= 0;
                 const isPaused = storeMode === 'pausado';
-
+                const cartItem = cart.find(i => i.id === p.id); // Lógica nova
+                
                 return (
-                  <div key={`promo-${p.id}`} className={`snap-start shrink-0 w-48 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col relative overflow-hidden group ${isOutOfStock ? 'opacity-70 grayscale-[50%]' : ''}`}>
+                  <div key={`promo-${p.id}`} className={`snap-start shrink-0 w-48 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col relative overflow-hidden group ${(isOutOfStock && !cartItem) ? 'opacity-70 grayscale-[50%]' : ''}`}>
                     <span className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-br-lg z-10">{discount}% OFF</span>
                     <div className="h-40 bg-gray-50 flex items-center justify-center p-4 relative">
                        {p.category && <span className="absolute top-2 right-2 text-[8px] font-black uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded tracking-widest">{p.category}</span>}
@@ -509,8 +518,14 @@ export default function App() {
                       
                       {isPaused ? (
                           <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Pausado</button>
-                      ) : isOutOfStock ? (
+                      ) : (isOutOfStock && !cartItem) ? (
                           <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Esgotado</button>
+                      ) : cartItem ? (
+                          <div className="flex items-center justify-between bg-emerald-100 border border-emerald-300 rounded-lg overflow-hidden mt-auto">
+                             <button onClick={() => handleDecreaseFromCart(p.id)} className="w-10 h-10 flex items-center justify-center text-emerald-800 hover:bg-emerald-200 transition-colors font-black text-lg">-</button>
+                             <span className="font-black text-emerald-900 text-sm">{cartItem.qtd}</span>
+                             <button onClick={() => handleAddToCart(p)} className="w-10 h-10 flex items-center justify-center text-emerald-800 hover:bg-emerald-200 transition-colors font-black text-lg">+</button>
+                          </div>
                       ) : (
                           <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-100 text-emerald-800 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-200 transition-colors mt-auto">Adicionar</button>
                       )}
@@ -523,14 +538,15 @@ export default function App() {
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-5">
-          {filteredProducts.map(p => {
+        {filteredProducts.map(p => {
             const isPromo = Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price);
             const activePrice = isPromo ? p.promotionalPrice : p.price;
             const isOutOfStock = storeMode === 'estoque' && (p.stock || 0) <= 0;
             const isPaused = storeMode === 'pausado';
-
+            const cartItem = cart.find(i => i.id === p.id); // Lógica nova
+            
             return (
-              <div key={p.id} className={`bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden ${isOutOfStock ? 'opacity-70 grayscale-[50%]' : ''}`}>
+              <div key={p.id} className={`bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden ${(isOutOfStock && !cartItem) ? 'opacity-70 grayscale-[50%]' : ''}`}>
                 <div className="aspect-square bg-gray-50 flex items-center justify-center p-4 relative">
                   {isPromo && <span className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-br-lg z-10">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
                   {p.image?.length > 50 ? <img src={p.image} className="h-full w-full object-cover rounded-lg" alt=""/> : <span className="text-4xl">{p.image || '📦'}</span>}
@@ -548,8 +564,14 @@ export default function App() {
                   
                   {isPaused ? (
                       <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Pausado</button>
-                  ) : isOutOfStock ? (
+                  ) : (isOutOfStock && !cartItem) ? (
                       <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Esgotado</button>
+                  ) : cartItem ? (
+                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden mt-auto">
+                         <button onClick={() => handleDecreaseFromCart(p.id)} className="w-10 h-10 flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg">-</button>
+                         <span className="font-black text-emerald-900 text-sm">{cartItem.qtd}</span>
+                         <button onClick={() => handleAddToCart(p)} className="w-10 h-10 flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg">+</button>
+                      </div>
                   ) : (
                       <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-50 text-emerald-700 border border-emerald-100 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-100 transition-colors mt-auto">Adicionar</button>
                   )}
@@ -593,10 +615,18 @@ export default function App() {
 
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
           <div className="space-y-3 mb-5">
-            {cart.map(item => (
-              <div key={item.id} className="flex justify-between items-center text-sm border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                <span className="font-bold text-slate-700 flex items-center"><span className="w-5 h-5 bg-emerald-50 text-emerald-700 rounded flex items-center justify-center mr-2 font-black text-[10px]">{item.qtd}x</span> {item.name}</span>
-                <span className="font-black text-slate-800">R$ {(getActivePrice(item) * item.qtd).toFixed(2)}</span>
+          {cart.map(item => (
+              <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center text-sm border-b border-gray-50 pb-4 last:border-0 last:pb-0 gap-3">
+                <span className="font-bold text-slate-700 flex-1 leading-snug">{item.name}</span>
+                
+                <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                    <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shrink-0">
+                       <button onClick={() => handleDecreaseFromCart(item.id)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors font-black">-</button>
+                       <span className="w-8 text-center font-black text-slate-800 text-xs">{item.qtd}</span>
+                       <button onClick={() => handleAddToCart(item)} className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors font-black">+</button>
+                    </div>
+                    <span className="font-black text-slate-800 w-20 text-right shrink-0">R$ {(getActivePrice(item) * item.qtd).toFixed(2)}</span>
+                </div>
               </div>
             ))}
           </div>
