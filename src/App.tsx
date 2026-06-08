@@ -1546,9 +1546,12 @@ export default function App() {
                 className="w-full p-3 border border-gray-200 bg-white rounded-xl mb-4 outline-none focus:border-emerald-500 font-medium text-sm"
               >
                 <option value="">Selecione o produto que faltou...</option>
-                {/* FILTRO INTELIGENTE: Mostra apenas produtos que constam nos pedidos válidos */}
+                {/* FILTRO INTELIGENTE CONSERTADO: Usa a lista global e garante que a tela não fique branca */}
                 {products
-                  .filter(p => validOrders.some(order => (order.items || []).some(item => item.id === p.id)))
+                  .filter(p => orders.some(order => 
+                     ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
+                     (order.items || []).some(item => String(item.id) === String(p.id))
+                  ))
                   .map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
