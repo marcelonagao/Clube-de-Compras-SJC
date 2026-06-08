@@ -588,8 +588,8 @@ export default function App() {
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{cart.reduce((s,i)=>s+i.qtd,0)} itens na cesta</p>
                     <p className="text-2xl font-black text-emerald-800 leading-none mt-1">R$ {cartTotal.toFixed(2)}</p>
                  </div>
-                 <button onClick={() => setCurrentScreen('checkout')} className="bg-emerald-700 text-white px-6 py-3 rounded-xl font-black shadow-lg hover:bg-emerald-800 transition flex items-center text-sm">
-                    Ir para Pagamento <ArrowRight className="w-4 h-4 ml-2"/>
+                 <button onClick={() => setCurrentScreen('checkout')} className="bg-emerald-700 text-white px-5 sm:px-6 py-3 rounded-xl font-black shadow-lg hover:bg-emerald-800 transition flex items-center text-sm">
+                    {CONFIG_APENAS_COLETA ? 'Revisar Pedido' : 'Ir para Pagamento'} <ArrowRight className="w-4 h-4 ml-2"/>
                  </button>
               </div>
            </div>
@@ -910,11 +910,11 @@ export default function App() {
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-5 text-center shadow-md flex flex-col justify-between">
+            <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-5 text-center shadow-md flex flex-col justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Total Coletado no Polo</p>
-                  <h1 className="text-3xl font-black mt-1">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
-                  <p className="text-[10px] text-emerald-200 mt-1 font-medium">{pedidosPagosPolo.length} caixas pagas no balcão</p>
+                  <h1 className="text-3xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
+                  <p className="text-[10px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} caixas pagas no balcão</p>
                 </div>
                 {totalArrecadadoPolo > 0 && (
                   <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs py-2.5 rounded-xl shadow mt-4 transition">
@@ -941,15 +941,17 @@ export default function App() {
                 <input type="text" placeholder="Nome do Cliente" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg mb-4 text-sm font-medium outline-none focus:border-emerald-500" />
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
-                  <div className="flex gap-2">
-                    <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="flex-1 p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none">
+                  <div className="flex flex-col gap-2">
+                    <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
                       <option value="">Selecione o Produto...</option>
                       {[...products]
                         .sort((a, b) => a.name.localeCompare(b.name))
                         .map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
                     </select>
-                    <input type="number" min="1" value={manualItemQty} onChange={e => setManualItemQty(parseInt(e.target.value))} className="w-16 p-3 border border-gray-200 rounded-lg text-sm outline-none text-center font-bold" />
-                    <button onClick={handleAddToManualCart} className="bg-emerald-100 text-emerald-800 px-4 rounded-lg font-bold hover:bg-emerald-200 transition text-sm">Add</button>
+                    <div className="flex gap-2 justify-end">
+                       <input type="number" min="1" value={manualItemQty} onChange={e => setManualItemQty(parseInt(e.target.value))} className="w-20 p-3 border border-gray-200 rounded-lg text-sm outline-none text-center font-bold" />
+                       <button onClick={handleAddToManualCart} className="flex-1 sm:flex-none bg-emerald-100 text-emerald-800 px-6 rounded-lg font-bold hover:bg-emerald-200 transition text-sm">Adicionar</button>
+                    </div>
                   </div>
                 </div>
                 {manualCart.length > 0 && (
