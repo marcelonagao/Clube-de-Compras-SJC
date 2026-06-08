@@ -1265,31 +1265,36 @@ export default function App() {
                </div>
             </div>
 
-            {/* SUPER DASHBOARD FINANCEIRO (Com Comparativo) */}
-            <div className="bg-slate-800 p-6 rounded-2xl shadow-lg border border-slate-700 text-white">
-                <p className="text-[10px] font-bold text-emerald-400 mb-1 uppercase tracking-wider">Faturamento Bruto (Mês)</p>
-                <div className="flex items-center gap-3 mb-6">
-                   <p className="text-4xl font-black">R$ {faturamentoMes.toFixed(2)}</p>
+           {/* SUPER DASHBOARD FINANCEIRO (Com Comparativo) */}
+           <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
+                {/* Efeito visual de brilho no fundo (Design Premium) */}
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                
+                <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider relative z-10">Faturamento Bruto (Mês)</p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6 relative z-10">
+                   <p className="text-4xl font-black tracking-tight">R$ {faturamentoMes.toFixed(2)}</p>
                    {(faturamentoAnterior > 0 || crescimento > 0) && (
-                       <span className={`px-2.5 py-1 rounded-lg border font-black text-[10px] flex items-center shadow-sm ${crescimento >= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
+                       <span className={`w-fit whitespace-nowrap px-2.5 py-1 rounded-lg border font-black text-[10px] flex items-center shadow-sm ${crescimento >= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
                            {crescimento >= 0 ? '↗' : '↘'} {Math.abs(crescimento).toFixed(1)}% vs mês passado
                        </span>
                    )}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 border-t border-slate-700 pt-6">
-                    <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 border-t border-slate-700 pt-5 relative z-10">
+                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custo Mercadoria</p>
                         <p className="text-xl font-black text-red-400">- R$ {custoMercadoriaMes.toFixed(2)}</p>
                     </div>
-                    <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos Estimados (8%)</p>
+                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos (8%)</p>
                         <p className="text-xl font-black text-orange-400">- R$ {impostosMes.toFixed(2)}</p>
                     </div>
-                    <div className="col-span-2 md:col-span-1 bg-emerald-900/50 p-3 rounded-xl border border-emerald-800">
-                        <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mb-1">Lucro Líquido Esperado</p>
+                    <div className="col-span-1 sm:col-span-2 md:col-span-1 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 flex flex-col justify-center">
+                        <div className="flex justify-between items-start mb-1">
+                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Lucro Líquido</p>
+                            <span className="text-[9px] font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">MG: {margemLucroMes.toFixed(1)}%</span>
+                        </div>
                         <p className="text-2xl font-black text-emerald-400">R$ {lucroLiquidoMes.toFixed(2)}</p>
-                        <p className="text-[10px] font-bold text-emerald-500 mt-1">Margem: {margemLucroMes.toFixed(1)}%</p>
                     </div>
                 </div>
             </div>
