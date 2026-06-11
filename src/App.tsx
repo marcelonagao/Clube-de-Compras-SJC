@@ -1679,7 +1679,7 @@ export default function App() {
                    <h3 className="text-lg font-black text-slate-800 tracking-tight">Falta Global</h3>
                    <p className="text-[10px] font-bold text-red-500 uppercase mt-0.5">Gerador Automático de Créditos</p>
                 </div>
-                <button onClick={() => {setFaltaGlobalModal(false); setShortagePreview(null); setShortageSelectedOrders([]);}} className="p-1.5 bg-gray-100 rounded-md"><X className="w-4 h-4"/></button>
+                <button onClick={() => {setFaltaGlobalModal(false); setShortagePreview(null); setShortageSelectedOrders({});}} className="p-1.5 bg-gray-100 rounded-md"><X className="w-4 h-4"/></button>
              </div>
              {!shortagePreview ? (
                <div className="space-y-4">
@@ -1749,6 +1749,9 @@ export default function App() {
                 </div>
               </div>
              )}
+          </div>
+        </div>
+      )}
 
       {isPrintMode ? renderDispatchPDF() : (
         <>
