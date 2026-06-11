@@ -754,7 +754,8 @@ export default function App() {
                             <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
                             <div>
                                 <p className="font-black text-orange-900 mb-0.5">Pedido Atualizado</p>
-                                <p>Um item faltou no fornecedor. O valor que você pagará na retirada já foi reduzido em R$ {order.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)}.</p>
+                                {/* CORREÇÃO DO BUG R$ NaN APLICADA AQUI */}
+                                <p>Um item faltou no fornecedor. O valor que você pagará na retirada já foi reduzido em R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)}.</p>
                             </div>
                         </>
                     ) : (user?.pendingPixRefund > 0 || user?.walletBalance > 0 ? (
@@ -762,7 +763,7 @@ export default function App() {
                             <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
                             <div>
                                 <p className="font-black text-orange-900 mb-0.5">Atenção ao seu pedido</p>
-                                <p>Um item faltou. O crédito de R$ {order.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} já está na sua carteira.</p>
+                                <p>Um item faltou. O crédito de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)} já está na sua carteira.</p>
                             </div>
                         </>
                     ) : (
@@ -770,7 +771,7 @@ export default function App() {
                             <CheckCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-emerald-600"/>
                             <div className="text-emerald-800">
                                 <p className="font-black text-emerald-900 mb-0.5">Estorno Realizado</p>
-                                <p>O valor de R$ {order.faltas.reduce((s,f)=>s+f.refundValue,0).toFixed(2)} foi reembolsado via PIX.</p>
+                                <p>O valor de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)} foi reembolsado via PIX.</p>
                             </div>
                         </>
                     ))}
@@ -781,13 +782,18 @@ export default function App() {
                 {(order.items || []).map((item, idx) => {
                   const isFalta = order.faltas?.find(f => f.productId === item.id);
                   const quantidade = item.qtd || item.qty || 1;
+                  const totalDoItem = (item.price || 0) * quantidade;
                   
                   return (
-                    <div key={idx} className={`flex items-center text-sm font-medium transition-all ${isFalta ? 'text-red-400 line-through opacity-70' : 'text-slate-700'}`}>
-                      <span className={`w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 ${isFalta ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
-                        {quantidade}x
-                      </span>
-                      {item.name}
+                    // PREÇOS ADICIONADOS AQUI NESTA LINHA
+                    <div key={idx} className={`flex items-center justify-between text-sm font-medium transition-all ${isFalta ? 'text-red-400 line-through opacity-70' : 'text-slate-700'}`}>
+                      <div className="flex items-center truncate">
+                          <span className={`w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 ${isFalta ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
+                            {quantidade}x
+                          </span>
+                          <span className="truncate">{item.name}</span>
+                      </div>
+                      <span className="shrink-0 ml-3 font-black">R$ {totalDoItem.toFixed(2)}</span>
                     </div>
                   );
                 })}
@@ -801,7 +807,6 @@ export default function App() {
                   <span className="font-black text-xl text-emerald-800">R$ {(order.total || 0).toFixed(2)}</span>
                 </div>
               </div>
-              
             </div>
           ))}
           {myOrders.length === 0 && (
@@ -1713,21 +1718,22 @@ export default function App() {
                     const refundValue = qtyToRemove * imp.itemPrice;
 
                     return (
-                      <div key={imp.orderId} className={`flex flex-col sm:flex-row items-center justify-between p-3 rounded-xl border transition-all ${qtyToRemove > 0 ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                         <div className="flex items-center gap-3 w-full sm:w-auto mb-2 sm:mb-0">
-                            <div>
-                               <p className="font-bold text-slate-800 text-xs">{imp.customer}</p>
-                               <p className="text-[10px] text-gray-500 mt-0.5">JC: {imp.polo} • Comprou: {imp.maxQty}x</p>
-                            </div>
+                      <div key={imp.orderId} className={`p-3 rounded-xl border transition-all flex flex-col gap-3 ${qtyToRemove > 0 ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                         {/* Andar de Cima: Informações do Membro */}
+                         <div>
+                             <p className="font-bold text-slate-800 text-xs leading-tight">{imp.customer}</p>
+                             <p className="text-[10px] text-gray-500 mt-1">JC: {imp.polo} • Comprou: {imp.maxQty}x</p>
                          </div>
-                         <div className="flex items-center gap-4">
+                         
+                         {/* Andar de Baixo: Controles e Valores */}
+                         <div className="flex items-center justify-between w-full pt-2 border-t border-orange-200/50">
                              {/* CONTROLADOR DE QUANTIDADE DA FALTA */}
                              <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm shrink-0">
                                  <button onClick={() => setShortageSelectedOrders(prev => ({...prev, [imp.orderId]: Math.max(0, (prev[imp.orderId] || 0) - 1)}))} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black">-</button>
                                  <span className={`w-8 text-center font-black text-xs ${qtyToRemove > 0 ? 'text-orange-600' : 'text-slate-800'}`}>{qtyToRemove}</span>
                                  <button onClick={() => setShortageSelectedOrders(prev => ({...prev, [imp.orderId]: Math.min(imp.maxQty, (prev[imp.orderId] || 0) + 1)}))} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black">+</button>
                              </div>
-                             <span className={`font-black text-xs w-20 text-right shrink-0 ${qtyToRemove > 0 ? 'text-orange-700' : 'text-gray-400'}`}>- R$ {refundValue.toFixed(2)}</span>
+                             <span className={`font-black text-sm shrink-0 ${qtyToRemove > 0 ? 'text-orange-700' : 'text-gray-400'}`}>- R$ {refundValue.toFixed(2)}</span>
                          </div>
                       </div>
                     );
