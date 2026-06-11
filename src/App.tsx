@@ -9,7 +9,7 @@ import {
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD7RvxvIGsnl5AP8tcNpATdS94PKjFzLV4",
@@ -72,6 +72,7 @@ export default function App() {
   const [loginName, setLoginName] = useState('');
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
+  const [tempGoogleUser, setTempGoogleUser] = useState(null);
   
   const [shopCategory, setShopCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -124,10 +125,17 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-        if (userDoc.exists()) {
+        
+        if (userDoc.exists() && userDoc.data().polo) {
+          // Usuário existe e tem os dados completos. Pode entrar na loja!
           const userData = userDoc.data();
           setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
           setCurrentScreen('shop');
+        } else {
+          // INTERCEPTADOR: Logou com Google, mas não tem cadastro no banco de dados!
+          setTempGoogleUser(firebaseUser);
+          setAuthMode('complete_google');
+          setCurrentScreen('login');
         }
       } else {
         setUser(null);
@@ -186,6 +194,49 @@ export default function App() {
       showToast(err.message.includes('Código') ? err.message : 'Verifique os dados informados.', 'error');
       setAuthLoading(false);
     }
+  };
+
+  const handleGoogleLogin = async () => {
+    setAuthLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      // O onAuthStateChanged (nosso cão de guarda) vai assumir a partir daqui automaticamente!
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        showToast('Erro ao conectar com Google.', 'error');
+      }
+      setAuthLoading(false);
+    }
+  };
+
+  const handleCompleteGoogleProfile = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    try {
+        if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') throw new Error('Código Master Inválido');
+        if (registerRole === 'representante' && secretCode !== 'REP2024') throw new Error('Código Rep Inválido');
+
+        // Cria o perfil no Banco de Dados combinando os dados do Google + o que ele preencheu agora
+        const profile = { 
+            name: tempGoogleUser.displayName || loginName || 'Membro do Clube', 
+            email: tempGoogleUser.email, 
+            whatsapp: loginWhatsapp, 
+            polo: selectedPolo, 
+            role: registerRole, 
+            walletBalance: 0, 
+            pendingPixRefund: 0, 
+            pixKey: '' 
+        };
+        
+        await setDoc(doc(db, "users", tempGoogleUser.uid), profile);
+        setUser({ uid: tempGoogleUser.uid, ...profile });
+        setCurrentScreen('shop');
+        showToast('Cadastro concluído com sucesso!');
+    } catch (err) {
+        showToast(err.message.includes('Código') ? err.message : 'Verifique os dados informados.', 'error');
+    }
+    setAuthLoading(false);
   };
 
   const processOrder = async (finalTotal, paymentMethod, walletDiscount) => {
@@ -2085,37 +2136,90 @@ export default function App() {
                      <button onClick={() => setAuthMode('register')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${authMode === 'register' ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Nova Conta</button>
                    </div>
 
-                   <form onSubmit={handleAuth} className="space-y-3">
-                     {authMode === 'register' && (
-                       <div className="space-y-3">
-                         <input type="text" placeholder="Nome Completo" value={loginName} onChange={e=>setLoginName(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
-                         <input type="tel" placeholder="WhatsApp (DDD+Num)" value={loginWhatsapp} onChange={e=>setLoginWhatsapp(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
-                         <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
+                   {/* SE ESTIVER NA SALA DE ESPERA DO GOOGLE */}
+                   {authMode === 'complete_google' ? (
+                     <form onSubmit={handleCompleteGoogleProfile} className="space-y-3 animate-in fade-in duration-300">
+                       <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl mb-4 text-center">
+                          <p className="font-black text-emerald-800 text-sm mb-1">Falta muito pouco, {tempGoogleUser?.displayName?.split(' ')[0]}! 🎉</p>
+                          <p className="text-xs text-emerald-600 font-medium">Para sua segurança e envio das encomendas, precisamos de mais alguns dados.</p>
+                       </div>
+                       
+                       <input type="tel" placeholder="WhatsApp (DDD+Num)" value={loginWhatsapp} onChange={e=>setLoginWhatsapp(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
+                       
+                       <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
                            <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
                              {polos.map(p => <option key={p} value={p}>Polo: {p}</option>)}
                            </select>
-                         </div>
-                         <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
+                       </div>
+                       
+                       <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
                            <select value={registerRole} onChange={e=>setRegisterRole(e.target.value)} className="w-full bg-transparent p-2 outline-none font-black text-sm text-emerald-700 cursor-pointer">
                              <option value="cliente">Sou Cliente</option>
                              <option value="representante">Sou Representante</option>
                              <option value="consolidador">Sou Gestor Geral</option>
                            </select>
-                         </div>
-                         {['consolidador', 'representante'].includes(registerRole) && (
-                           <div>
-                             <input type="password" placeholder="Código de Segurança" value={secretCode} onChange={e=>setSecretCode(e.target.value)} required className="w-full bg-red-50 border border-red-200 p-3 rounded-lg outline-none focus:border-red-500 font-black text-sm text-red-800 placeholder-red-300" />
-                           </div>
-                         )}
                        </div>
-                     )}
-                     <input type="email" placeholder="E-mail" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
-                     <input type="password" placeholder="Senha" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
-                     
-                     <button type="submit" disabled={authLoading} className="w-full bg-emerald-700 text-white font-black py-3.5 rounded-lg shadow-md hover:bg-emerald-800 transition-all text-sm flex items-center justify-center mt-4">
-                       {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'Acessar Loja' : 'Finalizar Cadastro')}
-                     </button>
-                   </form>
+
+                       {['consolidador', 'representante'].includes(registerRole) && (
+                           <div><input type="password" placeholder="Código de Segurança" value={secretCode} onChange={e=>setSecretCode(e.target.value)} required className="w-full bg-red-50 border border-red-200 p-3 rounded-lg outline-none focus:border-red-500 font-black text-sm text-red-800 placeholder-red-300" /></div>
+                       )}
+                       
+                       <button type="submit" disabled={authLoading} className="w-full bg-emerald-700 text-white font-black py-3.5 rounded-lg shadow-md hover:bg-emerald-800 transition-all text-sm flex items-center justify-center mt-4">
+                         {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Finalizar e Entrar na Loja'}
+                       </button>
+                     </form>
+
+                   ) : (
+
+                     /* FORMULÁRIO PADRÃO (LOGIN OU CADASTRO MANUAL) */
+                     <form onSubmit={handleAuth} className="space-y-3">
+                       {authMode === 'register' && (
+                         <div className="space-y-3">
+                           <input type="text" placeholder="Nome Completo" value={loginName} onChange={e=>setLoginName(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
+                           <input type="tel" placeholder="WhatsApp (DDD+Num)" value={loginWhatsapp} onChange={e=>setLoginWhatsapp(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
+                           <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
+                             <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
+                               {polos.map(p => <option key={p} value={p}>Polo: {p}</option>)}
+                             </select>
+                           </div>
+                           <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
+                             <select value={registerRole} onChange={e=>setRegisterRole(e.target.value)} className="w-full bg-transparent p-2 outline-none font-black text-sm text-emerald-700 cursor-pointer">
+                               <option value="cliente">Sou Cliente</option>
+                               <option value="representante">Sou Representante</option>
+                               <option value="consolidador">Sou Gestor Geral</option>
+                             </select>
+                           </div>
+                           {['consolidador', 'representante'].includes(registerRole) && (
+                               <div><input type="password" placeholder="Código de Segurança" value={secretCode} onChange={e=>setSecretCode(e.target.value)} required className="w-full bg-red-50 border border-red-200 p-3 rounded-lg outline-none focus:border-red-500 font-black text-sm text-red-800 placeholder-red-300" /></div>
+                           )}
+                         </div>
+                       )}
+                       
+                       <input type="email" placeholder="E-mail" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
+                       <input type="password" placeholder="Senha" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
+                       
+                       <button type="submit" disabled={authLoading} className="w-full bg-emerald-700 text-white font-black py-3.5 rounded-lg shadow-md hover:bg-emerald-800 transition-all text-sm flex items-center justify-center mt-4">
+                         {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'Acessar Loja' : 'Finalizar Cadastro')}
+                       </button>
+
+                       {/* DIVISÓRIA E BOTÃO DO GOOGLE */}
+                       <div className="flex items-center gap-3 my-4">
+                           <div className="flex-1 h-px bg-gray-200"></div>
+                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ou</span>
+                           <div className="flex-1 h-px bg-gray-200"></div>
+                       </div>
+
+                       <button type="button" onClick={handleGoogleLogin} disabled={authLoading} className="w-full bg-white border-2 border-gray-200 text-slate-700 font-black py-3.5 rounded-lg shadow-sm hover:bg-gray-50 hover:border-gray-300 transition-all text-sm flex items-center justify-center relative">
+                           <svg className="w-5 h-5 absolute left-4" viewBox="0 0 24 24">
+                              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                           </svg>
+                           Continuar com o Google
+                       </button>
+                     </form>
+                   )}
                  </div>
                </div>
              )}
