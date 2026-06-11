@@ -88,6 +88,8 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [pixRefundModal, setPixRefundModal] = useState({ open: false, key: '' });
   const [faltaGlobalModal, setFaltaGlobalModal] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'warning' });
+  const showConfirm = (title, message, onConfirm, type = 'warning') => setConfirmDialog({ open: true, title, message, onConfirm, type });
   const [shortageSelectedProduct, setShortageSelectedProduct] = useState('');
   const [shortagePreview, setShortagePreview] = useState(null);
   const [expandedMonths, setExpandedMonths] = useState({});
@@ -286,51 +288,41 @@ export default function App() {
   };
 
   const confirmFaltaGlobal = async () => {
-    // Filtra apenas os membros que tiveram alguma quantidade cortada (> 0)
     const selectedImpacts = shortagePreview.impact.filter(imp => (shortageSelectedOrders[imp.orderId] || 0) > 0);
-    
     if (selectedImpacts.length === 0) return showToast('Selecione pelo menos um membro para aplicar a falta.', 'error');
 
-    if (!window.confirm(`Tem certeza que deseja registrar a falta para os ${selectedImpacts.length} membros selecionados?`)) return;
+    // AQUI ENTRA O NOSSO NOVO ALERTA PERSONALIZADO!
+    showConfirm('Confirmar Corte', `Você está prestes a aplicar a falta em ${selectedImpacts.length} membro(s). O sistema abaterá o valor automaticamente da cobrança deles. Deseja continuar?`, async () => {
+        try {
+          for (const imp of selectedImpacts) {
+            const qtyToRemove = shortageSelectedOrders[imp.orderId];
+            const refundValue = qtyToRemove * imp.itemPrice;
+            const orderRef = doc(db, "orders", imp.orderId);
+            const orderDoc = await getDoc(orderRef);
+            
+            if (orderDoc.exists()) {
+              const oData = orderDoc.data();
+              const updatedItems = oData.items.map(i => {
+                  if (String(i.id) === String(shortagePreview.product.id)) {
+                      const currentQty = i.qtd || i.qty || 1;
+                      return { ...i, qtd: currentQty - qtyToRemove, qty: currentQty - qtyToRemove };
+                  }
+                  return i;
+              }).filter(i => (i.qtd || i.qty) > 0);
 
-    try {
-      for (const imp of selectedImpacts) {
-        const qtyToRemove = shortageSelectedOrders[imp.orderId];
-        const refundValue = qtyToRemove * imp.itemPrice;
-
-        const orderRef = doc(db, "orders", imp.orderId);
-        const orderDoc = await getDoc(orderRef);
-        
-        if (orderDoc.exists()) {
-          const oData = orderDoc.data();
-          
-          // Lógica Cirúrgica: Reduz a quantidade ou remove o item se zerou
-          const updatedItems = oData.items.map(i => {
-              if (String(i.id) === String(shortagePreview.product.id)) {
-                  const currentQty = i.qtd || i.qty || 1;
-                  return { ...i, qtd: currentQty - qtyToRemove, qty: currentQty - qtyToRemove };
-              }
-              return i;
-          }).filter(i => (i.qtd || i.qty) > 0);
-
-          const newFaltas = [...(oData.faltas || []), { productId: shortagePreview.product.id, name: shortagePreview.product.name, value: refundValue, qtyMissing: qtyToRemove }];
-          const newTotal = oData.total - refundValue;
-          
-          await updateDoc(orderRef, { items: updatedItems, faltas: newFaltas, total: newTotal > 0 ? newTotal : 0 });
-          
-          const userRef = doc(db, "users", imp.userEmail);
-          const userDoc = await getDoc(userRef);
-          if (userDoc.exists()) {
-            await updateDoc(userRef, { pendingPixRefund: (userDoc.data().pendingPixRefund || 0) + refundValue });
+              const newFaltas = [...(oData.faltas || []), { productId: shortagePreview.product.id, name: shortagePreview.product.name, value: refundValue, qtyMissing: qtyToRemove }];
+              const newTotal = oData.total - refundValue;
+              
+              await updateDoc(orderRef, { items: updatedItems, faltas: newFaltas, total: newTotal > 0 ? newTotal : 0 });
+            }
           }
-        }
-      }
-      showToast(`Falta aplicada com sucesso para ${selectedImpacts.length} membros!`);
-      setShortageSelectedProduct('');
-      setShortagePreview(null);
-      setShortageSelectedOrders({});
-      fetchData(); 
-    } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
+          showToast(`Falta aplicada com sucesso!`);
+          setShortageSelectedProduct('');
+          setShortagePreview(null);
+          setShortageSelectedOrders({});
+          fetchData(); 
+        } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
+    });
   };
 
   const generatePurchasePlan = () => {
@@ -1126,17 +1118,17 @@ export default function App() {
                               
                               <div className="flex flex-col sm:flex-row gap-2 w-full">
                                 {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
-                                    <button onClick={async () => {
-                                        if(window.confirm(`Confirmar que o membro pagou R$ ${(o.total||0).toFixed(2)} e retirou a mercadoria?`)) {
-                                            try {
-                                                await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
-                                                showToast('Baixa efetuada! Valor guardado no JC.');
-                                                setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
-                                            } catch(e) { showToast('Erro ao dar baixa', 'error'); }
-                                        }
-                                    }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
-                                      <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR PIX
-                                    </button>
+                                    <button onClick={() => {
+                                      showConfirm('Confirmar Retirada', `O membro pagou R$ ${(o.total||0).toFixed(2)} via PIX e já retirou a mercadoria?`, async () => {
+                                          try {
+                                              await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
+                                              showToast('Baixa efetuada! Valor guardado no JC.');
+                                              setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
+                                          } catch(e) { showToast('Erro ao dar baixa', 'error'); }
+                                      });
+                                  }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
+                                    <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR PIX
+                                  </button>
                                 )}
 
                                 <button onClick={() => {
@@ -1650,7 +1642,8 @@ export default function App() {
       };
 
       const handleZerarEstoque = async () => {
-        if(window.confirm('ATENÇÃO MESTRE: Tem certeza que deseja ZERAR o estoque (Sobra na Sede) de absolutamente TODOS os produtos?')) {
+        // ALERTA VERMELHO DE PERIGO ('danger')
+        showConfirm('Zerar Estoque', 'ATENÇÃO: Você tem certeza que deseja ZERAR o estoque local de TODOS os produtos? Essa ação não pode ser desfeita.', async () => {
             try {
                 for (const p of products) {
                     if ((p.stock || 0) > 0) {
@@ -1658,10 +1651,9 @@ export default function App() {
                     }
                 }
                 showToast('Estoque zerado com sucesso!');
-                // Atualiza a tela imediatamente sem precisar recarregar
                 setProducts(prev => prev.map(prod => ({...prod, stock: 0})));
             } catch(e) { showToast('Erro ao zerar estoque', 'error'); }
-        }
+        }, 'danger');
     };
 
       // Extrai a lista de categorias únicas existentes para o Dropdown
@@ -1790,7 +1782,11 @@ export default function App() {
                              <span className="font-black text-slate-800 text-sm">R$ {p.price.toFixed(2)}</span>
                              <div className="flex gap-1.5">
                                  <button onClick={()=>setEditingProduct(p)} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
-                                 <button onClick={async()=>{ if(window.confirm('Excluir produto?')) await deleteDoc(doc(db,"products",p.id));}} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"><Trash2 className="w-3 h-3"/></button>
+                                 <button onClick={() => {
+                                       showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => {
+                                           await deleteDoc(doc(db,"products",p.id));
+                                       }, 'danger');
+                                   }} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"><Trash2 className="w-3 h-3"/></button>
                              </div>
                            </div>
                          </div>
@@ -1919,6 +1915,26 @@ export default function App() {
       {toast && (
         <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[200] px-4 py-2 rounded-lg shadow-xl font-bold text-white text-xs flex items-center animate-in slide-in-from-top-2 ${toast.type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`}>
           <CheckCircle className="w-4 h-4 mr-2" /> {toast.msg}
+        </div>
+      )}
+
+{confirmDialog.open && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 text-left">
+          <div className="bg-white p-6 rounded-3xl max-w-sm w-full shadow-2xl border border-gray-100">
+             <div className="flex items-start gap-4 mb-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${confirmDialog.type === 'danger' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
+                   <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div className="pt-1">
+                    <h3 className="text-lg font-black text-slate-800 leading-tight mb-1">{confirmDialog.title}</h3>
+                    <p className="text-xs text-gray-500 font-medium leading-snug">{confirmDialog.message}</p>
+                </div>
+             </div>
+             <div className="flex gap-3 mt-6">
+               <button onClick={() => setConfirmDialog({ open: false })} className="flex-1 bg-gray-100 text-slate-600 font-black py-3.5 rounded-xl text-xs hover:bg-gray-200 transition-colors">Cancelar</button>
+               <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({ open: false }); }} className={`flex-1 text-white font-black py-3.5 rounded-xl shadow-md transition-colors text-xs ${confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}>Confirmar Ação</button>
+             </div>
+          </div>
         </div>
       )}
 
