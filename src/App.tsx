@@ -1037,48 +1037,50 @@ export default function App() {
                             </div>
                           </div>
           
-                          <div className="flex flex-col sm:flex-row gap-2 w-full mt-auto pt-4 border-t border-gray-50">
+                          <div className="w-full mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
+                              {/* A ETIQUETA DE FALTA AGORA FICA EM UMA LINHA ISOLADA */}
                               {temFalta && (
-                                  <span className={`w-full py-2 rounded font-black text-[10px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                  <span className={`w-full py-1.5 rounded font-black text-[10px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
                                       {estornado ? 'FALTA ESTORNADA' : 'CONTÉM FALTAS'}
                                   </span>
                               )}
                               
-                              {/* BOTÃO ATUALIZADO */}
-                              {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
-                                  <button onClick={async () => {
-                                      if(window.confirm(`Confirmar que o membro pagou R$ ${(o.total||0).toFixed(2)} e retirou a mercadoria?`)) {
-                                          try {
-                                              await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
-                                              showToast('Baixa efetuada! Valor guardado no JC.');
-                                              setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
-                                          } catch(e) { showToast('Erro ao dar baixa', 'error'); }
-                                      }
-                                  }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
-                                    <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR PIX
-                                  </button>
-                              )}
+                              {/* OS BOTÕES DE AÇÃO FICAM LIVRES NA LINHA DE BAIXO */}
+                              <div className="flex flex-col sm:flex-row gap-2 w-full">
+                                {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
+                                    <button onClick={async () => {
+                                        if(window.confirm(`Confirmar que o membro pagou R$ ${(o.total||0).toFixed(2)} e retirou a mercadoria?`)) {
+                                            try {
+                                                await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
+                                                showToast('Baixa efetuada! Valor guardado no JC.');
+                                                setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
+                                            } catch(e) { showToast('Erro ao dar baixa', 'error'); }
+                                        }
+                                    }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
+                                      <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR PIX
+                                    </button>
+                                )}
 
-                              {/* NOTIFICAÇÃO INTELIGENTE DO WHATSAPP */}
-                              <button onClick={() => {
-                                  let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
-                                  (o.items || []).forEach(i => {
-                                      const isFalta = o.faltas?.find(f => f.productId === i.id);
-                                      if (!isFalta) {
-                                          const quantidade = i.qtd || i.qty || 1;
-                                          text += `• ${quantidade}x ${i.name}\n`;
-                                      }
-                                  });
-                                  if(temFalta) {
-                                      const itensFaltantes = o.faltas.map(f => f.name).join(', ');
-                                      text += `\n⚠️ *Aviso:* Tivemos falta no fornecedor para o(s) item(ns): ${itensFaltantes}. O valor da sua cesta já foi ajustado!\n`;
-                                  }
-                                  text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*. Te aguardamos!`;
-                                  
-                                  window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
-                              }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
-                                <MessageCircle className="w-3 h-3 mr-1.5"/> NOTIFICAR MEMBRO
-                              </button>
+                                <button onClick={() => {
+                                    let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                    (o.items || []).forEach(i => {
+                                        const isFalta = o.faltas?.find(f => f.productId === i.id);
+                                        if (!isFalta) {
+                                            const quantidade = i.qtd || i.qty || 1;
+                                            text += `• ${quantidade}x ${i.name}\n`;
+                                        }
+                                    });
+                                    if(temFalta) {
+                                        const itensFaltantes = o.faltas.map(f => f.name).join(', ');
+                                        text += `\n⚠️ *Aviso:* Tivemos falta no fornecedor para o(s) item(ns): ${itensFaltantes}. O valor da sua cesta já foi ajustado!\n`;
+                                    }
+                                    text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*. Te aguardamos!`;
+                                    
+                                    window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                                }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
+                                  <MessageCircle className="w-3 h-3 mr-1.5"/> NOTIFICAR MEMBRO
+                                </button>
+                              </div>
                           </div>
                         </div>
                       );
