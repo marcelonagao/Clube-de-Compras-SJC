@@ -62,7 +62,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [shortageSelectedOrders, setShortageSelectedOrders] = useState([]);
+  const [shortageSelectedOrders, setShortageSelectedOrders] = useState({});
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState('login');
   const [loginEmail, setLoginEmail] = useState('');
@@ -266,50 +266,68 @@ export default function App() {
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
        const quantidade = item.qtd || item.qty || 1;
-       // Adicionamos o JC/Polo para facilitar a sua visualização
-       return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item, polo: order.polo };
+       return { 
+           orderId: order.id, customer: order.customer, userEmail: order.email, 
+           itemPrice: (item.price || 0), maxQty: quantidade, itemData: item, polo: order.polo 
+       };
     });
     
+    // O sistema ainda marca a falta total por padrão para agilizar, mas agora você pode diminuir!
+    const initialSelections = {};
+    impact.forEach(imp => { initialSelections[imp.orderId] = imp.maxQty; });
+
     setShortagePreview({ 
       product: products.find(p => String(p.id) === String(shortageSelectedProduct)), 
       impact 
     });
-    // Por padrão, o sistema já vem com todos os membros marcados para receber a falta
-    setShortageSelectedOrders(impact.map(i => i.orderId));
+    setShortageSelectedOrders(initialSelections);
   };
 
   const confirmFaltaGlobal = async () => {
-    // Filtra para aplicar o estorno APENAS nos membros que você deixou com a caixinha marcada!
-    const selectedImpacts = shortagePreview.impact.filter(imp => shortageSelectedOrders.includes(imp.orderId));
+    // Filtra apenas os membros que tiveram alguma quantidade cortada (> 0)
+    const selectedImpacts = shortagePreview.impact.filter(imp => (shortageSelectedOrders[imp.orderId] || 0) > 0);
     
     if (selectedImpacts.length === 0) return showToast('Selecione pelo menos um membro para aplicar a falta.', 'error');
 
-    if (!window.confirm(`Tem certeza que deseja registrar a falta e estornar o valor para os ${selectedImpacts.length} membros selecionados?`)) return;
+    if (!window.confirm(`Tem certeza que deseja registrar a falta para os ${selectedImpacts.length} membros selecionados?`)) return;
 
     try {
       for (const imp of selectedImpacts) {
+        const qtyToRemove = shortageSelectedOrders[imp.orderId];
+        const refundValue = qtyToRemove * imp.itemPrice;
+
         const orderRef = doc(db, "orders", imp.orderId);
         const orderDoc = await getDoc(orderRef);
+        
         if (orderDoc.exists()) {
           const oData = orderDoc.data();
-          const updatedItems = oData.items.filter(i => String(i.id) !== String(shortagePreview.product.id));
-          const newFaltas = [...(oData.faltas || []), { productId: shortagePreview.product.id, name: shortagePreview.product.name, value: imp.refundValue }];
-          const newTotal = oData.total - imp.refundValue;
+          
+          // Lógica Cirúrgica: Reduz a quantidade ou remove o item se zerou
+          const updatedItems = oData.items.map(i => {
+              if (String(i.id) === String(shortagePreview.product.id)) {
+                  const currentQty = i.qtd || i.qty || 1;
+                  return { ...i, qtd: currentQty - qtyToRemove, qty: currentQty - qtyToRemove };
+              }
+              return i;
+          }).filter(i => (i.qtd || i.qty) > 0);
+
+          const newFaltas = [...(oData.faltas || []), { productId: shortagePreview.product.id, name: shortagePreview.product.name, value: refundValue, qtyMissing: qtyToRemove }];
+          const newTotal = oData.total - refundValue;
           
           await updateDoc(orderRef, { items: updatedItems, faltas: newFaltas, total: newTotal > 0 ? newTotal : 0 });
           
           const userRef = doc(db, "users", imp.userEmail);
           const userDoc = await getDoc(userRef);
           if (userDoc.exists()) {
-            await updateDoc(userRef, { pendingPixRefund: (userDoc.data().pendingPixRefund || 0) + imp.refundValue });
+            await updateDoc(userRef, { pendingPixRefund: (userDoc.data().pendingPixRefund || 0) + refundValue });
           }
         }
       }
       showToast(`Falta aplicada com sucesso para ${selectedImpacts.length} membros!`);
       setShortageSelectedProduct('');
       setShortagePreview(null);
-      setShortageSelectedOrders([]);
-      fetchData(); // Recarrega os dados atualizados
+      setShortageSelectedOrders({});
+      fetchData(); 
     } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
   };
 
@@ -1687,26 +1705,30 @@ export default function App() {
              ) : (
               <div className="bg-slate-50 p-5 rounded-2xl border border-gray-200 shadow-inner">
                 <h4 className="font-black text-slate-800 text-sm mb-3 flex items-center"><AlertTriangle className="w-4 h-4 mr-2 text-orange-500"/> Impacto da Falta: {shortagePreview.product?.name}</h4>
-                <p className="text-xs text-gray-500 font-medium mb-4">Selecione abaixo os membros que <strong>NÃO</strong> receberão o produto. O sistema fará o estorno automático apenas para os marcados.</p>
+                <p className="text-xs text-gray-500 font-medium mb-4">Ajuste as quantidades que <strong>FALTARAM</strong> para cada membro. O sistema manterá o restante na cesta e estornará apenas a diferença.</p>
                 
                 <div className="space-y-2 mb-5 max-h-60 overflow-y-auto pr-2">
                   {shortagePreview.impact.map((imp) => {
-                    const isChecked = shortageSelectedOrders.includes(imp.orderId);
+                    const qtyToRemove = shortageSelectedOrders[imp.orderId] || 0;
+                    const refundValue = qtyToRemove * imp.itemPrice;
+
                     return (
-                      <div key={imp.orderId} onClick={() => {
-                          if (isChecked) setShortageSelectedOrders(prev => prev.filter(id => id !== imp.orderId));
-                          else setShortageSelectedOrders(prev => [...prev, imp.orderId]);
-                      }} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${isChecked ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
-                         <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isChecked ? 'bg-orange-500 border-orange-600 text-white' : 'bg-white border-gray-300'}`}>
-                               {isChecked && <CheckCircle className="w-3 h-3" />}
-                            </div>
+                      <div key={imp.orderId} className={`flex flex-col sm:flex-row items-center justify-between p-3 rounded-xl border transition-all ${qtyToRemove > 0 ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                         <div className="flex items-center gap-3 w-full sm:w-auto mb-2 sm:mb-0">
                             <div>
                                <p className="font-bold text-slate-800 text-xs">{imp.customer}</p>
-                               <p className="text-[10px] text-gray-500 mt-0.5">JC: {imp.polo}</p>
+                               <p className="text-[10px] text-gray-500 mt-0.5">JC: {imp.polo} • Comprou: {imp.maxQty}x</p>
                             </div>
                          </div>
-                         <span className={`font-black text-xs ${isChecked ? 'text-orange-700' : 'text-gray-400 line-through'}`}>- R$ {imp.refundValue.toFixed(2)}</span>
+                         <div className="flex items-center gap-4">
+                             {/* CONTROLADOR DE QUANTIDADE DA FALTA */}
+                             <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm shrink-0">
+                                 <button onClick={() => setShortageSelectedOrders(prev => ({...prev, [imp.orderId]: Math.max(0, (prev[imp.orderId] || 0) - 1)}))} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black">-</button>
+                                 <span className={`w-8 text-center font-black text-xs ${qtyToRemove > 0 ? 'text-orange-600' : 'text-slate-800'}`}>{qtyToRemove}</span>
+                                 <button onClick={() => setShortageSelectedOrders(prev => ({...prev, [imp.orderId]: Math.min(imp.maxQty, (prev[imp.orderId] || 0) + 1)}))} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black">+</button>
+                             </div>
+                             <span className={`font-black text-xs w-20 text-right shrink-0 ${qtyToRemove > 0 ? 'text-orange-700' : 'text-gray-400'}`}>- R$ {refundValue.toFixed(2)}</span>
+                         </div>
                       </div>
                     );
                   })}
@@ -1715,21 +1737,18 @@ export default function App() {
                 <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 mb-4 shadow-sm">
                    <span className="font-bold text-slate-500 text-xs uppercase tracking-wider">Total a Estornar:</span>
                    <span className="font-black text-orange-600 text-xl">
-                      R$ {shortagePreview.impact.filter(imp => shortageSelectedOrders.includes(imp.orderId)).reduce((sum, imp) => sum + imp.refundValue, 0).toFixed(2)}
+                      R$ {shortagePreview.impact.reduce((sum, imp) => sum + ((shortageSelectedOrders[imp.orderId] || 0) * imp.itemPrice), 0).toFixed(2)}
                    </span>
                 </div>
 
                 <div className="flex gap-3">
-                  <button onClick={() => {setShortagePreview(null); setShortageSelectedOrders([]);}} className="flex-1 bg-white border border-gray-300 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-50 transition text-sm">Cancelar</button>
+                  <button onClick={() => {setShortagePreview(null); setShortageSelectedOrders({});}} className="flex-1 bg-white border border-gray-300 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-50 transition text-sm">Cancelar</button>
                   <button onClick={confirmFaltaGlobal} className="flex-1 bg-orange-600 text-white py-3 rounded-xl font-black shadow-lg hover:bg-orange-700 transition flex items-center justify-center text-sm">
-                    ⚠️ Confirmar Corte
+                    ⚠️ Confirmar Corte Parcial
                   </button>
                 </div>
               </div>
              )}
-          </div>
-        </div>
-      )}
 
       {isPrintMode ? renderDispatchPDF() : (
         <>
