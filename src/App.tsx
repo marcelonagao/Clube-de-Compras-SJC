@@ -808,15 +808,19 @@ export default function App() {
   const renderRepDashboard = () => {
     const viewingPolo = isGestor ? (adminTab === 'logistica_polo_view' || user?.polo || polos[0]) : user?.polo;
     
-    // Na Fase Beta, o representante acompanha tanto o que falta coletar quanto o que já coletou
+    // Filtros de status atualizados
     const repOrders = orders.filter(o => o.polo === viewingPolo && ['confirmado', 'pago_polo'].includes(o.status) && o.date);
+    const historicoOrders = orders.filter(o => o.polo === viewingPolo && o.status === 'pago' && o.date); // Nova aba de histórico
     
-    // Lógica de Separação Financeira do Polo
     const pedidosConfirmados = orders.filter(o => o.polo === viewingPolo && o.status === 'confirmado');
     const pedidosPagosPolo = orders.filter(o => o.polo === viewingPolo && o.status === 'pago_polo');
     
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
+
+    // Novo estado para a aba de histórico e WhatsApp manual
+    const [showHistory, setShowHistory] = useState(false);
+    const [manualClientWhatsapp, setManualClientWhatsapp] = useState('');
 
     const ordersByMonth = repOrders.reduce((acc, order) => {
       const d = order.date ? new Date(order.date) : new Date();
@@ -831,22 +835,20 @@ export default function App() {
       return acc;
     }, {});
 
-    // FUNÇÃO MASTER: Representante transfere todo o acumulado do Polo para o Gestor
     const handleEfetuarRepassePolo = async () => {
       if (pedidosPagosPolo.length === 0) return showToast('Nenhum valor arrecadado para repassar!', 'error');
       
-      if (window.confirm(`ATENÇÃO REPRESENTANTE:\n\nVocê confirma que realizou o PIX no valor TOTAL de R$ ${totalArrecadadoPolo.toFixed(2)} para o Gestor Geral da Sede?`)) {
+      if (window.confirm(`ATENÇÃO REPRESENTANTE:\n\nVocê confirma que realizou o PIX no valor TOTAL de R$ ${totalArrecadadoPolo.toFixed(2)} para a Sede Central?`)) {
         try {
           for (const o of pedidosPagosPolo) {
             await updateDoc(doc(db, "orders", o.id), { status: 'pago', dataRepasseSede: new Date().toISOString() });
           }
-          showToast('Repasse efetuado! Caixa do polo sincronizado com a Sede.');
+          showToast('Repasse efetuado! Caixa do Johrei Center sincronizado.');
           setOrders(prev => prev.map(ord => (ord.polo === viewingPolo && ord.status === 'pago_polo') ? { ...ord, status: 'pago' } : ord));
         } catch(e) { showToast('Erro ao processar repasse', 'error'); }
       }
     };
 
-    // Função para adicionar item ao "mini-carrinho" do pedido manual
     const handleAddToManualCart = () => {
       if (!manualItemProduct) return showToast('Selecione um produto!', 'error');
       const prod = products.find(p => String(p.id) === String(manualItemProduct));
@@ -866,15 +868,15 @@ export default function App() {
       setManualCart(manualCart.filter(i => i.id !== id));
     };
 
-    // Função de Salvar Pedido Manual Completo
     const handleSaveManualOrder = async () => {
-      if (!manualClientName) return showToast('Digite o nome do cliente!', 'error');
+      if (!manualClientName) return showToast('Digite o nome do membro!', 'error');
+      if (!manualClientWhatsapp || manualClientWhatsapp.length < 10) return showToast('O WhatsApp é obrigatório para notificações!', 'error'); // Regra nova
       if (manualCart.length === 0) return showToast('Adicione pelo menos 1 produto à lista!', 'error');
 
       const manualTotal = manualCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
       const manualOrder = {
-        customer: `${manualClientName} (Manual)`, email: '', whatsapp: '', polo: viewingPolo, cpf: 'Não informado',
+        customer: `${manualClientName} (Manual)`, email: '', whatsapp: manualClientWhatsapp, polo: viewingPolo, cpf: 'Não informado',
         total: manualTotal, method: 'manual', status: 'confirmado', status_nfe: 'pendente',
         date: new Date().toISOString(), items: manualCart, faltas: []
       };
@@ -884,15 +886,17 @@ export default function App() {
         showToast('Pedido Manual Salvo com Sucesso!');
         setShowManualOrder(false);
         setManualClientName('');
+        setManualClientWhatsapp('');
         setManualCart([]);
       } catch (e) { showToast('Erro ao salvar', 'error'); }
     };
 
     return (
-      <div className="p-4 max-w-4xl mx-auto pt-6 pb-24 font-sans text-left">
+      // max-w-7xl expande o layout para Notebooks
+      <div className="p-4 max-w-7xl mx-auto pt-6 pb-24 font-sans text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
            <div>
-             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Acompanhamento de Pedidos</h2>
+             <h2 className="text-2xl font-black text-slate-800 tracking-tight">Gestão do Johrei Center</h2>
              <p className="text-xs font-bold text-emerald-700 bg-emerald-50 inline-flex items-center px-3 py-1.5 rounded-lg mt-2 border border-emerald-100"><MapPin className="w-3 h-3 mr-1.5"/> Unidade: {viewingPolo}</p>
            </div>
            
@@ -900,21 +904,20 @@ export default function App() {
              <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
                  <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visão de Mestre</p>
                  <select onChange={e => {setAdminTab(e.target.value); setUser({...user, polo: e.target.value});}} className="w-full bg-white border border-gray-300 text-slate-800 font-bold px-3 py-2 rounded-lg outline-none text-xs">
-                    {polos.map(p => <option key={p} value={p}>Polo: {p}</option>)}
+                    {polos.map(p => <option key={p} value={p}>JC: {p}</option>)}
                  </select>
              </div>
            )}
         </div>
 
-        {/* DUPLO PAINEL DE CAIXA DO POLO (FASE 1) */}
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-5 text-center shadow-md flex flex-col justify-between">
+              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-5 text-center shadow-md flex flex-col justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Total Coletado no Polo</p>
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Total Coletado no JC</p>
                   <h1 className="text-3xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
-                  <p className="text-[10px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} caixas pagas no balcão</p>
+                  <p className="text-[10px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} caixas pagas na unidade</p>
                 </div>
                 {totalArrecadadoPolo > 0 && (
                   <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs py-2.5 rounded-xl shadow mt-4 transition">
@@ -926,7 +929,7 @@ export default function App() {
               <div className="bg-slate-100 border-2 border-slate-200 rounded-2xl p-5 text-center shadow-sm">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">⏳ Total Pendente de Coleta</p>
                 <h1 className="text-3xl font-black text-slate-800 mt-1">R$ {totalAindaAReceber.toFixed(2)}</h1>
-                <p className="text-[10px] text-slate-500 mt-1 font-medium">{pedidosConfirmados.length} clientes aguardando retirada</p>
+                <p className="text-[10px] text-slate-500 mt-1 font-medium">{pedidosConfirmados.length} membros aguardando retirada</p>
               </div>
             </div>
 
@@ -938,24 +941,23 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 text-sm">Novo Pedido Manual</h3>
                   <button onClick={() => setShowManualOrder(false)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
                 </div>
-                <input type="text" placeholder="Nome do Cliente" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg mb-4 text-sm font-medium outline-none focus:border-emerald-500" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                  <input type="text" placeholder="Nome do Membro" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm font-medium outline-none focus:border-emerald-500" />
+                  <input type="tel" placeholder="WhatsApp (Ex: 11999999999)" value={manualClientWhatsapp} onChange={e => setManualClientWhatsapp(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm font-medium outline-none focus:border-emerald-500" />
+                </div>
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
                   <div className="flex flex-col gap-2">
                     <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
                       <option value="">Selecione o Produto...</option>
-                      {[...products]
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
+                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
                     </select>
                     <div className="flex gap-2 justify-end">
-                       {/* NOVO CONTROLADOR DE QUANTIDADE COM BOTÕES + E - */}
                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
                           <button onClick={() => setManualItemQty(Math.max(1, manualItemQty - 1))} className="w-12 py-2.5 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors font-black text-lg leading-none">-</button>
                           <span className="w-10 text-center font-black text-slate-800 text-sm">{manualItemQty}</span>
                           <button onClick={() => setManualItemQty(manualItemQty + 1)} className="w-12 py-2.5 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors font-black text-lg leading-none">+</button>
                        </div>
-                       
                        <button onClick={handleAddToManualCart} className="flex-1 sm:flex-none bg-emerald-100 text-emerald-800 px-6 py-2.5 rounded-lg font-bold hover:bg-emerald-200 transition shadow-sm text-sm">Adicionar</button>
                     </div>
                   </div>
@@ -983,99 +985,141 @@ export default function App() {
           </div>
         )}
 
-        <div className="space-y-6">
-           {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => (
-             <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-5 bg-slate-50 border-b border-gray-100 flex justify-between items-center">
-                   <div>
-                      <h3 className="font-black text-slate-800 text-lg capitalize">{month}</h3>
-                      <p className="text-xs font-bold text-gray-500 mt-1 flex items-center"><Package className="w-3 h-3 mr-1.5"/> {data.count} pedidos ativos no polo</p>
-                   </div>
-                </div>
-                <div className="p-4 space-y-3 bg-slate-50/30">
-                   {data.orders.slice().reverse().map(o => {
-                     const temFalta = o.faltas && o.faltas.length > 0;
-                     const uRel = allUsers.find(u=>u.email===o.email);
-                     const estornado = temFalta && (uRel?.pendingPixRefund === 0 && uRel?.walletBalance === 0);
-                     return (
-                       <div key={o.id} className={`p-4 bg-white border rounded-xl shadow-sm flex flex-col md:flex-row justify-between gap-4 items-start transition-all ${temFalta ? 'border-orange-200' : 'border-gray-100'}`}>
-                         <div className="flex-1 w-full text-left">
-                           <div className="mb-1 flex items-center justify-between">
-                             <p className="font-bold text-slate-800 text-base">{o.customer}</p>
-                             {/* ETIQUETAS DO FLUXO FINANCEIRO LOCAL */}
-                             <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase ${o.status === 'confirmado' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
-                                {o.status === 'confirmado' ? '⏳ Retirar no Balcão' : '📦 Pago ao Polo'}
-                             </span>
-                           </div>
-                           <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
-                              <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono mr-1">#PED-{o.id.slice(-5).toUpperCase()}</span>
-                              • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
-                           </p>
-                           <div className="flex flex-col gap-1.5 mt-2">
-                           {(o.items || []).map((i, idx) => {
-                               const isFalta = o.faltas?.find(f=>f.productId===i.id);
-                               const quantidade = i.qtd || i.qty || 1; 
-                               const totalDoItem = (i.price || 0) * quantidade;
-                               
-                               return (
-                                 <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
-                                   <div className="flex items-center truncate">
-                                     <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
-                                     <span className="leading-tight truncate">{i.name}</span>
-                                   </div>
-                                   <span className="shrink-0 ml-2 font-black">R$ {totalDoItem.toFixed(2)}</span>
-                                 </div>
-                               )
-                             })}
-                           </div>
-                         </div>
-         
-                         <div className="flex gap-2 shrink-0 w-full md:w-auto mt-2 md:mt-0 items-center md:items-start justify-end">
-                            {temFalta && (
-                                <span className={`px-2 py-1 rounded font-black text-[9px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                                    {estornado ? 'ESTORNADO' : 'FALTAS'}
-                                </span>
-                            )}
-                            
-                            {/* BOTÃO INDIVIDUAL DE BAIXA FINANCEIRA DO CLIENTE */}
-                            {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
-                                <button onClick={async () => {
-                                    if(window.confirm(`Confirmar que o cliente pagou R$ ${(o.total||0).toFixed(2)} e retirou a mercadoria?`)) {
-                                        try {
-                                            await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
-                                            showToast('Baixa efetuada! Valor guardado no Polo.');
-                                            setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
-                                        } catch(e) { showToast('Erro ao dar baixa', 'error'); }
-                                    }
-                                }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center transition shadow-sm">
-                                  <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR RECEBIMENTO
-                                </button>
-                            )}
-
-                            <button onClick={() => {
-                                let text = `Olá ${o.customer}!\nAqui é do Clube de Compras. A sua caixa do pedido *#PED-${o.id.slice(-5).toUpperCase()}* já está pronta para retirada no polo de ${o.polo}.\nO total é R$ ${(o.total||0).toFixed(2)}.`;
-                                if(temFalta) {
-                                    const itensFaltantes = o.faltas.map(f => f.name).join(', ');
-                                    text += `\n\n⚠️ *Aviso:* O item '${itensFaltantes}' faltou no fornecedor. O total a pagar na retirada já foi reduzido para menos!`;
-                                }
-                                window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
-                            }} className="bg-emerald-100 text-emerald-800 px-3 py-1.5 rounded-lg font-bold text-[10px] flex items-center hover:bg-emerald-200 transition-colors shadow-sm">
-                              <MessageCircle className="w-3 h-3 mr-1.5"/> RECIBO
-                            </button>
-                         </div>
-                       </div>
-                     );
-                   })}
-                </div>
-             </div>
-           ))}
-           {Object.keys(ordersByMonth).length === 0 && (
-             <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
-                <Truck className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
-                <p className="text-gray-500 font-medium text-sm">Nenhuma caixa para entregar nesta unidade ainda.</p>
-             </div>
-           )}
+        {/* CONTROLE DE ABAS: ATIVOS VS HISTÓRICO */}
+        <div className="flex gap-2 mb-6">
+            <button onClick={() => setShowHistory(false)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${!showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>📦 Pedidos Ativos</button>
+            <button onClick={() => setShowHistory(true)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>🕰️ Repasses Anteriores</button>
         </div>
+
+        {/* VISÃO DE PEDIDOS ATIVOS */}
+        {!showHistory && (
+          <div className="space-y-6">
+            {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => (
+              <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-5 bg-slate-50 border-b border-gray-100 flex justify-between items-center">
+                    <div>
+                        <h3 className="font-black text-slate-800 text-lg capitalize">{month}</h3>
+                        <p className="text-xs font-bold text-gray-500 mt-1 flex items-center"><Package className="w-3 h-3 mr-1.5"/> {data.count} pedidos ativos no JC</p>
+                    </div>
+                  </div>
+                  {/* Grid expandido para Widescreen */}
+                  <div className="p-4 bg-slate-50/30 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {data.orders.slice().reverse().map(o => {
+                      const temFalta = o.faltas && o.faltas.length > 0;
+                      const uRel = allUsers.find(u=>u.email===o.email);
+                      const estornado = temFalta && (uRel?.pendingPixRefund === 0 && uRel?.walletBalance === 0);
+                      return (
+                        <div key={o.id} className={`p-4 bg-white border rounded-xl shadow-sm flex flex-col justify-between gap-4 transition-all h-full ${temFalta ? 'border-orange-200' : 'border-gray-100'}`}>
+                          <div className="w-full text-left">
+                            <div className="mb-2 flex items-start justify-between gap-2">
+                              <p className="font-bold text-slate-800 text-base leading-tight">{o.customer}</p>
+                              {/* ETIQUETAS ATUALIZADAS */}
+                              <span className={`shrink-0 px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase text-center ${o.status === 'confirmado' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
+                                  {o.status === 'confirmado' ? '⏳ Aguardando JC' : '📦 Pix Recebido'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
+                                <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono mr-1">#PED-{o.id.slice(-5).toUpperCase()}</span>
+                                • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
+                            </p>
+                            <div className="flex flex-col gap-1.5 mt-2">
+                              {(o.items || []).map((i, idx) => {
+                                const isFalta = o.faltas?.find(f=>f.productId===i.id);
+                                const quantidade = i.qtd || i.qty || 1; 
+                                const totalDoItem = (i.price || 0) * quantidade;
+                                return (
+                                  <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
+                                    <div className="flex items-center truncate">
+                                      <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
+                                      <span className="leading-tight truncate">{i.name}</span>
+                                    </div>
+                                    <span className="shrink-0 ml-2 font-black">R$ {totalDoItem.toFixed(2)}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+          
+                          <div className="flex flex-col sm:flex-row gap-2 w-full mt-auto pt-4 border-t border-gray-50">
+                              {temFalta && (
+                                  <span className={`w-full py-2 rounded font-black text-[10px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                                      {estornado ? 'FALTA ESTORNADA' : 'CONTÉM FALTAS'}
+                                  </span>
+                              )}
+                              
+                              {/* BOTÃO ATUALIZADO */}
+                              {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
+                                  <button onClick={async () => {
+                                      if(window.confirm(`Confirmar que o membro pagou R$ ${(o.total||0).toFixed(2)} e retirou a mercadoria?`)) {
+                                          try {
+                                              await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
+                                              showToast('Baixa efetuada! Valor guardado no JC.');
+                                              setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
+                                          } catch(e) { showToast('Erro ao dar baixa', 'error'); }
+                                      }
+                                  }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
+                                    <CheckCircle className="w-3 h-3 mr-1.5"/> CONFIRMAR PIX
+                                  </button>
+                              )}
+
+                              {/* NOTIFICAÇÃO INTELIGENTE DO WHATSAPP */}
+                              <button onClick={() => {
+                                  let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                  (o.items || []).forEach(i => {
+                                      const isFalta = o.faltas?.find(f => f.productId === i.id);
+                                      if (!isFalta) {
+                                          const quantidade = i.qtd || i.qty || 1;
+                                          text += `• ${quantidade}x ${i.name}\n`;
+                                      }
+                                  });
+                                  if(temFalta) {
+                                      const itensFaltantes = o.faltas.map(f => f.name).join(', ');
+                                      text += `\n⚠️ *Aviso:* Tivemos falta no fornecedor para o(s) item(ns): ${itensFaltantes}. O valor da sua cesta já foi ajustado!\n`;
+                                  }
+                                  text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*. Te aguardamos!`;
+                                  
+                                  window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                              }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
+                                <MessageCircle className="w-3 h-3 mr-1.5"/> NOTIFICAR MEMBRO
+                              </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+              </div>
+            ))}
+            {Object.keys(ordersByMonth).length === 0 && (
+              <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
+                  <Truck className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
+                  <p className="text-gray-500 font-medium text-sm">Nenhuma caixa pendente no JC no momento.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* VISÃO DE HISTÓRICO DE REPASSES */}
+        {showHistory && (
+           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-5">
+              <h3 className="font-black text-slate-800 text-lg mb-4">Repasses Concluídos à Sede</h3>
+              {historicoOrders.length === 0 ? (
+                 <p className="text-gray-500 text-sm">Nenhum repasse registrado no histórico.</p>
+              ) : (
+                 <div className="space-y-3">
+                    {historicoOrders.slice().reverse().map(o => (
+                       <div key={o.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 bg-slate-50 border border-gray-100 rounded-xl">
+                          <div>
+                             <p className="font-bold text-slate-800 text-sm">{o.customer}</p>
+                             <p className="text-xs text-gray-500 mt-0.5">Pedido Finalizado • {o.dataRepasseSede ? new Date(o.dataRepasseSede).toLocaleDateString() : 'Data N/D'}</p>
+                          </div>
+                          <span className="mt-2 sm:mt-0 font-black text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm w-fit">R$ {(o.total||0).toFixed(2)}</span>
+                       </div>
+                    ))}
+                 </div>
+              )}
+           </div>
+        )}
+
       </div>
     );
   };
