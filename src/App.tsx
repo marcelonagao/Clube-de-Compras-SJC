@@ -201,10 +201,11 @@ export default function App() {
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      // O onAuthStateChanged (nosso cão de guarda) vai assumir a partir daqui automaticamente!
     } catch (err) {
+      console.error("ERRO GOOGLE:", err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        showToast('Erro ao conectar com Google.', 'error');
+        // Agora o sistema vai cuspir o código exato do erro na tela!
+        showToast(`Erro Firebase: ${err.code}`, 'error');
       }
       setAuthLoading(false);
     }
