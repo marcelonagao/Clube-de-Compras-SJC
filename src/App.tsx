@@ -9,7 +9,7 @@ import {
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD7RvxvIGsnl5AP8tcNpATdS94PKjFzLV4",
@@ -193,6 +193,18 @@ export default function App() {
     } catch (err) {
       showToast(err.message.includes('Código') ? err.message : 'Verifique os dados informados.', 'error');
       setAuthLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!loginEmail) {
+      return showToast('Digite seu e-mail no campo acima para recuperar a senha.', 'error');
+    }
+    try {
+      await sendPasswordResetEmail(auth, loginEmail);
+      showToast('E-mail de recuperação enviado! Verifique sua caixa de entrada.');
+    } catch (err) {
+      showToast('Erro ao enviar e-mail. Verifique se o endereço está correto.', 'error');
     }
   };
 
@@ -2129,7 +2141,7 @@ export default function App() {
                    <div className="flex justify-center mb-6">
                      <div className="w-16 h-16 bg-emerald-700 rounded-2xl flex items-center justify-center shadow-lg rotate-3"><Leaf className="w-8 h-8 text-white" /></div>
                    </div>
-                   <h2 className="text-2xl font-black text-center text-slate-800 tracking-tight mb-1">Clube Orgânico</h2>
+                   <h2 className="text-2xl font-black text-center text-slate-800 tracking-tight mb-1">Clube de Compras SJC</h2>
                    <p className="text-center text-gray-500 font-bold text-xs mb-6">Acesse a sua conta</p>
                    
                    <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
@@ -2198,7 +2210,12 @@ export default function App() {
                        
                        <input type="email" placeholder="E-mail" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
                        <input type="password" placeholder="Senha" value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
-                       
+                       {authMode === 'login' && (
+                           <div className="text-right mt-1 mb-2">
+                               <button type="button" onClick={handleForgotPassword} className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 transition-colors">Esqueceu a senha?</button>
+                           </div>
+                       )}
+
                        <button type="submit" disabled={authLoading} className="w-full bg-emerald-700 text-white font-black py-3.5 rounded-lg shadow-md hover:bg-emerald-800 transition-all text-sm flex items-center justify-center mt-4">
                          {authLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (authMode === 'login' ? 'Acessar Loja' : 'Finalizar Cadastro')}
                        </button>
