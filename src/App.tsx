@@ -1649,6 +1649,21 @@ export default function App() {
           link.click();
       };
 
+      const handleZerarEstoque = async () => {
+        if(window.confirm('ATENÇÃO MESTRE: Tem certeza que deseja ZERAR o estoque (Sobra na Sede) de absolutamente TODOS os produtos?')) {
+            try {
+                for (const p of products) {
+                    if ((p.stock || 0) > 0) {
+                        await updateDoc(doc(db, "products", p.id), { stock: 0 });
+                    }
+                }
+                showToast('Estoque zerado com sucesso!');
+                // Atualiza a tela imediatamente sem precisar recarregar
+                setProducts(prev => prev.map(prod => ({...prod, stock: 0})));
+            } catch(e) { showToast('Erro ao zerar estoque', 'error'); }
+        }
+    };
+
       // Extrai a lista de categorias únicas existentes para o Dropdown
       const uniqueCategories = Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort();
 
@@ -1662,10 +1677,14 @@ export default function App() {
                  <h3 className="font-black text-emerald-900 text-sm">Importação & Edição em Lote (CSV)</h3>
                  <p className="text-xs text-emerald-700 mt-0.5 font-medium">Planilha completa integrada: SKU, Nome, Categoria, Preço, Custo e Caixa do Fornecedor.</p>
              </div>
+             
              <div className="flex flex-wrap items-center gap-2">
-                 <button onClick={baixarModeloCSV} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-lg font-black hover:bg-emerald-100 shadow-sm inline-flex items-center text-xs transition-colors">
-                   <Download className="w-4 h-4 mr-2"/> Baixar Base (.CSV)
-                 </button>
+                   <button onClick={handleZerarEstoque} className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2.5 rounded-lg font-black hover:bg-orange-100 shadow-sm inline-flex items-center text-xs transition-colors">
+                     <Trash2 className="w-4 h-4 mr-2"/> Zerar Estoque Geral
+                   </button>
+                   <button onClick={baixarModeloCSV} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-lg font-black hover:bg-emerald-100 shadow-sm inline-flex items-center text-xs transition-colors">
+                     <Download className="w-4 h-4 mr-2"/> Baixar Base (.CSV)
+                   </button>
                  <label className="bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-black cursor-pointer hover:bg-emerald-800 shadow-sm inline-flex items-center text-xs transition-colors m-0">
                    <Upload className="w-4 h-4 mr-2"/> Subir Tabela Atualizada
                    <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload}/>
@@ -1857,8 +1876,9 @@ export default function App() {
             <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
             <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
             <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
-            <button onClick={() => {setAdminTab('financeiro'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='financeiro'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Financeiro (Estornos)</button>
-            
+            {!CONFIG_APENAS_COLETA && (
+               <button onClick={() => {setAdminTab('financeiro'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='financeiro'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Financeiro (Estornos)</button>
+            )}            
             <div className="mt-6 pt-4 border-t border-white/10 shrink-0">
                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-3 mb-2">Acesso Rápido</p>
                <button onClick={() => {setCurrentScreen('shop'); setIsSidebarOpen(false);}} className="w-full text-left px-3 py-2.5 rounded-lg font-bold text-xs text-emerald-400 hover:bg-white/5 flex items-center"><Home className="w-3.5 h-3.5 mr-2"/> Loja (Comprar)</button>
