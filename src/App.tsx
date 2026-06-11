@@ -291,7 +291,6 @@ export default function App() {
     const selectedImpacts = shortagePreview.impact.filter(imp => (shortageSelectedOrders[imp.orderId] || 0) > 0);
     if (selectedImpacts.length === 0) return showToast('Selecione pelo menos um membro para aplicar a falta.', 'error');
 
-    // AQUI ENTRA O NOSSO NOVO ALERTA PERSONALIZADO!
     showConfirm('Confirmar Corte', `Você está prestes a aplicar a falta em ${selectedImpacts.length} membro(s). O sistema abaterá o valor automaticamente da cobrança deles. Deseja continuar?`, async () => {
         try {
           for (const imp of selectedImpacts) {
@@ -316,12 +315,17 @@ export default function App() {
               await updateDoc(orderRef, { items: updatedItems, faltas: newFaltas, total: newTotal > 0 ? newTotal : 0 });
             }
           }
+          
           showToast(`Falta aplicada com sucesso!`);
           setShortageSelectedProduct('');
           setShortagePreview(null);
           setShortageSelectedOrders({});
-          fetchData(); 
-        } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
+          // A linha "fetchData();" que causava o erro falso foi removida daqui!
+          
+        } catch (e) { 
+          console.error("Erro real na falta global:", e);
+          showToast('Erro ao aplicar falta global', 'error'); 
+        }
     });
   };
 
