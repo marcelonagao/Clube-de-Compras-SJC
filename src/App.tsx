@@ -90,6 +90,8 @@ export default function App() {
   const [faltaGlobalModal, setFaltaGlobalModal] = useState(false);
   const [shortageSelectedProduct, setShortageSelectedProduct] = useState('');
   const [shortagePreview, setShortagePreview] = useState(null);
+  const [expandedMonths, setExpandedMonths] = useState({});
+  const [purchasePlan, setPurchasePlan] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   // --- CHAVE DA FASE 1 (BETA) ---
   const CONFIG_APENAS_COLETA = true; // Mude para false no futuro para ativar o Mercado Pago!
@@ -331,61 +333,92 @@ export default function App() {
     } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
   };
 
-  const exportSupplierCSV = () => {
-    // Puxa o status correto e filtra apenas os pedidos dos últimos 30 dias!
-    const validOrders = orders.filter(o => 
-      o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
-      new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000)
-   );
-    const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "NOVA SOBRA PREVISTA"]];
+  const generatePurchasePlan = () => {
+    const validOrders = orders.filter(o => o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000));
     
+    const plan = [];
     products.forEach(p => {
-        let totalSedeFracionado = 0;
-        let totalSatellites = 0;
         const minBox = p.minBox || 1;
         const localStockSede = p.stock || 0;
+        
+        // 1. Calcula a Demanda por Polo
+        const demandByPolo = {};
+        polos.forEach(polo => demandByPolo[polo] = 0);
+        validOrders.forEach(o => {
+            const item = o.items?.find(i => String(i.id) === String(p.id));
+            if (item) demandByPolo[o.polo] += (item.qtd || item.qty || 0);
+        });
 
+        let totalSedeFracionado = 0;
+        let totalSatellites = 0;
+        const crossDockingDetails = [];
+
+        // 2. Inteligência de Cross-docking (Vila Adyana e Taubaté)
         polosEntregaDireta.forEach(poloDireto => {
-            const soldInPolo = validOrders.filter(o => o.polo === poloDireto).reduce((sum, o) => sum + (o.items?.find(i=>i.id===p.id)?.qtd || 0), 0);
+            const soldInPolo = demandByPolo[poloDireto];
             if (soldInPolo > 0) {
                 const caixasInteiras = Math.floor(soldInPolo / minBox);
                 const fracionado = soldInPolo % minBox;
-                if (caixasInteiras > 0) {
-                    rows.push([poloDireto.toUpperCase(), p.sku || '-', p.name, caixasInteiras, '-', '-']);
-                }
+                if (caixasInteiras > 0) crossDockingDetails.push({ polo: poloDireto, boxes: caixasInteiras });
                 totalSedeFracionado += fracionado; 
             }
         });
 
-        const polosSatellite = polos.filter(polo => !polosEntregaDireta.includes(polo));
-        polosSatellite.forEach(poloSat => {
-            totalSatellites += validOrders.filter(o => o.polo === poloSat).reduce((sum, o) => sum + (o.items?.find(i=>i.id===p.id)?.qtd || 0), 0);
+        // 3. Demanda dos polos "Satélites" (que dependem da Sede montar a sacola)
+        polos.filter(polo => !polosEntregaDireta.includes(polo)).forEach(poloSat => {
+            totalSatellites += demandByPolo[poloSat];
         });
 
         const totalSedeNeed = totalSatellites + totalSedeFracionado;
-        if (totalSedeNeed > 0 || localStockSede > 0) {
-            let needToBuy = Math.max(0, totalSedeNeed - localStockSede);
-            let boxesToBuy = 0;
-            let newStock = localStockSede - totalSedeNeed;
-
-            if (needToBuy > 0) {
-                boxesToBuy = Math.ceil(needToBuy / minBox);
-                newStock = (localStockSede + (boxesToBuy * minBox)) - totalSedeNeed;
-            } else if (totalSedeNeed > 0) {
-                newStock = localStockSede - totalSedeNeed;
-            }
-
-            if (boxesToBuy > 0 || totalSedeNeed > 0) {
-                 rows.push(["SEDE SJC (HUB)", p.sku || '-', p.name, boxesToBuy, totalSedeNeed, newStock]);
-            }
+        const totalDemandGeral = totalSedeNeed + crossDockingDetails.reduce((acc, c) => acc + c.boxes * minBox, 0);
+        
+        // 4. Se tiver demanda ou se for pra repor estoque local, entra na Mesa de Compras!
+        if (totalDemandGeral > 0 || localStockSede > 0) {
+            let needToBuySede = Math.max(0, totalSedeNeed - localStockSede);
+            let suggestedBoxesSede = needToBuySede > 0 ? Math.ceil(needToBuySede / minBox) : 0;
+            
+            plan.push({
+                id: p.id, sku: p.sku || '-', name: p.name, minBox, stock: localStockSede,
+                demandSede: totalSedeNeed, demandCross: crossDockingDetails, boxesToBuy: suggestedBoxesSede
+            });
         }
     });
+    
+    setPurchasePlan(plan.sort((a,b) => a.name.localeCompare(b.name)));
+  };
 
+  const confirmAndExportPurchasePlan = async () => {
+    if (!purchasePlan) return;
+    const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "NOVA SOBRA PREVISTA"]];
+    
+    for (const item of purchasePlan) {
+        // As caixas inteiras vão direto para Vila Adyana / Taubaté
+        item.demandCross.forEach(cd => {
+            rows.push([cd.polo.toUpperCase(), item.sku, item.name, cd.boxes, '-', '-']);
+        });
+
+        // Calcula a Nova Sobra após as edições manuais
+        const newStock = (item.stock + (item.boxesToBuy * item.minBox)) - item.demandSede;
+        
+        // Manda comprar as caixas para a HUB
+        if (item.boxesToBuy > 0 || item.demandSede > 0) {
+            rows.push(["SEDE SJC (HUB)", item.sku, item.name, item.boxesToBuy, item.demandSede, newStock]);
+        }
+        
+        // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
+        if (item.stock !== newStock) {
+           try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
+        }
+    }
+    
     const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
     const link = document.createElement("a");
     link.href = encodeURI(csvContent);
     link.download = `Pedido_Fornecedor_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
     link.click();
+    
+    showToast('CSV Exportado e Estoque Atualizado com a Nova Sobra!');
+    setPurchasePlan(null); 
   };
 
   const handleCSVUpload = (e) => {
@@ -1438,65 +1471,158 @@ export default function App() {
       }
    
       if (adminTab === 'vendas') {
-         const ordersByMonth = validOrders.reduce((acc, order) => {
-           const d = new Date(order.date);
-           const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-           const capMonth = `${months[d.getMonth()]} ${d.getFullYear()}`;
-           const sortKey = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-           if (!acc[capMonth]) acc[capMonth] = { orders: [], total: 0, count: 0, sortKey };
-           acc[capMonth].orders.push(order);
-           acc[capMonth].total += (order.total || 0);
-           acc[capMonth].count += 1;
-           return acc;
-         }, {});
+        const ordersByMonth = validOrders.reduce((acc, order) => {
+          const d = new Date(order.date);
+          const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+          const capMonth = `${months[d.getMonth()]} ${d.getFullYear()}`;
+          const sortKey = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+          
+          if (!acc[capMonth]) acc[capMonth] = { ordersByPolo: {}, total: 0, count: 0, sortKey };
+          if(!acc[capMonth].ordersByPolo[order.polo]) acc[capMonth].ordersByPolo[order.polo] = [];
+          acc[capMonth].ordersByPolo[order.polo].push(order);
 
-         return (
-           <div className="space-y-6 text-left">
-             <h2 className="text-2xl font-black text-slate-800 mb-4">Histórico de Vendas</h2>
-             {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => (
-               <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
-                  <div className="p-4 bg-slate-50 border-b border-gray-50 flex justify-between items-center">
-                     <div>
-                       <h3 className="font-black text-slate-800 text-lg capitalize">{month}</h3>
-                       <p className="text-[10px] font-bold text-gray-500 mt-1">{data.count} pedidos globais</p>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[9px] font-bold text-gray-400 uppercase">Faturamento</p>
-                        <p className="text-xl font-black text-emerald-700">R$ {data.total.toFixed(2)}</p>
-                     </div>
-                  </div>
-                  <div className="p-3 space-y-2">
-                     {data.orders.slice().reverse().map(o => (
-                       <div key={o.id} className="p-3 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col md:flex-row justify-between gap-3 items-start md:items-center hover:border-emerald-200">
-                         <div>
-                           <p className="font-bold text-slate-800 text-sm">{o.customer}</p>
-                           <p className="text-[10px] font-medium text-gray-500 mb-1">#{o.id.slice(0,5)} • {new Date(o.date).toLocaleDateString()} • Polo: {o.polo}</p>
-                         </div>
-                         <div className="flex flex-col items-end gap-1 w-full md:w-auto">
-                            <span className="font-black text-slate-800 text-sm">R$ {(o.total||0).toFixed(2)}</span>
-                            <button onClick={async ()=>{ await deleteDoc(doc(db,"orders",o.id)); showToast('Excluído'); }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center"><Trash2 className="w-3 h-3 mr-1"/> Excluir</button>
-                         </div>
-                       </div>
-                     ))}
-                  </div>
-               </div>
-             ))}
-           </div>
-         );
-      }
+          acc[capMonth].total += (order.total || 0);
+          acc[capMonth].count += 1;
+          return acc;
+        }, {});
 
-      if (adminTab === 'compras') {
         return (
-          <div className="space-y-6 text-left">
-            <h2 className="text-2xl font-black text-emerald-900 mb-4">Inteligência de Compras</h2>
-            <div className="flex flex-col gap-3 bg-emerald-50 p-5 rounded-2xl border border-emerald-100 shadow-sm">
-               <p className="text-xs font-medium text-emerald-800 mb-2">Cálculo de Cross-docking automático. O CSV enviará caixas fechadas diretamente aos polos definidos.</p>
-               <button onClick={exportSupplierCSV} className="bg-emerald-700 text-white font-black px-4 py-3 rounded-xl shadow-md hover:bg-emerald-800 flex items-center justify-center w-full text-sm"><Download className="w-4 h-4 mr-2"/> Exportar CSV Fornecedor</button>
-               <button onClick={() => setIsPrintMode(true)} className="bg-slate-800 text-white font-black px-4 py-3 rounded-xl shadow-md hover:bg-slate-900 flex items-center justify-center w-full text-sm"><Printer className="w-4 h-4 mr-2"/> PDF Despacho da Sede</button>
-            </div>
+          <div className="space-y-6 text-left max-w-6xl mx-auto">
+            <h2 className="text-2xl font-black text-slate-800 mb-4">Histórico de Vendas</h2>
+            {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => {
+              const isExpanded = expandedMonths[month];
+              return (
+              <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 transition-all">
+                 <div onClick={() => setExpandedMonths(prev => ({...prev, [month]: !prev[month]}))} className="p-4 bg-slate-50 border-b border-gray-50 flex justify-between items-center cursor-pointer hover:bg-slate-100">
+                    <div>
+                      <h3 className="font-black text-slate-800 text-lg capitalize flex items-center">
+                         {isExpanded ? <ChevronUp className="w-5 h-5 mr-2 text-emerald-600"/> : <ChevronDown className="w-5 h-5 mr-2 text-gray-400"/>}
+                         {month}
+                      </h3>
+                      <p className="text-[10px] font-bold text-gray-500 mt-1 ml-7">{data.count} pedidos liquidados</p>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[9px] font-bold text-gray-400 uppercase">Faturamento</p>
+                       <p className="text-xl font-black text-emerald-700">R$ {data.total.toFixed(2)}</p>
+                    </div>
+                 </div>
+                 
+                 {isExpanded && (
+                   <div className="p-5 space-y-8">
+                       {Object.entries(data.ordersByPolo).map(([polo, poloOrders]) => {
+                          const poloTotal = poloOrders.reduce((s,o)=>s+(o.total||0), 0);
+                          return (
+                              <div key={polo} className="space-y-4">
+                                  <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                                      <MapPin className="w-4 h-4 text-emerald-600"/>
+                                      <h4 className="font-black text-slate-800 text-sm flex-1">JC {polo}</h4>
+                                      <span className="font-bold text-emerald-800 text-xs bg-emerald-50 px-2 py-1.5 border border-emerald-100 rounded-lg shadow-sm">R$ {poloTotal.toFixed(2)}</span>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pl-2 sm:pl-6">
+                                    {poloOrders.slice().reverse().map(o => (
+                                      <div key={o.id} className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col justify-between gap-3 hover:border-emerald-200 transition-colors">
+                                        <div>
+                                          <p className="font-bold text-slate-800 text-sm mb-1">{o.customer}</p>
+                                          <p className="text-[10px] font-medium text-gray-500 font-mono bg-gray-50 inline-block px-1.5 py-0.5 rounded border border-gray-100">#{o.id.slice(0,5).toUpperCase()}</p>
+                                          <p className="text-[10px] font-medium text-gray-500 mt-1">{new Date(o.date).toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
+                                           <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
+                                           <button onClick={async (e)=>{ e.stopPropagation(); await deleteDoc(doc(db,"orders",o.id)); showToast('Excluído'); }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3 h-3 mr-1"/> Excluir</button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                              </div>
+                          );
+                       })}
+                   </div>
+                 )}
+              </div>
+            )})}
           </div>
         );
-      }
+     }
+
+     if (adminTab === 'compras') {
+       return (
+         <div className="space-y-6 text-left max-w-6xl mx-auto">
+           <h2 className="text-2xl font-black text-emerald-900 mb-4">Inteligência de Compras</h2>
+           
+           {!purchasePlan ? (
+               <div className="flex flex-col gap-3 bg-emerald-50 p-6 rounded-2xl border border-emerald-200 shadow-sm text-center sm:text-left">
+                  <h3 className="font-black text-emerald-900 text-lg mb-1">Mesa Operacional</h3>
+                  <p className="text-sm font-medium text-emerald-800 mb-4 max-w-2xl">O algoritmo calculará o envio direto para os JCs de Cross-docking e organizará a demanda da Sede. Você poderá alterar as quantidades de compra sugeridas antes de gerar o arquivo do fornecedor.</p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
+                      <button onClick={generatePurchasePlan} className="bg-emerald-700 text-white font-black px-6 py-4 rounded-xl shadow-lg hover:bg-emerald-800 flex items-center justify-center text-sm transition-transform hover:scale-[1.02] flex-1"><Package className="w-5 h-5 mr-2"/> Iniciar Mesa de Compras</button>
+                      <button onClick={() => setIsPrintMode(true)} className="bg-white text-emerald-800 font-black px-6 py-4 rounded-xl shadow-sm border-2 border-emerald-200 hover:bg-emerald-50 flex items-center justify-center text-sm flex-1"><Printer className="w-5 h-5 mr-2"/> Emitir Romaneio (Logística Sede)</button>
+                  </div>
+               </div>
+           ) : (
+               <div className="bg-white p-5 rounded-3xl shadow-xl border border-gray-200">
+                   <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-5">
+                       <div>
+                           <h3 className="font-black text-slate-800 text-2xl tracking-tight">Painel de Compra e Sobra</h3>
+                           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Ajuste as caixas no controlador abaixo</p>
+                       </div>
+                       <button onClick={() => setPurchasePlan(null)} className="p-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><X className="w-6 h-6"/></button>
+                   </div>
+
+                   <div className="space-y-4 mb-8 max-h-[60vh] overflow-y-auto pr-2">
+                       {purchasePlan.map(item => {
+                           const newStock = (item.stock + (item.boxesToBuy * item.minBox)) - item.demandSede;
+                           const isShortage = newStock < 0;
+
+                           return (
+                               <div key={item.id} className={`p-4 sm:p-5 rounded-2xl border-2 flex flex-col xl:flex-row xl:items-center justify-between gap-4 transition-all ${isShortage ? 'border-red-300 bg-red-50/50' : 'border-gray-100 bg-white hover:border-emerald-200'}`}>
+                                   <div className="flex-1">
+                                       <p className="font-black text-slate-800 text-base mb-1">{item.name}</p>
+                                       <div className="flex flex-wrap gap-2 text-[10px] font-bold text-gray-600 font-mono">
+                                          <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">Estoque Local: {item.stock}</span>
+                                          <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">Pedidos Sede (HUB): {item.demandSede}</span>
+                                          <span className="bg-gray-100 px-2 py-1 rounded border border-gray-200">Caixa Mínima: {item.minBox} un</span>
+                                       </div>
+                                       
+                                       {item.demandCross.length > 0 && (
+                                           <div className="mt-3 flex flex-wrap gap-2">
+                                               {item.demandCross.map((cd, idx) => (
+                                                   <span key={idx} className="bg-blue-50 border border-blue-200 text-blue-800 text-[10px] font-black px-2.5 py-1 rounded-md flex items-center shadow-sm"><Truck className="w-3.5 h-3.5 mr-1.5"/> {cd.boxes} Cx ➔ JC {cd.polo}</span>
+                                               ))}
+                                           </div>
+                                       )}
+                                   </div>
+                                   
+                                   <div className="flex items-center gap-6 border-t xl:border-t-0 border-gray-100 pt-4 xl:pt-0">
+                                       <div className="flex flex-col items-center">
+                                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Comprar para Sede</span>
+                                           <div className="flex items-center bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                               <button onClick={() => setPurchasePlan(plan => plan.map(p => p.id === item.id ? {...p, boxesToBuy: Math.max(0, p.boxesToBuy - 1)} : p))} className="w-10 h-10 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black text-lg transition-colors">-</button>
+                                               <span className="w-12 text-center font-black text-slate-800 text-base">{item.boxesToBuy} cx</span>
+                                               <button onClick={() => setPurchasePlan(plan => plan.map(p => p.id === item.id ? {...p, boxesToBuy: p.boxesToBuy + 1} : p))} className="w-10 h-10 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black text-lg transition-colors">+</button>
+                                           </div>
+                                       </div>
+
+                                       <div className="flex flex-col items-end min-w-[100px] bg-slate-50 p-3 rounded-xl border border-gray-100">
+                                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{isShortage ? 'Faltará' : 'Nova Sobra'}</span>
+                                           <span className={`font-black text-2xl tracking-tight ${isShortage ? 'text-red-600' : 'text-emerald-600'}`}>
+                                               {isShortage ? newStock : `+${newStock}`}
+                                           </span>
+                                       </div>
+                                   </div>
+                               </div>
+                           );
+                       })}
+                   </div>
+
+                   <button onClick={confirmAndExportPurchasePlan} className="w-full bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-700 flex items-center justify-center transition-all text-base">
+                       <Download className="w-5 h-5 mr-2"/> Gravar Estoque Local e Baixar CSV
+                   </button>
+               </div>
+           )}
+         </div>
+       );
+     }
 
       if (adminTab === 'catalogo') {
         return (
