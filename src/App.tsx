@@ -389,7 +389,7 @@ export default function App() {
 
   const confirmAndExportPurchasePlan = async () => {
     if (!purchasePlan) return;
-    const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "NOVA SOBRA PREVISTA"]];
+    const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "ESTOQUE FINAL PREVISTO"]];
     
     for (const item of purchasePlan) {
         // As caixas inteiras vão direto para Vila Adyana / Taubaté
@@ -417,7 +417,7 @@ export default function App() {
     link.download = `Pedido_Fornecedor_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
     link.click();
     
-    showToast('CSV Exportado e Estoque Atualizado com a Nova Sobra!');
+    showToast('CSV Exportado e Estoque Atualizado!');
     setPurchasePlan(null); 
   };
 
@@ -1570,7 +1570,7 @@ export default function App() {
                <div className="bg-white p-5 rounded-3xl shadow-xl border border-gray-200">
                    <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-5">
                        <div>
-                           <h3 className="font-black text-slate-800 text-2xl tracking-tight">Painel de Compra e Sobra</h3>
+                       <h3 className="font-black text-slate-800 text-2xl tracking-tight">Painel de Compras e Estoque</h3>
                            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Ajuste as caixas no controlador abaixo</p>
                        </div>
                        <button onClick={() => setPurchasePlan(null)} className="p-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"><X className="w-6 h-6"/></button>
@@ -1611,7 +1611,7 @@ export default function App() {
                                        </div>
 
                                        <div className="flex flex-col items-end min-w-[100px] bg-slate-50 p-3 rounded-xl border border-gray-100">
-                                           <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{isShortage ? 'Faltará' : 'Nova Sobra'}</span>
+                                       <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{isShortage ? 'Faltará' : 'Estoque Final'}</span>
                                            <span className={`font-black text-2xl tracking-tight ${isShortage ? 'text-red-600' : 'text-emerald-600'}`}>
                                                {isShortage ? newStock : `+${newStock}`}
                                            </span>
@@ -1752,7 +1752,7 @@ export default function App() {
                           
                           <div className="grid grid-cols-2 gap-3 items-end">
                              <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1 truncate">Itens por Caixa</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
-                             <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Sobra na Sede</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
+                             <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Estoque Local</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
                           </div>
                           
                           <button type="submit" className="w-full bg-slate-800 text-white font-black py-3 rounded-lg shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
@@ -1782,7 +1782,7 @@ export default function App() {
                                  <div className="flex flex-wrap gap-1.5 mt-1 text-[9px] font-bold font-mono">
                                      <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100">Custo: R$ {(p.cost || 0).toFixed(2)}</span>
                                      <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-gray-200">Cx: {p.minBox || 1} un</span>
-                                     <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded border border-orange-100">Estoque Sobra: {p.stock || 0}</span>
+                                     <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded border border-orange-100">Estoque: {p.stock || 0}</span>
                                  </div>
                              </div>
                            </div>
@@ -1971,7 +1971,7 @@ export default function App() {
              ) : (
               <div className="bg-slate-50 p-5 rounded-2xl border border-gray-200 shadow-inner">
                 <h4 className="font-black text-slate-800 text-sm mb-3 flex items-center"><AlertTriangle className="w-4 h-4 mr-2 text-orange-500"/> Impacto da Falta: {shortagePreview.product?.name}</h4>
-                <p className="text-xs text-gray-500 font-medium mb-4">Ajuste as quantidades que <strong>FALTARAM</strong> para cada membro. O sistema manterá o restante na cesta e estornará apenas a diferença.</p>
+                <p className="text-xs text-gray-500 font-medium mb-4">Ajuste as quantidades que <strong>FALTARAM</strong> para cada membro. O sistema abaterá a diferença e manterá os demais itens no pedido.</p>
                 
                 <div className="space-y-2 mb-5 max-h-60 overflow-y-auto pr-2">
                   {shortagePreview.impact.map((imp) => {
