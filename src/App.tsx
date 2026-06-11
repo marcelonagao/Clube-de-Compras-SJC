@@ -97,6 +97,8 @@ export default function App() {
   /// --- ESTADOS DO PEDIDO MANUAL (REP) ---
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [manualClientName, setManualClientName] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [manualClientWhatsapp, setManualClientWhatsapp] = useState('');
   const [manualCart, setManualCart] = useState([]); // Agora é um mini-carrinho!
   const [manualItemProduct, setManualItemProduct] = useState('');
   const [manualItemQty, setManualItemQty] = useState(1);
@@ -818,10 +820,6 @@ export default function App() {
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
 
-    // Novo estado para a aba de histórico e WhatsApp manual
-    const [showHistory, setShowHistory] = useState(false);
-    const [manualClientWhatsapp, setManualClientWhatsapp] = useState('');
-
     const ordersByMonth = repOrders.reduce((acc, order) => {
       const d = order.date ? new Date(order.date) : new Date();
       const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -892,7 +890,6 @@ export default function App() {
     };
 
     return (
-      // max-w-7xl expande o layout para Notebooks
       <div className="p-4 max-w-7xl mx-auto pt-6 pb-24 font-sans text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
            <div>
