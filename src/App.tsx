@@ -778,22 +778,36 @@ export default function App() {
                  </div>
               )}
 
-              <div className="space-y-3 mb-5">
+<div className="space-y-3 mb-5">
+                {/* ITENS QUE O CLIENTE VAI RECEBER (Ativos) */}
                 {(order.items || []).map((item, idx) => {
-                  const isFalta = order.faltas?.find(f => f.productId === item.id);
                   const quantidade = item.qtd || item.qty || 1;
                   const totalDoItem = (item.price || 0) * quantidade;
                   
                   return (
-                    // PREÇOS ADICIONADOS AQUI NESTA LINHA
-                    <div key={idx} className={`flex items-center justify-between text-sm font-medium transition-all ${isFalta ? 'text-red-400 line-through opacity-70' : 'text-slate-700'}`}>
+                    <div key={`item-${idx}`} className="flex items-center justify-between text-sm font-medium transition-all text-slate-700">
                       <div className="flex items-center truncate">
-                          <span className={`w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 ${isFalta ? 'bg-red-50 text-red-700 border-red-100' : 'bg-emerald-50 text-emerald-800 border-emerald-100'}`}>
+                          <span className="w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 bg-emerald-50 text-emerald-800 border-emerald-100">
                             {quantidade}x
                           </span>
                           <span className="truncate">{item.name}</span>
                       </div>
                       <span className="shrink-0 ml-3 font-black">R$ {totalDoItem.toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+
+                {/* ITENS QUE FALTARAM (Cortados) */}
+                {(order.faltas || []).map((falta, idx) => {
+                  return (
+                    <div key={`falta-${idx}`} className="flex items-center justify-between text-sm font-medium transition-all text-red-400 opacity-80">
+                      <div className="flex items-center truncate line-through">
+                          <span className="w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 bg-red-50 text-red-700 border-red-100">
+                            {falta.qtyMissing || 1}x
+                          </span>
+                          <span className="truncate">{falta.name} <span className="text-[9px] ml-1 uppercase">(Falta)</span></span>
+                      </div>
+                      <span className="shrink-0 ml-3 font-black line-through">- R$ {(falta.value || falta.refundValue || 0).toFixed(2)}</span>
                     </div>
                   );
                 })}
@@ -1023,7 +1037,6 @@ export default function App() {
                           <div className="w-full text-left">
                             <div className="mb-2 flex items-start justify-between gap-2">
                               <p className="font-bold text-slate-800 text-base leading-tight">{o.customer}</p>
-                              {/* ETIQUETAS ATUALIZADAS */}
                               <span className={`shrink-0 px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase text-center ${o.status === 'confirmado' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
                                   {o.status === 'confirmado' ? '⏳ Aguardando JC' : '📦 Pix Recebido'}
                               </span>
@@ -1032,13 +1045,14 @@ export default function App() {
                                 <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono mr-1">#PED-{o.id.slice(-5).toUpperCase()}</span>
                                 • {o.date ? new Date(o.date).toLocaleDateString() : 'N/D'} • R$ {(o.total||0).toFixed(2)}
                             </p>
+                            
                             <div className="flex flex-col gap-1.5 mt-2">
+                              {/* ITENS ATIVOS NA CAIXA */}
                               {(o.items || []).map((i, idx) => {
-                                const isFalta = o.faltas?.find(f=>f.productId===i.id);
                                 const quantidade = i.qtd || i.qty || 1; 
                                 const totalDoItem = (i.price || 0) * quantidade;
                                 return (
-                                  <div key={idx} className={`text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full ${isFalta ? 'bg-red-50 text-red-700 border-red-200 line-through opacity-70' : 'bg-white text-slate-700 border-gray-200'}`}>
+                                  <div key={`ativo-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full bg-white text-slate-700 border-gray-200">
                                     <div className="flex items-center truncate">
                                       <span className="mr-2 px-2 py-1 bg-gray-100 rounded-md text-emerald-800 font-black shrink-0">{quantidade}x</span> 
                                       <span className="leading-tight truncate">{i.name}</span>
@@ -1047,18 +1061,29 @@ export default function App() {
                                   </div>
                                 )
                               })}
+                              
+                              {/* ITENS CORTADOS (FALTAS) */}
+                              {(o.faltas || []).map((f, idx) => {
+                                return (
+                                  <div key={`falta-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full bg-red-50 text-red-700 border-red-200 opacity-80">
+                                    <div className="flex items-center truncate line-through">
+                                      <span className="mr-2 px-2 py-1 bg-red-100/50 rounded-md text-red-800 font-black shrink-0">{f.qtyMissing || 1}x</span> 
+                                      <span className="leading-tight truncate">{f.name}</span>
+                                    </div>
+                                    <span className="shrink-0 ml-2 font-black line-through">- R$ {(f.value || f.refundValue || 0).toFixed(2)}</span>
+                                  </div>
+                                )
+                              })}
                             </div>
                           </div>
           
                           <div className="w-full mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
-                              {/* A ETIQUETA DE FALTA AGORA FICA EM UMA LINHA ISOLADA */}
                               {temFalta && (
                                   <span className={`w-full py-1.5 rounded font-black text-[10px] flex items-center justify-center shadow-sm ${estornado ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
                                       {estornado ? 'FALTA ESTORNADA' : 'CONTÉM FALTAS'}
                                   </span>
                               )}
                               
-                              {/* OS BOTÕES DE AÇÃO FICAM LIVRES NA LINHA DE BAIXO */}
                               <div className="flex flex-col sm:flex-row gap-2 w-full">
                                 {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
                                     <button onClick={async () => {
@@ -1076,17 +1101,20 @@ export default function App() {
 
                                 <button onClick={() => {
                                     let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                    
                                     (o.items || []).forEach(i => {
-                                        const isFalta = o.faltas?.find(f => f.productId === i.id);
-                                        if (!isFalta) {
-                                            const quantidade = i.qtd || i.qty || 1;
-                                            text += `• ${quantidade}x ${i.name}\n`;
-                                        }
+                                        const quantidade = i.qtd || i.qty || 1;
+                                        text += `• ${quantidade}x ${i.name}\n`;
                                     });
+                                    
                                     if(temFalta) {
-                                        const itensFaltantes = o.faltas.map(f => f.name).join(', ');
-                                        text += `\n⚠️ *Aviso:* Tivemos falta no fornecedor para o(s) item(ns): ${itensFaltantes}. O valor da sua cesta já foi ajustado!\n`;
+                                        text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
+                                        o.faltas.forEach(f => {
+                                            text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`;
+                                        });
+                                        text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
                                     }
+                                    
                                     text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*. Te aguardamos!`;
                                     
                                     window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
