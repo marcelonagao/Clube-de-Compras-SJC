@@ -62,7 +62,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  
+  const [shortageSelectedOrders, setShortageSelectedOrders] = useState([]);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState('login');
   const [loginEmail, setLoginEmail] = useState('');
@@ -255,72 +255,62 @@ export default function App() {
 
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
-        // CORREÇÃO: Procura o item nos pedidos com qualquer status válido da Fase Beta!
+    
     const ordersToUpdate = orders.filter(o => 
        ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
        (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct))
     );
+    
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
        const quantidade = item.qtd || item.qty || 1;
-       return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item };
+       // Adicionamos o JC/Polo para facilitar a sua visualização
+       return { orderId: order.id, customer: order.customer, userEmail: order.email, refundValue: (item.price || 0) * quantidade, itemData: item, polo: order.polo };
     });
     
     setShortagePreview({ 
       product: products.find(p => String(p.id) === String(shortageSelectedProduct)), 
-      impact, 
-      totalRefund: impact.reduce((sum, imp) => sum + imp.refundValue, 0) 
+      impact 
     });
+    // Por padrão, o sistema já vem com todos os membros marcados para receber a falta
+    setShortageSelectedOrders(impact.map(i => i.orderId));
   };
 
   const confirmFaltaGlobal = async () => {
+    // Filtra para aplicar o estorno APENAS nos membros que você deixou com a caixinha marcada!
+    const selectedImpacts = shortagePreview.impact.filter(imp => shortageSelectedOrders.includes(imp.orderId));
+    
+    if (selectedImpacts.length === 0) return showToast('Selecione pelo menos um membro para aplicar a falta.', 'error');
+
+    if (!window.confirm(`Tem certeza que deseja registrar a falta e estornar o valor para os ${selectedImpacts.length} membros selecionados?`)) return;
+
     try {
-      for (const imp of shortagePreview.impact) {
+      for (const imp of selectedImpacts) {
         const orderRef = doc(db, "orders", imp.orderId);
-        const orderSnap = await getDoc(orderRef);
-        
-        if(orderSnap.exists()){
-           const orderData = orderSnap.data();
-           const faltasAtualizadas = [...(orderData.faltas || []), { productId: shortagePreview.product.id, name: imp.itemData.name, refundValue: imp.refundValue }];
-           
-           let orderUpdates = { faltas: faltasAtualizadas };
-
-           if (CONFIG_APENAS_COLETA) {
-            // FASE 1: Mantém o item na tela (para ficar riscado), mas zera ele na matemática da conta final!
-            const novoTotal = orderData.items.reduce((s, i) => {
-                // Se o item estiver na lista de faltas, ignoramos o valor dele na soma
-                const isFaltante = faltasAtualizadas.some(f => f.productId === i.id);
-                if (isFaltante) return s; 
-                
-                const quantidade = i.qtd || i.qty || 1;
-                return s + ((i.price || 0) * quantidade);
-            }, 0);
-            
-            // Repare que NÃO estamos mais alterando o orderUpdates.items!
-            orderUpdates.total = novoTotal;
-        }
-
-           await updateDoc(orderRef, orderUpdates);
-
-           if (!CONFIG_APENAS_COLETA) {
-               // FASE 2 (Futuro): Deposita o crédito na carteira do cliente.
-               const userQuery = query(collection(db, "users"), where("email", "==", imp.userEmail));
-               const uSnap = await getDocs(userQuery);
-               if (!uSnap.empty) {
-                 const uDoc = uSnap.docs[0];
-                 await updateDoc(doc(db, "users", uDoc.id), { walletBalance: (uDoc.data().walletBalance || 0) + imp.refundValue });
-               }
-           }
+        const orderDoc = await getDoc(orderRef);
+        if (orderDoc.exists()) {
+          const oData = orderDoc.data();
+          const updatedItems = oData.items.filter(i => String(i.id) !== String(shortagePreview.product.id));
+          const newFaltas = [...(oData.faltas || []), { productId: shortagePreview.product.id, name: shortagePreview.product.name, value: imp.refundValue }];
+          const newTotal = oData.total - imp.refundValue;
+          
+          await updateDoc(orderRef, { items: updatedItems, faltas: newFaltas, total: newTotal > 0 ? newTotal : 0 });
+          
+          const userRef = doc(db, "users", imp.userEmail);
+          const userDoc = await getDoc(userRef);
+          if (userDoc.exists()) {
+            await updateDoc(userRef, { pendingPixRefund: (userDoc.data().pendingPixRefund || 0) + imp.refundValue });
+          }
         }
       }
-      showToast(`Ajuste aplicado para ${shortagePreview.impact.length} pedidos!`);
-      setFaltaGlobalModal(false); setShortagePreview(null); setShortageSelectedProduct('');
-      
-      const oSnap = await getDocs(collection(db, "orders"));
-      setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch(e) { showToast('Erro ao processar', 'error'); }
+      showToast(`Falta aplicada com sucesso para ${selectedImpacts.length} membros!`);
+      setShortageSelectedProduct('');
+      setShortagePreview(null);
+      setShortageSelectedOrders([]);
+      fetchData(); // Recarrega os dados atualizados
+    } catch (e) { showToast('Erro ao aplicar falta global', 'error'); }
   };
 
   const exportSupplierCSV = () => {
@@ -1662,16 +1652,16 @@ export default function App() {
         </div>
       )}
 
-      {faltaGlobalModal && (
+{faltaGlobalModal && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 text-left">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-gray-100 relative overflow-hidden">
              <div className="absolute top-0 left-0 w-full h-1.5 bg-red-500"></div>
              <div className="flex justify-between items-start mb-5 border-b border-gray-100 pb-3">
-                <div>
+               <div>
                    <h3 className="text-lg font-black text-slate-800 tracking-tight">Falta Global</h3>
                    <p className="text-[10px] font-bold text-red-500 uppercase mt-0.5">Gerador Automático de Créditos</p>
                 </div>
-                <button onClick={() => {setFaltaGlobalModal(false); setShortagePreview(null);}} className="p-1.5 bg-gray-100 rounded-md"><X className="w-4 h-4"/></button>
+                <button onClick={() => {setFaltaGlobalModal(false); setShortagePreview(null); setShortageSelectedOrders([]);}} className="p-1.5 bg-gray-100 rounded-md"><X className="w-4 h-4"/></button>
              </div>
              {!shortagePreview ? (
                <div className="space-y-4">
@@ -1682,7 +1672,6 @@ export default function App() {
                     className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500"
                   >
                     <option value="">Selecione o produto ausente...</option>
-                    {/* FILTRO INTELIGENTE CONSERTADO */}
                     {products
                       .filter(p => orders.some(order => 
                          ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
@@ -1696,22 +1685,47 @@ export default function App() {
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
                </div>
              ) : (
-               <div>
-                 <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl mb-5">
-                    <h4 className="font-bold text-orange-900 mb-1 text-sm">Resumo da Ação</h4>
-                    <p className="text-xs text-orange-800 mb-3">
-                      {CONFIG_APENAS_COLETA ? `Irá abater o valor na cobrança de ` : `Irá devolver crédito a `}
-                      <strong>{shortagePreview.impact.length}</strong> {CONFIG_APENAS_COLETA ? 'pedidos.' : 'clientes.'}
-                    </p>
-                    <div className="flex justify-between items-center border-t border-orange-200 pt-3">
-                       <span className="font-bold text-orange-800 text-xs">{CONFIG_APENAS_COLETA ? 'Total Abatido:' : 'Total Estornado:'}</span>
-                       <span className="font-black text-xl text-orange-600">R$ {shortagePreview.totalRefund.toFixed(2)}</span>
-                    </div>
-                 </div>
-                 <button onClick={confirmFaltaGlobal} className="w-full bg-red-600 text-white font-bold py-3 rounded-lg shadow text-sm">
-                    {CONFIG_APENAS_COLETA ? 'CONFIRMAR FALTA E ABATER VALORES' : 'CONFIRMAR E GERAR CRÉDITOS'}
-                 </button>
-               </div>
+              <div className="bg-slate-50 p-5 rounded-2xl border border-gray-200 shadow-inner">
+                <h4 className="font-black text-slate-800 text-sm mb-3 flex items-center"><AlertTriangle className="w-4 h-4 mr-2 text-orange-500"/> Impacto da Falta: {shortagePreview.product?.name}</h4>
+                <p className="text-xs text-gray-500 font-medium mb-4">Selecione abaixo os membros que <strong>NÃO</strong> receberão o produto. O sistema fará o estorno automático apenas para os marcados.</p>
+                
+                <div className="space-y-2 mb-5 max-h-60 overflow-y-auto pr-2">
+                  {shortagePreview.impact.map((imp) => {
+                    const isChecked = shortageSelectedOrders.includes(imp.orderId);
+                    return (
+                      <div key={imp.orderId} onClick={() => {
+                          if (isChecked) setShortageSelectedOrders(prev => prev.filter(id => id !== imp.orderId));
+                          else setShortageSelectedOrders(prev => [...prev, imp.orderId]);
+                      }} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${isChecked ? 'bg-orange-50 border-orange-200 shadow-sm' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                         <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isChecked ? 'bg-orange-500 border-orange-600 text-white' : 'bg-white border-gray-300'}`}>
+                               {isChecked && <CheckCircle className="w-3 h-3" />}
+                            </div>
+                            <div>
+                               <p className="font-bold text-slate-800 text-xs">{imp.customer}</p>
+                               <p className="text-[10px] text-gray-500 mt-0.5">JC: {imp.polo}</p>
+                            </div>
+                         </div>
+                         <span className={`font-black text-xs ${isChecked ? 'text-orange-700' : 'text-gray-400 line-through'}`}>- R$ {imp.refundValue.toFixed(2)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="flex items-center justify-between bg-white p-4 rounded-xl border border-gray-200 mb-4 shadow-sm">
+                   <span className="font-bold text-slate-500 text-xs uppercase tracking-wider">Total a Estornar:</span>
+                   <span className="font-black text-orange-600 text-xl">
+                      R$ {shortagePreview.impact.filter(imp => shortageSelectedOrders.includes(imp.orderId)).reduce((sum, imp) => sum + imp.refundValue, 0).toFixed(2)}
+                   </span>
+                </div>
+
+                <div className="flex gap-3">
+                  <button onClick={() => {setShortagePreview(null); setShortageSelectedOrders([]);}} className="flex-1 bg-white border border-gray-300 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-50 transition text-sm">Cancelar</button>
+                  <button onClick={confirmFaltaGlobal} className="flex-1 bg-orange-600 text-white py-3 rounded-xl font-black shadow-lg hover:bg-orange-700 transition flex items-center justify-center text-sm">
+                    ⚠️ Confirmar Corte
+                  </button>
+                </div>
+              </div>
              )}
           </div>
         </div>
