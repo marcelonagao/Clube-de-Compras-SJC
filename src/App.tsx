@@ -1623,13 +1623,22 @@ export default function App() {
          </div>
        );
      }
-
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
-          const csvContent = "data:text/csv;charset=utf-8,SKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA\nEX-001;Sobrecoxa de Frango 1Kg;Carnes;22.50\nEX-002;Arroz Orgânico 5Kg;Mercearia;25.90";
+          let csvContent = "data:text/csv;charset=utf-8,SKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA\n";
+          
+          if (products && products.length > 0) {
+              // MÁGICA: Exporta o seu catálogo atual para você editar no Excel!
+              const rows = products.map(p => `${p.sku || ''};${p.name || ''};${p.category || 'Geral'};${(p.price || 0).toFixed(2)}`);
+              csvContent += rows.join("\n");
+          } else {
+              // Se a loja estiver vazia, gera o modelo padrão
+              csvContent += "EX-001;Sobrecoxa de Frango 1Kg;Carnes;22.50\nEX-002;Arroz Orgânico 5Kg;Mercearia;25.90";
+          }
+          
           const link = document.createElement("a");
           link.href = encodeURI(csvContent);
-          link.download = "Modelo_Importacao_Produtos.csv";
+          link.download = "Catalogo_Produtos.csv";
           link.click();
       };
 
@@ -1637,18 +1646,18 @@ export default function App() {
         <div className="space-y-6 text-left max-w-7xl mx-auto">
           <h2 className="text-2xl font-black text-slate-800 mb-4">Gestão de Catálogo</h2>
           
-          {/* BARRA DE IMPORTAÇÃO (COM O NOVO BOTÃO DE MODELO) */}
+          {/* BARRA DE IMPORTAÇÃO */}
           <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
              <div>
-                 <h3 className="font-black text-emerald-900 text-sm">Importação em Lote (CSV)</h3>
-                 <p className="text-xs text-emerald-700 mt-0.5 font-medium">Baixe o modelo, preencha no Excel e suba no sistema.</p>
+                 <h3 className="font-black text-emerald-900 text-sm">Importação & Edição em Lote (CSV)</h3>
+                 <p className="text-xs text-emerald-700 mt-0.5 font-medium">Baixe o seu catálogo atual, altere os preços no Excel e suba novamente.</p>
              </div>
              <div className="flex flex-wrap items-center gap-2">
                  <button onClick={baixarModeloCSV} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-lg font-black hover:bg-emerald-100 shadow-sm inline-flex items-center text-xs transition-colors">
-                   <Download className="w-4 h-4 mr-2"/> Baixar Modelo
+                   <Download className="w-4 h-4 mr-2"/> Baixar Catálogo
                  </button>
                  <label className="bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-black cursor-pointer hover:bg-emerald-800 shadow-sm inline-flex items-center text-xs transition-colors m-0">
-                   <Upload className="w-4 h-4 mr-2"/> Subir Tabela CSV
+                   <Upload className="w-4 h-4 mr-2"/> Subir Tabela
                    <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload}/>
                  </label>
              </div>
@@ -1657,7 +1666,7 @@ export default function App() {
           {/* NOVO LAYOUT LADO A LADO PARA NOTEBOOKS */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
              
-             {/* LADO ESQUERDO: FORMULÁRIO (FICA GRUDADO NA TELA) */}
+             {/* LADO ESQUERDO: FORMULÁRIO GRUDADO E AJUSTADO */}
              <div className="lg:col-span-5 sticky top-20">
                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                      <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center justify-between">
@@ -1685,24 +1694,40 @@ export default function App() {
                           setEditingProduct(null); e.target.reset(); showToast('Salvo!');
                        } catch(er){ showToast('Erro', 'error'); }
                      }} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="md:col-span-2 flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                        
+                        {/* GRID HÍBRIDO: Mistura de 1 Coluna com 2 Colunas para evitar esmagamento */}
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
                                 {editingProduct?.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
                              </div>
                              <label className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-emerald-100">Escolher Foto <input type="file" accept="image/*" className="hidden" /></label>
                           </div>
-                          <input name="name" defaultValue={editingProduct?.name} placeholder="Nome do Produto" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                          <input name="sku" defaultValue={editingProduct?.sku} placeholder="SKU / Código" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                          <input name="category" defaultValue={editingProduct?.category} placeholder="Categoria (ex: Carnes)" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                          <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                          <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Preço Promoção (R$)" className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
-                          <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Custo de Compra (R$)" required className="p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
-                          <div className="grid grid-cols-2 gap-2">
-                             <div><label className="text-[10px] font-bold ml-1 block text-gray-500">Qtd Cx Fornecedor</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm" /></div>
-                             <div><label className="text-[10px] font-bold text-orange-600 ml-1 block">Sobra na Sede</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
+                          
+                          {/* Linha Inteira */}
+                          <input name="name" defaultValue={editingProduct?.name} placeholder="Nome do Produto" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                          
+                          {/* Meias Linhas */}
+                          <div className="grid grid-cols-2 gap-3">
+                              <input name="sku" defaultValue={editingProduct?.sku} placeholder="SKU (Código)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                              <input name="category" defaultValue={editingProduct?.category} placeholder="Categoria" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
                           </div>
-                          <button type="submit" className="md:col-span-2 bg-slate-800 text-white font-black py-3 rounded-lg shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
+
+                          <div className="grid grid-cols-2 gap-3">
+                              <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                              <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Promoção (R$)" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
+                          </div>
+                          
+                          {/* Linha Inteira */}
+                          <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Custo de Compra (R$)" required className="w-full p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
+                          
+                          {/* Meias Linhas Ajustadas com Textos Curtos */}
+                          <div className="grid grid-cols-2 gap-3 items-end">
+                             <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1 truncate">Itens por Caixa</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
+                             <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Sobra na Sede</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
+                          </div>
+                          
+                          <button type="submit" className="w-full bg-slate-800 text-white font-black py-3 rounded-lg shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
                               {editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}
                           </button>
                         </div>
