@@ -890,7 +890,7 @@ export default function App() {
     };
 
     return (
-      <div className="p-4 max-w-7xl mx-auto pt-6 pb-24 font-sans text-left">
+      <div className="w-full px-4 lg:px-8 mx-auto pt-6 pb-24 font-sans text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
            <div>
              <h2 className="text-2xl font-black text-slate-800 tracking-tight">Gestão do Johrei Center</h2>
