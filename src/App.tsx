@@ -333,7 +333,7 @@ export default function App() {
     
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
-       const quantidade = item.qtd || item.qty || 1;
+       const quantidade = item.qtd || item.qty;
        return { 
            orderId: order.id, customer: order.customer, userEmail: order.email, 
            itemPrice: (item.price || 0), maxQty: quantidade, itemData: item, polo: order.polo 
@@ -1280,17 +1280,17 @@ export default function App() {
           <p className="mt-2">Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
         </div>
         
-        {Object.entries(summaryByPolo).map(([poloName, data]) => {
+        {Object.entries(summaryByPolo).map(([poloName, data], index) => {
            const poloTotals = {};
            data.customers.forEach(cust => {
                (cust.items || []).forEach(item => {
                    if(!poloTotals[item.name]) poloTotals[item.name] = 0;
-                   poloTotals[item.name] += item.qtd;
+                   poloTotals[item.name] += (Number(item.qtd) || Number(item.qty) || 1);
                });
            });
 
            return (
-            <div key={poloName} style={{ pageBreakBefore: 'always' }} className="mb-10 page-break-after">
+            <div key={poloName} style={{ pageBreakBefore: index === 0 ? 'auto' : 'always' }} className="mb-10 page-break-after">
               <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black">Destino: Unidade {poloName}</div>
               
               <div style={{ pageBreakInside: 'avoid' }} className="mb-6 border border-black p-4">
@@ -1313,7 +1313,7 @@ export default function App() {
                         {(cust.items || []).map((it, idx) => (
                            <div key={idx} className="flex items-center gap-2 mb-1">
                               <div className="w-4 h-4 border border-black inline-block"></div>
-                              <span>{it.qtd}x {it.name}</span>
+                              <span>☐ {item.qtd || item.qty}x {item.name}</span>
                            </div>
                         ))}
                      </div>
