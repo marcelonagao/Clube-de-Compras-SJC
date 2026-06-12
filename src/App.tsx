@@ -1290,10 +1290,10 @@ export default function App() {
            });
 
            return (
-            <div key={poloName} className="mb-10 page-break-after">
-              <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black">Destino: POLO {poloName}</div>
+            <div key={poloName} style={{ pageBreakBefore: 'always' }} className="mb-10 page-break-after">
+              <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black">Destino: Unidade {poloName}</div>
               
-              <div className="mb-6 border border-black p-4">
+              <div style={{ pageBreakInside: 'avoid' }} className="mb-6 border border-black p-4">
                 <h3 className="font-bold underline mb-2">Resumo Total para a Van:</h3>
                 <div className="grid grid-cols-2 gap-2">
                    {Object.entries(poloTotals).map(([itemName, qty]) => (
