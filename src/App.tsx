@@ -1313,7 +1313,7 @@ export default function App() {
                         {(cust.items || []).map((it, idx) => (
                            <div key={idx} className="flex items-center gap-2 mb-1">
                               <div className="w-4 h-4 border border-black inline-block"></div>
-                              <span>☐ {item.qtd || item.qty || 1}x {item.name}</span>
+                              <span>☐ {it.qtd || it.qty || 1}x {it.name}</span>
                            </div>
                         ))}
                      </div>
