@@ -31,7 +31,7 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
   document.head.appendChild(script);
 }
 
-const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba', 'Caçapava', 'Vila Adyana'];
+const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba', 'Caçapava', 'Vila Adyana', 'Pindamonhangaba', 'Cruzeiro','Guaratinguetá'];
 const polosEntregaDireta = ['Taubaté', 'Vila Adyana'];
 
 const compressImage = (file) => {
