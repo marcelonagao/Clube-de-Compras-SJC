@@ -1849,7 +1849,7 @@ export default function App() {
                            <div className="flex flex-col items-end gap-2 shrink-0 ml-2">
                              <span className="font-black text-slate-800 text-sm">R$ {p.price.toFixed(2)}</span>
                              <div className="flex gap-1.5">
-                             <button onClick={() => { setEditingProduct(p); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
+                             <button onClick={() => { setEditingProduct(p); setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
                                  <button onClick={() => {
                                        showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => {
                                            await deleteDoc(doc(db,"products",p.id));
