@@ -31,7 +31,7 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
   document.head.appendChild(script);
 }
 
-const polos = ['São José dos Campos (Sede)', 'Jacareí', 'Taubaté', 'Caraguatatuba', 'Caçapava', 'Vila Adyana', 'Pindamonhangaba', 'Cruzeiro','Guaratinguetá'];
+const polos = ['São José dos Campos (Sede)','Caçapava','Caraguatatuba','Cruzeiro','Guaratinguetá','Jacareí','Pindamonhangaba','Taubaté','Vila Adyana'];
 const polosEntregaDireta = ['Taubaté', 'Vila Adyana'];
 
 const compressImage = (file) => {
@@ -1755,7 +1755,7 @@ export default function App() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
              
              {/* LADO ESQUERDO: FORMULÁRIO */}
-             <div className="lg:col-span-5 sticky top-20">
+             <div className="w-full lg:col-span-5 lg:sticky lg:top-20 bg-transparent">
                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                      <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center justify-between">
                          {editingProduct ? '✏️ Editando Produto' : '✨ Novo Produto'}
@@ -2161,7 +2161,7 @@ export default function App() {
                        
                        <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
                            <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
-                             {polos.map(p => <option key={p} value={p}>Polo: {p}</option>)}
+                             {polos.map(p => <option key={p} value={p}>Unidade: {p}</option>)}
                            </select>
                        </div>
                        
