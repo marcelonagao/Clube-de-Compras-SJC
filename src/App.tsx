@@ -1729,7 +1729,7 @@ export default function App() {
 
       return (
         <div className="space-y-6 text-left max-w-7xl mx-auto">
-          <h2 className="text-2xl font-black text-slate-800 mb-4">Gestão de Catálogo</h2>
+          <h2 id="topo-catalogo" className="text-2xl font-black text-slate-800 mb-4">Gestão de Catálogo</h2>
           
           {/* BARRA DE IMPORTAÇÃO */}
           <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1849,7 +1849,7 @@ export default function App() {
                            <div className="flex flex-col items-end gap-2 shrink-0 ml-2">
                              <span className="font-black text-slate-800 text-sm">R$ {p.price.toFixed(2)}</span>
                              <div className="flex gap-1.5">
-                             <button onClick={() => { setEditingProduct(p); setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
+                             <button onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
                                  <button onClick={() => {
                                        showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => {
                                            await deleteDoc(doc(db,"products",p.id));
