@@ -1057,7 +1057,15 @@ export default function App() {
               </div>
             </div>
 
-            <button onClick={() => setShowManualOrder(!showManualOrder)} className="w-full bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">➕ Incluir Pedido Manual</button>
+            {/* Botões de Ação do Representante */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
+                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
+                </button>
+                <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
+                    ➕ Incluir Pedido Manual
+                </button>
+            </div>
 
             {showManualOrder && (
               <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-lg mt-3 transition-all">
@@ -1265,7 +1273,8 @@ export default function App() {
   };
 
   const renderDispatchPDF = () => {
-    const validOrders = orders.filter(o => (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo') && o.date);
+    // A MÁGICA AQUI: Se for gestor, pega tudo. Se for representante, pega só o polo dele.
+    const validOrders = orders.filter(o => (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo') && o.date && (isGestor ? true : o.polo === user?.polo));
     const summaryByPolo = {};
 
     validOrders.forEach(o => {
@@ -1276,10 +1285,13 @@ export default function App() {
     return (
       <div className="bg-white p-8 max-w-4xl mx-auto font-mono text-sm text-black">
         <div className="text-center mb-8 border-b-2 border-black pb-4">
-          <h1 className="text-2xl font-black uppercase">Romaneio de Despacho (Sede)</h1>
+          {/* Título dinâmico: Sede ou Representante */}
+          <h1 className="text-2xl font-black uppercase">
+            {isGestor ? 'Romaneio de Despacho (Sede)' : `Lista de Conferência - JC ${user?.polo}`}
+          </h1>
           <p className="mt-2">Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
         </div>
-        
+
         {Object.entries(summaryByPolo).map(([poloName, data], index) => {
            const poloTotals = {};
            data.customers.forEach(cust => {
