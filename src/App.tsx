@@ -1787,13 +1787,14 @@ export default function App() {
                        e.preventDefault();
                        const fd = new FormData(e.target);
                        const np = { 
-                          name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
-                          price: parseFloat(fd.get('price').replace(',','.')), 
-                          promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
-                          cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
-                          stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
-                          image: editingProduct?.image || '📦' 
-                       };
+                        name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
+                        price: parseFloat(fd.get('price').replace(',','.')), 
+                        promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
+                        cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
+                        stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
+                        image: editingProduct?.image || '📦',
+                        pausado: editingProduct?.pausado || false // <-- Regra adicionada!
+                     };
                        const fileInput = e.target.querySelector('input[type="file"]');
                        if (fileInput.files[0]) { np.image = await compressImage(fileInput.files[0]); }
 
