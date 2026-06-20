@@ -555,8 +555,8 @@ export default function App() {
   // --- RENDERS ---
 
   const renderShop = () => {
-    const filteredProducts = products.filter(p => (shopCategory === 'Todos' || p.category === shopCategory) && (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
-    const promoProducts = products.filter(p => Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price));
+    const filteredProducts = products.filter(p => !p.pausado && (shopCategory === 'Todos' || p.category === shopCategory) && (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const promoProducts = products.filter(p => !p.pausado && Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price));
 
     return (
       <div className="pb-24 px-4 max-w-5xl mx-auto font-sans">
@@ -1723,7 +1723,16 @@ export default function App() {
             } catch(e) { showToast('Erro ao zerar estoque', 'error'); }
         }, 'danger');
     };
-
+    const handleTogglePausa = async (produtoId, estadoAtual) => {
+      try {
+          await updateDoc(doc(db, "products", produtoId), { pausado: !estadoAtual });
+          showToast(estadoAtual ? 'Produto reativado na vitrine!' : 'Produto pausado com sucesso!');
+          // Atualiza a tela imediatamente sem precisar recarregar
+          setProducts(prev => prev.map(p => p.id === produtoId ? { ...p, pausado: !estadoAtual } : p));
+      } catch(e) {
+          showToast('Erro ao atualizar status', 'error');
+      }
+  };
       // Extrai a lista de categorias únicas existentes para o Dropdown
       const uniqueCategories = Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort();
 
@@ -1835,7 +1844,10 @@ export default function App() {
                                {p.image?.length > 50 ? <img src={p.image} className="w-full h-full object-cover"/> : <span className="text-sm">📦</span>}
                              </div>
                              <div className="truncate text-left">
-                                 <p className="font-bold text-slate-800 text-sm truncate leading-tight">{p.name}</p>
+                             <p className="font-bold text-slate-800 text-sm truncate leading-tight">
+                                    {p.name}
+                                    {p.pausado && <span className="ml-2 bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-black">Pausado</span>}
+                                 </p>
                                  <p className="text-[10px] text-gray-400 mt-0.5 font-medium">SKU: {p.sku} • Categoria: {p.category}</p>
                                  
                                  {/* EXIBIÇÃO COMPLETA DOS DEMAIS CAMPOS NOS CARDS */}
@@ -1849,12 +1861,11 @@ export default function App() {
                            <div className="flex flex-col items-end gap-2 shrink-0 ml-2">
                              <span className="font-black text-slate-800 text-sm">R$ {p.price.toFixed(2)}</span>
                              <div className="flex gap-1.5">
-                             <button onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
-                                 <button onClick={() => {
-                                       showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => {
-                                           await deleteDoc(doc(db,"products",p.id));
-                                       }, 'danger');
-                                   }} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"><Trash2 className="w-3 h-3"/></button>
+                                 <button onClick={() => handleTogglePausa(p.id, p.pausado)} className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center text-[10px] font-bold ${p.pausado ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>
+                                    {p.pausado ? '▶ Ativar' : '⏸ Pausar'}
+                                 </button>
+                                 <button onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
+                                 <button onClick={() => { showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => { await deleteDoc(doc(db,"products",p.id)); }, 'danger'); }} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"><Trash2 className="w-3 h-3"/></button>
                              </div>
                            </div>
                          </div>
