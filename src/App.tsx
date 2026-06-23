@@ -842,8 +842,14 @@ export default function App() {
                   <p className="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-1">{order.date ? new Date(order.date).toLocaleDateString() : 'N/D'}</p>
                   <p className="font-black text-slate-800 text-lg">Pedido <span className="text-emerald-700">#{order.id.slice(0, 5)}</span></p>
                 </div>
-                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center ${order.status === 'aguardando_pagamento' ? 'bg-orange-50 text-orange-700 border border-orange-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
-                   {order.status === 'pago' ? <><CheckCircle className="w-3 h-3 mr-1"/> Confirmado</> : 'Aguardando Pagamento'}
+                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center ${order.status === 'pago' || order.status === 'pago_polo' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
+                   {order.status === 'pago' || order.status === 'pago_polo' ? (
+                       <><CheckCircle className="w-3 h-3 mr-1"/> Pago</>
+                   ) : CONFIG_APENAS_COLETA ? (
+                       'Pagar na Retirada'
+                   ) : (
+                       'Aguardando Pagamento'
+                   )}
                 </span>
               </div>
 
