@@ -778,7 +778,17 @@ export default function App() {
           </div>
         )}
 
-        <button onClick={() => processOrder(finalTotal, paymentMethod, walletDiscount)} disabled={isProcessingPayment} className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-800 transition-all text-base flex items-center justify-center">
+<button onClick={() => {
+            if (CONFIG_APENAS_COLETA) {
+                showConfirm(
+                    'Confirmar Pedido', 
+                    `Sua cesta deu R$ ${finalTotal.toFixed(2)}. Lembre-se: O pagamento será feito presencialmente na retirada! Deseja enviar o pedido para a Sede?`, 
+                    () => processOrder(finalTotal, paymentMethod, walletDiscount)
+                );
+            } else {
+                processOrder(finalTotal, paymentMethod, walletDiscount);
+            }
+        }} disabled={isProcessingPayment} className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-800 transition-all text-base flex items-center justify-center">
           {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : (CONFIG_APENAS_COLETA ? 'Concluir Pedido (Pagar na Retirada)' : (finalTotal <= 0 ? 'Concluir Pedido (Usar Saldo)' : 'Gerar Pagamento Seguro'))}
         </button>
       </div>
@@ -952,6 +962,7 @@ export default function App() {
     
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
+    const totalGeralPolo = totalAindaAReceber + totalArrecadadoPolo; 
 
     const ordersByMonth = repOrders.reduce((acc, order) => {
       const d = order.date ? new Date(order.date) : new Date();
@@ -1042,24 +1053,33 @@ export default function App() {
 
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-5 text-center shadow-md flex flex-col justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Card 1: Fatura Total (Obrigação com a Sede) */}
+              <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Ciclo</p>
+                <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2)}</h1>
+                <p className="text-[9px] text-slate-300 mt-1 font-medium">Soma de todas as encomendas do polo</p>
+              </div>
+
+              {/* Card 2: Caixa do JC (O que já está no bolso) */}
+              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Total Coletado no JC</p>
-                  <h1 className="text-3xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
-                  <p className="text-[10px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} caixas pagas na unidade</p>
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa da Unidade</p>
+                  <h1 className="text-2xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
+                  <p className="text-[9px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} pagamentos recebidos</p>
                 </div>
                 {totalArrecadadoPolo > 0 && (
-                  <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs py-2.5 rounded-xl shadow mt-4 transition">
-                    💸 Enviar Repasse via PIX à Sede
+                  <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] py-2 rounded-xl shadow mt-3 transition">
+                    💸 Enviar Repasse
                   </button>
                 )}
               </div>
 
-              <div className="bg-slate-100 border-2 border-slate-200 rounded-2xl p-5 text-center shadow-sm">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">⏳ Total Pendente de Coleta</p>
-                <h1 className="text-3xl font-black text-slate-800 mt-1">R$ {totalAindaAReceber.toFixed(2)}</h1>
-                <p className="text-[10px] text-slate-500 mt-1 font-medium">{pedidosConfirmados.length} membros aguardando retirada</p>
+              {/* Card 3: Fiado / Pendente */}
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center">
+                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber de Clientes</p>
+                <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2)}</h1>
+                <p className="text-[9px] text-orange-600 mt-1 font-medium">{pedidosConfirmados.length} membros pendentes</p>
               </div>
             </div>
 
