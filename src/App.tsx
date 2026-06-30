@@ -23,6 +23,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
   const script = document.createElement('script');
@@ -45,11 +46,16 @@ const compressImage = (file) => {
         const canvas = document.createElement('canvas');
         const MAX_WIDTH = 400;
         const scaleSize = MAX_WIDTH / img.width;
+      
         canvas.width = MAX_WIDTH;
         canvas.height = img.height * scaleSize;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        
+        // A MÁGICA MUDA AQUI: Em vez de texto Base64, geramos um arquivo binário (Blob) leve!
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/jpeg', 0.7);
       };
     };
   });
@@ -1821,8 +1827,21 @@ export default function App() {
                         image: editingProduct?.image || '📦',
                         pausado: editingProduct?.pausado || false // <-- Regra adicionada!
                      };
-                       const fileInput = e.target.querySelector('input[type="file"]');
-                       if (fileInput.files[0]) { np.image = await compressImage(fileInput.files[0]); }
+                     const fileInput = e.target.querySelector('input[type="file"]');
+                     if (fileInput.files[0]) { 
+                         // 1. Comprime a imagem gerando o Blob
+                         const imageBlob = await compressImage(fileInput.files[0]);
+                         
+                         // 2. Cria uma referência lá no Storage com um nome único (Data + Nome do arquivo)
+                         const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
+                         const imageRef = ref(storage, imageName);
+                         
+                         // 3. Faz o upload do pacote para o Firebase Storage
+                         await uploadBytes(imageRef, imageBlob);
+                         
+                         // 4. Pega o link seguro (.jpg) que o Storage gerou e salva na variável do produto!
+                         np.image = await getDownloadURL(imageRef);
+                     }
 
                        try { 
                           if(editingProduct) await updateDoc(doc(db,"products",editingProduct.id), np);
