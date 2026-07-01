@@ -1343,8 +1343,19 @@ export default function App() {
   };
 
   const renderDispatchPDF = () => {
-    // A MÁGICA AQUI: Se for gestor, pega tudo. Se for representante, pega só o polo dele.
-    const validOrders = orders.filter(o => (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo') && o.date && (isGestor ? true : o.polo === user?.polo));
+    // A MÁGICA AQUI: O Romaneio agora obedece a etiqueta de Lote (Data de Entrega)
+    const validOrders = orders.filter(o => {
+        const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
+        const hasValidPolo = isGestor ? true : o.polo === user?.polo;
+        const hasDate = !!o.date;
+
+        // Regra de Retrocompatibilidade e Filtro
+        const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
+        const matchesLote = mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter;
+
+        return hasValidStatus && hasDate && hasValidPolo && matchesLote;
+    });
+
     const summaryByPolo = {};
 
     validOrders.forEach(o => {
@@ -1360,6 +1371,15 @@ export default function App() {
             {isGestor ? 'Romaneio de Despacho (Sede)' : `Lista de Conferência - JC ${user?.polo}`}
           </h1>
           <p className="mt-2">Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
+          
+          {/* 👇 AVISO GIGANTE NO PDF PARA O MOTORISTA 👇 */}
+          {mesaDateFilter !== 'Todos' && (
+             <div className="mt-3">
+                 <span className="font-black text-lg bg-gray-200 px-4 py-1.5 border-2 border-black uppercase tracking-widest">
+                   Lote: {mesaDateFilter}
+                 </span>
+             </div>
+          )}
         </div>
 
         {Object.entries(summaryByPolo).map(([poloName, data], index) => {
