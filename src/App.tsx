@@ -114,7 +114,10 @@ export default function App() {
   const [manualCart, setManualCart] = useState([]); // Agora é um mini-carrinho!
   const [manualItemProduct, setManualItemProduct] = useState('');
   const [manualItemQty, setManualItemQty] = useState(1);
+
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
+  const [manualSelectedPolo, setManualSelectedPolo] = useState('');
+
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
   const [repManualItems, setRepManualItems] = useState([]);
@@ -1033,18 +1036,21 @@ export default function App() {
 
       const manualTotal = manualCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
+      // A MÁGICA DA SEGURANÇA AQUI:
+      const poloDestino = isGestor ? (manualSelectedPolo || viewingPolo) : viewingPolo;
+
       const manualOrder = {
         customer: `${manualClientName} (Manual)`, 
         email: '', 
         whatsapp: manualClientWhatsapp, 
-        polo: viewingPolo, 
+        polo: poloDestino, // 👈 Usa o destino validado
         cpf: 'Não informado',
         total: manualTotal, 
         method: 'manual', 
         status: 'confirmado', 
         status_nfe: 'pendente',
         date: new Date().toISOString(), 
-        deliveryDate: manualDeliveryDate || 'Ciclo Mensal', // 👈 A ETIQUETA MÁGICA AQUI
+        deliveryDate: manualDeliveryDate || 'Ciclo Mensal', 
         items: manualCart, 
         faltas: []
       };
@@ -1056,6 +1062,7 @@ export default function App() {
         setManualClientName('');
         setManualClientWhatsapp('');
         setManualCart([]);
+        setManualSelectedPolo('')
       } catch (e) { showToast('Erro ao salvar', 'error'); }
     };
 
@@ -1131,6 +1138,15 @@ export default function App() {
                   {/* 👇 NOVO CAMPO PARA O GESTOR ESCOLHER O LOTE 👇 */}
                   <input type="text" placeholder="Data Entrega (Ex: 30/06)" value={manualDeliveryDate} onChange={e => setManualDeliveryDate(e.target.value)} className="w-full p-3 border border-emerald-200 bg-emerald-50 rounded-lg text-sm font-bold text-emerald-800" />
                 </div>
+                {/* 👇 O SELETOR BLINDADO APENAS PARA GESTORES 👇 */}
+                {isGestor && (
+                  <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Destino do Pedido (Visão Master)</p>
+                    <select value={manualSelectedPolo || viewingPolo} onChange={e => setManualSelectedPolo(e.target.value)} className="w-full p-3 border border-gray-300 bg-white rounded-lg text-sm font-bold text-slate-800 outline-none">
+                        {polos.map(p => <option key={p} value={p}>Lançar para: {p}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
                   <div className="flex flex-col gap-2">
@@ -1700,7 +1716,7 @@ export default function App() {
                      </select>
                  </div>
                  {/* 👆 FIM DO NOVO FILTRO 👆 */}
-                 
+
                   <div className="flex flex-col sm:flex-row gap-3">
                       <button onClick={generatePurchasePlan} className="bg-emerald-700 text-white font-black px-6 py-4 rounded-xl shadow-lg hover:bg-emerald-800 flex items-center justify-center text-sm transition-transform hover:scale-[1.02] flex-1"><Package className="w-5 h-5 mr-2"/> Iniciar Mesa de Compras</button>
                       <button onClick={() => setIsPrintMode(true)} className="bg-white text-emerald-800 font-black px-6 py-4 rounded-xl shadow-sm border-2 border-emerald-200 hover:bg-emerald-50 flex items-center justify-center text-sm flex-1"><Printer className="w-5 h-5 mr-2"/> Emitir Romaneio (Logística Sede)</button>
