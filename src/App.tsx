@@ -1409,7 +1409,7 @@ export default function App() {
               <div>
                 <h3 className="font-bold mb-3">Separação por Cliente:</h3>
                 {data.customers.map(cust => (
-                   <div key={cust.id} className="mb-4 border-b border-black pb-2">
+                   <div key={cust.id} style={{ pageBreakInside: 'avoid' }} className="mb-4 border-b border-black pb-2">
                      <p className="font-bold bg-gray-100 p-1">Cliente: {cust.customer} (Pedido #{cust.id.slice(0,5)})</p>
                      <div className="pl-4 mt-1">
                         {(cust.items || []).map((it, idx) => (
