@@ -114,10 +114,11 @@ export default function App() {
   const [manualCart, setManualCart] = useState([]); // Agora é um mini-carrinho!
   const [manualItemProduct, setManualItemProduct] = useState('');
   const [manualItemQty, setManualItemQty] = useState(1);
-  
+  const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
   const [repManualItems, setRepManualItems] = useState([]);
+  const [mesaDateFilter, setMesaDateFilter] = useState('Todos');
 
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
@@ -401,7 +402,15 @@ export default function App() {
   };
 
   const generatePurchasePlan = () => {
-    const validOrders = orders.filter(o => o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000));
+    const validOrders = orders.filter(o => {
+        // A MÁGICA DA SEGURANÇA: Se o pedido é antigo e não tem a etiqueta, 
+        // o sistema carimba ele provisoriamente como 'Ciclo Mensal' na hora de ler!
+        const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
+        
+        return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
+               new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000) &&
+               (mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter);
+    });
     
     const plan = [];
     products.forEach(p => {
@@ -1025,9 +1034,19 @@ export default function App() {
       const manualTotal = manualCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
 
       const manualOrder = {
-        customer: `${manualClientName} (Manual)`, email: '', whatsapp: manualClientWhatsapp, polo: viewingPolo, cpf: 'Não informado',
-        total: manualTotal, method: 'manual', status: 'confirmado', status_nfe: 'pendente',
-        date: new Date().toISOString(), items: manualCart, faltas: []
+        customer: `${manualClientName} (Manual)`, 
+        email: '', 
+        whatsapp: manualClientWhatsapp, 
+        polo: viewingPolo, 
+        cpf: 'Não informado',
+        total: manualTotal, 
+        method: 'manual', 
+        status: 'confirmado', 
+        status_nfe: 'pendente',
+        date: new Date().toISOString(), 
+        deliveryDate: manualDeliveryDate || 'Ciclo Mensal', // 👈 A ETIQUETA MÁGICA AQUI
+        items: manualCart, 
+        faltas: []
       };
 
       try {
@@ -1106,9 +1125,11 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 text-sm">Novo Pedido Manual</h3>
                   <button onClick={() => setShowManualOrder(false)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                  <input type="text" placeholder="Nome do Membro" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm font-medium outline-none focus:border-emerald-500" />
-                  <input type="tel" placeholder="WhatsApp (Ex: 11999999999)" value={manualClientWhatsapp} onChange={e => setManualClientWhatsapp(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm font-medium outline-none focus:border-emerald-500" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                  <input type="text" placeholder="Nome do Membro" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm" />
+                  <input type="tel" placeholder="WhatsApp (Ex: 11999999999)" value={manualClientWhatsapp} onChange={e => setManualClientWhatsapp(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm" />
+                  {/* 👇 NOVO CAMPO PARA O GESTOR ESCOLHER O LOTE 👇 */}
+                  <input type="text" placeholder="Data Entrega (Ex: 30/06)" value={manualDeliveryDate} onChange={e => setManualDeliveryDate(e.target.value)} className="w-full p-3 border border-emerald-200 bg-emerald-50 rounded-lg text-sm font-bold text-emerald-800" />
                 </div>
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
@@ -1657,6 +1678,8 @@ export default function App() {
      }
 
      if (adminTab === 'compras') {
+      // 1. O SISTEMA LÊ AS DATAS AQUI:
+      const datasExistentes = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
        return (
          <div className="space-y-6 text-left max-w-6xl mx-auto">
            <h2 className="text-2xl font-black text-emerald-900 mb-4">Inteligência de Compras</h2>
@@ -1666,6 +1689,18 @@ export default function App() {
                   <h3 className="font-black text-emerald-900 text-lg mb-1">Mesa Operacional</h3>
                   <p className="text-sm font-medium text-emerald-800 mb-4 max-w-2xl">O algoritmo calculará o envio direto para os JCs de Cross-docking e organizará a demanda da Sede. Você poderá alterar as quantidades de compra sugeridas antes de gerar o arquivo do fornecedor.</p>
                   
+                  {/* 👇 2. O NOVO FILTRO ENTRA EXATAMENTE AQUI 👇 */}
+                 <div className="mb-2 bg-white p-4 border border-emerald-100 rounded-xl shadow-sm flex flex-col sm:flex-row sm:items-center gap-4">
+                     <span className="font-bold text-slate-800 text-sm shrink-0">Filtrar Lote:</span>
+                     <select value={mesaDateFilter} onChange={e => setMesaDateFilter(e.target.value)} className="p-2.5 border border-emerald-200 rounded-lg outline-none font-black text-emerald-800 bg-emerald-50 text-sm flex-1 cursor-pointer">
+                         <option value="Todos">Mostrar Tudo Misturado</option>
+                         {datasExistentes.map(data => (
+                             <option key={data} value={data}>Lote: {data}</option>
+                         ))}
+                     </select>
+                 </div>
+                 {/* 👆 FIM DO NOVO FILTRO 👆 */}
+                 
                   <div className="flex flex-col sm:flex-row gap-3">
                       <button onClick={generatePurchasePlan} className="bg-emerald-700 text-white font-black px-6 py-4 rounded-xl shadow-lg hover:bg-emerald-800 flex items-center justify-center text-sm transition-transform hover:scale-[1.02] flex-1"><Package className="w-5 h-5 mr-2"/> Iniciar Mesa de Compras</button>
                       <button onClick={() => setIsPrintMode(true)} className="bg-white text-emerald-800 font-black px-6 py-4 rounded-xl shadow-sm border-2 border-emerald-200 hover:bg-emerald-50 flex items-center justify-center text-sm flex-1"><Printer className="w-5 h-5 mr-2"/> Emitir Romaneio (Logística Sede)</button>
