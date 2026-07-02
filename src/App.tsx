@@ -406,29 +406,29 @@ export default function App() {
 
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
-    
     const ordersToUpdate = orders.filter(o => 
        ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
        (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct))
     );
-    
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
+    // MÁGICA NOVA: Pega o nome do produto diretamente do pedido, ignorando o catálogo
+    let foundProductName = '';
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
+       if (item && !foundProductName) foundProductName = item.name;
        const quantidade = item.qtd || item.qty;
        return { 
            orderId: order.id, customer: order.customer, userEmail: order.email, 
            itemPrice: (item.price || 0), maxQty: quantidade, itemData: item, polo: order.polo 
        };
     });
-    
-    // O sistema ainda marca a falta total por padrão para agilizar, mas agora você pode diminuir!
     const initialSelections = {};
     impact.forEach(imp => { initialSelections[imp.orderId] = imp.maxQty; });
-
+    
+    // Injeta o produto fantasma direto na tela de impacto
     setShortagePreview({ 
-      product: products.find(p => String(p.id) === String(shortageSelectedProduct)), 
+      product: { id: shortageSelectedProduct, name: foundProductName }, 
       impact 
     });
     setShortageSelectedOrders(initialSelections);
@@ -2409,14 +2409,22 @@ export default function App() {
                     className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500"
                   >
                     <option value="">Selecione o produto ausente...</option>
-                    {products
-                      .filter(p => orders.some(order => 
-                         ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
-                         (order.items || []).some(item => String(item.id) === String(p.id))
-                      ))
-                      .map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
+                    {(() => {
+                        // LÊ TODOS OS ITENS REALMENTE VENDIDOS NO CICLO
+                        const itemsMap = new Map();
+                        orders.forEach(order => {
+                          if (['confirmado', 'pago_polo', 'pago'].includes(order.status)) {
+                            (order.items || []).forEach(item => {
+                              if (!itemsMap.has(item.id)) itemsMap.set(item.id, item.name);
+                            });
+                          }
+                        });
+                        return Array.from(itemsMap.entries())
+                          .sort((a, b) => a[1].localeCompare(b[1]))
+                          .map(([id, name]) => (
+                            <option key={id} value={id}>{name}</option>
+                          ));
+                    })()}
                   </select>
                  </div>
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
