@@ -119,9 +119,22 @@ export default function App() {
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
 
+  const [expressModalOpen, setExpressModalOpen] = useState(false);
+  const [expressQty, setExpressQty] = useState(1);
+
   // --- CONFIGURAÇÕES GLOBAIS DO SISTEMA ---
   // 1. A TUA PASTA FINANCEIRA ATUAL (Mudas isto no dia 1 de cada mês/ciclo)
   const mesReferenciaGlobal = "Julho/2026"; 
+
+  const campanhaAtiva = {
+    ativo: true, 
+    titulo: "🚨 OFERTA RELÂMPAGO",
+    produtoNome: "Bandeja de Ovos Jumbo (30 un)",
+    preco: 25.35, 
+    dataEntrega: "30/06 - Ovos", // A etiqueta que vai para a Logística
+    mesReferencia: mesReferenciaGlobal, // A etiqueta que vai para o Dashboard (Julho)
+    cor: "bg-red-600"
+};
 
   // 2. O CICLO LOGÍSTICO DAS CARNES
   const cicloMensalAtivo = {
@@ -329,6 +342,41 @@ export default function App() {
       setIsProcessingPayment(false); showToast('Erro no pedido', 'error'); 
     }
   };
+
+  const handleExpressCheckout = async () => {
+    setIsProcessingPayment(true);
+    const total = campanhaAtiva.preco * expressQty;
+
+    const expressOrder = {
+        customer: user?.name || 'Cliente',
+        email: user?.email || '',
+        whatsapp: user?.whatsapp || '',
+        polo: user?.polo || polos[0],
+        cpf: 'Não informado',
+        total: total,
+        method: 'pix',
+        status: CONFIG_APENAS_COLETA ? 'confirmado' : 'aguardando_pagamento',
+        status_nfe: 'pendente',
+        date: new Date().toISOString(),
+        deliveryDate: campanhaAtiva.dataEntrega, // Etiqueta da Van
+        cicloFinanceiro: campanhaAtiva.mesReferencia, // Etiqueta do Dashboard
+        items: [{ id: 'oferta-1', name: campanhaAtiva.produtoNome, price: campanhaAtiva.preco, qtd: expressQty, qty: expressQty }],
+        faltas: []
+    };
+
+    try {
+        await addDoc(collection(db, "orders"), expressOrder);
+        showToast('Pedido Expresso Confirmado!', 'success');
+        setExpressModalOpen(false);
+        setExpressQty(1);
+        setIsProcessingPayment(false);
+        setCurrentScreen('my_orders'); // Atira o cliente direto para ver o recibo
+    } catch (error) {
+        showToast('Erro ao processar pedido.', 'error');
+        setIsProcessingPayment(false);
+    }
+};
+
   const simulateMercadoPagoApproval = async () => {
     if(pendingOrder) { 
       await updateDoc(doc(db, "orders", pendingOrder.id), { status: 'pago' }); 
@@ -612,6 +660,20 @@ export default function App() {
              </button>
           ))}
         </div>
+
+        {/* 👇 O BANNER DA OFERTA RELÂMPAGO 👇 */}
+        {campanhaAtiva.ativo && storeMode !== 'pausado' && !searchTerm && shopCategory === 'Todos' && (
+          <div onClick={() => setExpressModalOpen(true)} className={`${campanhaAtiva.cor} rounded-2xl p-5 mb-8 text-white shadow-xl cursor-pointer transform transition hover:scale-[1.02] flex flex-col sm:flex-row items-center justify-between gap-4 border-2 border-white/20`}>
+            <div>
+               <h3 className="text-xl font-black mb-1">{campanhaAtiva.titulo}</h3>
+               <p className="font-medium text-sm text-red-100">Clique aqui e reserve a sua: <span className="font-bold text-white">{campanhaAtiva.produtoNome}</span></p>
+            </div>
+            <button className="bg-white text-red-700 font-black px-6 py-3 rounded-xl shadow-sm hover:bg-gray-50 whitespace-nowrap w-full sm:w-auto">
+               Comprar Agora
+            </button>
+          </div>
+        )}
+        {/* 👆 FIM DO BANNER 👆 */}
 
         {/* Banners Inteligentes das Fases da Loja */}
         {storeMode === 'estoque' && (
@@ -2308,6 +2370,39 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* 👇 O PASSO 4 ENTRA EXATAMENTE AQUI 👇 */}
+      {expressModalOpen && (
+         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 text-left">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
+               <button onClick={() => setExpressModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+               
+               <div className="mb-6 mt-2 text-center">
+                   <h3 className="font-black text-2xl text-slate-800 leading-tight mb-2">{campanhaAtiva.produtoNome}</h3>
+                   <span className="bg-red-50 text-red-700 font-bold text-[10px] px-2.5 py-1 rounded-md uppercase tracking-wider border border-red-100">Entrega: {campanhaAtiva.dataEntrega}</span>
+               </div>
+
+               <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6">
+                  <span className="font-bold text-gray-600 text-sm">Quantidade:</span>
+                  <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                     <button onClick={() => setExpressQty(Math.max(1, expressQty - 1))} className="w-12 h-12 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black text-xl transition-colors">-</button>
+                     <span className="w-10 text-center font-black text-slate-800 text-lg">{expressQty}</span>
+                     <button onClick={() => setExpressQty(expressQty + 1)} className="w-12 h-12 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black text-xl transition-colors">+</button>
+                  </div>
+               </div>
+
+               <div className="flex justify-between items-end mb-6 px-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pb-1">Total a pagar<br/>na retirada:</span>
+                  <span className="text-4xl font-black text-emerald-700">R$ {(campanhaAtiva.preco * expressQty).toFixed(2).replace('.', ',')}</span>
+               </div>
+
+               <button onClick={handleExpressCheckout} disabled={isProcessingPayment} className="w-full bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-700 transition flex justify-center items-center text-base">
+                  {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Pedido Expresso'}
+               </button>
+            </div>
+         </div>
+      )}
+      {/* 👆 FIM DO PASSO 4 👆 */}
 
       {isPrintMode ? renderDispatchPDF() : (
         <>
