@@ -119,6 +119,16 @@ export default function App() {
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
 
+  // --- CONFIGURAÇÕES GLOBAIS DO SISTEMA ---
+  // 1. A TUA PASTA FINANCEIRA ATUAL (Mudas isto no dia 1 de cada mês/ciclo)
+  const mesReferenciaGlobal = "Julho/2026"; 
+
+  // 2. O CICLO LOGÍSTICO DAS CARNES
+  const cicloMensalAtivo = {
+      dataEntrega: "Ciclo Mensal - Julho", 
+      mesReferencia: mesReferenciaGlobal 
+  };
+
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
   const [repManualItems, setRepManualItems] = useState([]);
@@ -280,6 +290,8 @@ export default function App() {
         status_nfe: 'pendente',
         walletDiscountApplied: walletDiscount, 
         date: new Date().toISOString(), 
+        deliveryDate: cicloMensalAtivo.dataEntrega, // 👈 ADICIONA ISTO (Lote da Logística)
+        cicloFinanceiro: cicloMensalAtivo.mesReferencia, // 👈 ADICIONA ISTO (Lote do Financeiro)
         items: cart.map(i => ({ id: i.id, name: i.name, qtd: i.qtd, price: getActivePrice(i) })),
         faltas: []
       };
@@ -1052,6 +1064,7 @@ export default function App() {
         status_nfe: 'pendente',
         date: new Date().toISOString(), 
         deliveryDate: manualDeliveryDate || 'Ciclo Mensal', 
+        cicloFinanceiro: mesReferenciaGlobal,
         items: manualCart, 
         faltas: []
       };
