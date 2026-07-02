@@ -1549,7 +1549,7 @@ export default function App() {
                </div>
             </div>
 
-            {/* SUPER DASHBOARD FINANCEIRO (MELHORADO) */}
+            {/* SUPER DASHBOARD FINANCEIRO (LAYOUT REFORMULADO) */}
             <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
                 
@@ -1558,34 +1558,43 @@ export default function App() {
                    <p className="text-4xl font-black tracking-tight">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
                 </div>
 
-                {/* 👇 AGORA COM 5 COLUNAS PARA RESPIRAR MELHOR 👇 */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 border-t border-slate-700 pt-5 relative z-10">
-                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Membros</p>
-                        <p className="text-lg font-black text-white">{uniqueCustomers.length}</p>
-                        <div className="flex gap-2 mt-1 text-[9px] font-bold">
-                            <span className="text-emerald-400">+{membrosNovos} Nov.</span>
-                            <span className="text-blue-400">{membrosRecorrentes} Rec.</span>
+                {/* BLOCOS DIVIDIDOS EM DUAS LINHAS PARA RESPIRAR */}
+                <div className="flex flex-col gap-3 border-t border-slate-700 pt-5 relative z-10">
+                    
+                    {/* LINHA 1: CLIENTES E VOLUME */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Membros</p>
+                            <div className="flex items-end gap-3">
+                                <p className="text-2xl font-black text-white">{uniqueCustomers.length}</p>
+                                <div className="flex flex-col text-[9px] font-bold pb-1">
+                                    <span className="text-emerald-400">+{membrosNovos} Novos</span>
+                                    <span className="text-blue-400">{membrosRecorrentes} Recorrentes</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Volume Físico</p>
+                            <p className="text-2xl font-black text-white">{unidadesVendidas} <span className="text-xs font-normal text-slate-400">unidades</span></p>
                         </div>
                     </div>
-                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vol. Físico</p>
-                        <p className="text-lg font-black text-white">{unidadesVendidas} <span className="text-[10px] font-normal text-slate-400">un.</span></p>
+
+                    {/* LINHA 2: CUSTOS E LUCRO */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custos</p>
+                            <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex flex-col justify-center">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos</p>
+                            <p className="text-sm font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 flex flex-col justify-center">
+                            <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lucro ({margemLucroLote.toFixed(1)}%)</p>
+                            <p className="text-lg font-black text-emerald-400">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
                     </div>
-                    {/* CUSTOS SEPARADOS */}
-                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custos</p>
-                        <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
-                    </div>
-                    {/* IMPOSTOS SEPARADOS */}
-                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos</p>
-                        <p className="text-sm font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
-                    </div>
-                    <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-                        <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lucro ({margemLucroLote.toFixed(1)}%)</p>
-                        <p className="text-lg font-black text-emerald-400">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
-                    </div>
+
                 </div>
             </div>
 
