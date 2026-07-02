@@ -1056,23 +1056,25 @@ export default function App() {
   };
 
   const renderRepDashboard = () => {
-    // Corrige o bug da visão do Gestor
+    // Corrige a visão do Gestor caso esteja a "espreitar" outras unidades
     const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
     
-    // 1. LÓGICA DE ETIQUETAS E FILTRO (Idêntica à do Dashboard Master)
+    // 1. LÓGICA DE ETIQUETAS E FILTRO BLINDADA (Igual à do Dashboard Central)
     const lotesLogisticos = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
-    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     
     const pastasFinanceiras = [...new Set(orders.map(o => {
+        // Se o pedido já tem a etiqueta financeira, usa-a
         if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
         
-        // Proteção para pedidos antigos
-        const date = o.date ? new Date(o.date) : new Date();
-        return `Consolidado: ${meses[date.getMonth()]}/${date.getFullYear()}`;
+        // 🌟 CORREÇÃO CIRÚRGICA: Pedidos antigos ou antecipados ignoram o calendário
+        // e vão diretamente para a pasta ativa definida no teu Firebase
+        return `Consolidado: ${sysConfig.mesReferencia}`;
     }))].sort();
 
     const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
-    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+    
+    // Âncora de segurança para o "Estado Fantasma" do React
+    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : `Consolidado: ${sysConfig.mesReferencia}`;
 
     // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
     const poloOrdersFiltered = orders.filter(o => {
@@ -1080,18 +1082,20 @@ export default function App() {
         
         if (filtroAtivo.startsWith('Consolidado:')) {
             const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-            if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
             
-            // Retrocompatibilidade
-            const datePedido = o.date ? new Date(o.date) : new Date();
-            const pastaAntiga = `${meses[datePedido.getMonth()]}/${datePedido.getFullYear()}`;
-            return pastaAntiga === pastaFiltro;
+            if (o.cicloFinanceiro) {
+                return o.cicloFinanceiro === pastaFiltro;
+            } else {
+                // 🌟 CORREÇÃO CIRÚRGICA NO FILTRO: Força a retrocompatibilidade com o Firebase
+                return sysConfig.mesReferencia === pastaFiltro;
+            }
         } else {
+            // Filtro por lote logístico específico (Ex: 30/06 - Ovos)
             return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
         }
     });
 
-    // 3. SEPARA POR STATUS (DENTRO DO CICLO)
+    // 3. SEPARA OS PEDIDOS POR STATUS DENTRO DO FILTRO SELECIONADO
     const repOrders = poloOrdersFiltered.filter(o => ['confirmado', 'pago_polo'].includes(o.status));
     const historicoOrders = poloOrdersFiltered.filter(o => o.status === 'pago');
 
@@ -1153,8 +1157,8 @@ export default function App() {
         status: 'confirmado', 
         status_nfe: 'pendente',
         date: new Date().toISOString(), 
-        deliveryDate: sysConfig.loteMensal, // Usa a configuração da nuvem
-        cicloFinanceiro: sysConfig.mesReferencia, // Usa a configuração da nuvem
+        deliveryDate: sysConfig.loteMensal, 
+        cicloFinanceiro: sysConfig.mesReferencia, 
         items: manualCart, 
         faltas: []
       };
@@ -1178,7 +1182,7 @@ export default function App() {
            </div>
            
            <div className="flex flex-col sm:flex-row gap-3">
-               {/* 👇 FILTRO INTELIGENTE PARA O REPRESENTANTE 👇 */}
+               {/* SELETOR DE ANÁLISE ATUALIZADO PARA FILTROATIVO */}
                <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visualizar Ciclo / Lote</p>
                    <select value={filtroAtivo} onChange={e => setDashCycleFilter(e.target.value)} className="w-full bg-white border border-gray-300 text-emerald-800 font-black px-3 py-2 rounded-lg outline-none text-xs cursor-pointer shadow-sm">
@@ -1200,14 +1204,14 @@ export default function App() {
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Card 1: Fatura Total (Obrigação com a Sede) */}
+              {/* Card 1: Título dinâmico baseado no filtro selecionado */}
               <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Lote</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">📋 {filtroAtivo}</p>
                 <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-slate-300 mt-1 font-medium">Soma de todas as encomendas do polo</p>
               </div>
 
-              {/* Card 2: Caixa do JC (O que já está no bolso) */}
+              {/* Card 2: Caixa do JC */}
               <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa da Unidade</p>
@@ -1221,7 +1225,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Card 3: Fiado / Pendente */}
+              {/* Card 3: Pendente */}
               <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center">
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber de Clientes</p>
                 <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
@@ -1229,7 +1233,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Botões de Ação do Representante */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
                     <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio da Unidade
@@ -1292,13 +1295,11 @@ export default function App() {
           </div>
         )}
 
-        {/* CONTROLE DE ABAS: ATIVOS VS HISTÓRICO */}
         <div className="flex gap-2 mb-6">
             <button onClick={() => setShowHistory(false)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${!showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>📦 Pedidos Pendentes / No JC</button>
             <button onClick={() => setShowHistory(true)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>🕰️ Repassados à Sede</button>
         </div>
 
-        {/* VISÃO DE PEDIDOS ATIVOS */}
         {!showHistory && (
           <div className="space-y-6">
             {repOrders.length > 0 ? (
@@ -1323,7 +1324,6 @@ export default function App() {
                             </p>
                             
                             <div className="flex flex-col gap-1.5 mt-2">
-                              {/* ITENS ATIVOS NA CAIXA */}
                               {(o.items || []).map((i, idx) => {
                                 const quantidade = i.qtd || i.qty || 1; 
                                 const totalDoItem = (i.price || 0) * quantidade;
@@ -1338,7 +1338,6 @@ export default function App() {
                                 )
                               })}
                               
-                              {/* ITENS CORTADOS (FALTAS) */}
                               {(o.faltas || []).map((f, idx) => {
                                 return (
                                   <div key={`falta-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full bg-red-50 text-red-700 border-red-200 opacity-80">
@@ -1377,20 +1376,15 @@ export default function App() {
 
                                 <button onClick={() => {
                                     let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
-                                    
                                     (o.items || []).forEach(i => {
-                                        const quantidade = i.qtd || i.qty || 1;
-                                        text += `• ${quantidade}x ${i.name}\n`;
+                                        const q = i.qtd || i.qty || 1;
+                                        text += `• ${q}x ${i.name}\n`;
                                     });
-
                                     if(temFalta) {
                                         text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
-                                        o.faltas.forEach(f => {
-                                            text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`;
-                                        });
+                                        o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
                                         text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
                                     }
-                                    
                                     text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
                                     window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
                                 }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
@@ -1411,7 +1405,6 @@ export default function App() {
           </div>
         )}
 
-        {/* VISÃO DE HISTÓRICO DE REPASSES */}
         {showHistory && (
            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-5">
               <h3 className="font-black text-slate-800 text-lg mb-4">Repasses Concluídos à Sede ({filtroAtivo})</h3>
