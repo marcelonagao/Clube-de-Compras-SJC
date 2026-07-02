@@ -1472,39 +1472,44 @@ export default function App() {
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES (Ex: 30/06 - Ovos, Ciclo Mensal)
+        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
         const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
 
-        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (Ex: Julho/2026, Agosto/2026)
-        // Se o pedido for antigo e não tiver a etiqueta, usa o calendário como salvação para o histórico
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (Com Array Fixo para blindar contra bugs de navegador)
+        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
         const pastasFinanceiras = [...new Set(validOrders.map(o => {
             if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
             
             const date = o.date ? new Date(o.date) : new Date();
-            const mes = date.toLocaleString('pt-BR', { month: 'long' });
-            return `Consolidado: ${mes.charAt(0).toUpperCase() + mes.slice(1)}/${date.getFullYear()}`;
+            const mesNome = meses[date.getMonth()];
+            return `Consolidado: ${mesNome}/${date.getFullYear()}`;
         }))].sort();
 
         // Une tudo no menu de seleção do topo
         const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
 
-        // 3. FILTRO INTELIGENTE (PASTAS VS LOTES)
+        // 🌟 CORREÇÃO DO "ESTADO FANTASMA" DO REACT 🌟
+        // Se o filtro gravado na memória não existir nas opções (ex: mudamos de mês), 
+        // ele assume a primeira opção visível para não mostrar "R$ 0,00" por erro de sincronia.
+        const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+
+        // 3. FILTRO INTELIGENTE E BLINDADO
         const currentCycleOrders = validOrders.filter(o => {
-            if (dashCycleFilter.startsWith('Consolidado:')) {
-                const [_, pastaFiltro] = dashCycleFilter.split(': ');
+            if (filtroAtivo.startsWith('Consolidado:')) {
+                const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
                 
                 if (o.cicloFinanceiro) {
                     return o.cicloFinanceiro === pastaFiltro;
                 } else {
-                    // Retrocompatibilidade para pedidos antigos sem etiqueta financeira
+                    // Retrocompatibilidade usando o mesmo Array de meses
                     const datePedido = o.date ? new Date(o.date) : new Date();
-                    const mesPedido = datePedido.toLocaleString('pt-BR', { month: 'long' });
-                    const pastaAntiga = `${mesPedido.charAt(0).toUpperCase() + mesPedido.slice(1)}/${datePedido.getFullYear()}`;
+                    const mesPedido = meses[datePedido.getMonth()];
+                    const pastaAntiga = `${mesPedido}/${datePedido.getFullYear()}`;
                     return pastaAntiga === pastaFiltro;
                 }
             } else {
                 // Filtro por lote logístico específico
-                return (o.deliveryDate || 'Ciclo Mensal') === dashCycleFilter;
+                return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
             }
         });
 
@@ -1567,10 +1572,10 @@ export default function App() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <h2 className="text-2xl font-black text-slate-800">DRE do Lote</h2>
                 
-                {/* O SELETOR DE ANÁLISE INTELIGENTE */}
+                {/* 👇 ATUALIZADO PARA USAR O filtroAtivo 👇 */}
                 <div className="bg-white p-2 border border-emerald-200 rounded-xl shadow-sm flex items-center gap-3">
                      <span className="font-bold text-slate-500 text-xs pl-2">Analisar:</span>
-                     <select value={dashCycleFilter} onChange={e => setDashCycleFilter(e.target.value)} className="p-2 border-none outline-none font-black text-emerald-800 bg-emerald-50 rounded-lg text-sm cursor-pointer">
+                     <select value={filtroAtivo} onChange={e => setDashCycleFilter(e.target.value)} className="p-2 border-none outline-none font-black text-emerald-800 bg-emerald-50 rounded-lg text-sm cursor-pointer">
                          {ciclosExistentes.map(data => (
                              <option key={data} value={data}>{data}</option>
                          ))}
