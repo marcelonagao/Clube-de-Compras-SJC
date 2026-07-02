@@ -1459,11 +1459,21 @@ export default function App() {
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // 1. RETROCOMPATIBILIDADE: Lê os ciclos e cria 'Ciclo Mensal' para os antigos
-        const ciclosExistentes = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
+        /// 1. AS DATAS POSSÍVEIS (Com a opção de 'Mês Atual')
+        const ciclosExistentes = ['Consolidado do Mês', ...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
         
-        // 2. FILTRA OS PEDIDOS SÓ DO CICLO SELECIONADO
-        const currentCycleOrders = validOrders.filter(o => (o.deliveryDate || 'Ciclo Mensal') === dashCycleFilter);
+        // 2. O FILTRO INTELIGENTE
+        const currentCycleOrders = validOrders.filter(o => {
+            if (dashCycleFilter === 'Consolidado do Mês') {
+                // Se for consolidado, ignora o lote e olha só para pedidos do mês atual
+                const dataPedido = new Date(o.date);
+                const hoje = new Date();
+                return dataPedido.getMonth() === hoje.getMonth() && dataPedido.getFullYear() === hoje.getFullYear();
+            } else {
+                // Se for um lote específico, usa a etiqueta
+                return (o.deliveryDate || 'Ciclo Mensal') === dashCycleFilter;
+            }
+        });
 
         // 3. FINANCEIRO DO LOTE
         const faturamentoLote = currentCycleOrders.reduce((sum, o) => sum + (o.total || 0), 0);
