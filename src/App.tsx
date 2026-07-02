@@ -1475,22 +1475,20 @@ export default function App() {
         // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
         const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
 
-        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (Com Array Fixo para blindar contra bugs de navegador)
-        const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS 
         const pastasFinanceiras = [...new Set(validOrders.map(o => {
+            // Se o pedido for novo e já tiver a etiqueta, usa ela
             if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
             
-            const date = o.date ? new Date(o.date) : new Date();
-            const mesNome = meses[date.getMonth()];
-            return `Consolidado: ${mesNome}/${date.getFullYear()}`;
+            // A MÁGICA AQUI: Se é um pedido antigo (sem etiqueta), ignora o calendário 
+            // e atira ele direto para a pasta financeira global atual para não perder as vendas antecipadas.
+            return `Consolidado: ${mesReferenciaGlobal}`;
         }))].sort();
 
         // Une tudo no menu de seleção do topo
         const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
 
         // 🌟 CORREÇÃO DO "ESTADO FANTASMA" DO REACT 🌟
-        // Se o filtro gravado na memória não existir nas opções (ex: mudamos de mês), 
-        // ele assume a primeira opção visível para não mostrar "R$ 0,00" por erro de sincronia.
         const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
         // 3. FILTRO INTELIGENTE E BLINDADO
@@ -1501,14 +1499,11 @@ export default function App() {
                 if (o.cicloFinanceiro) {
                     return o.cicloFinanceiro === pastaFiltro;
                 } else {
-                    // Retrocompatibilidade usando o mesmo Array de meses
-                    const datePedido = o.date ? new Date(o.date) : new Date();
-                    const mesPedido = meses[datePedido.getMonth()];
-                    const pastaAntiga = `${mesPedido}/${datePedido.getFullYear()}`;
-                    return pastaAntiga === pastaFiltro;
+                    // Força os pedidos antigos a aparecerem no Consolidado atual
+                    return mesReferenciaGlobal === pastaFiltro;
                 }
             } else {
-                // Filtro por lote logístico específico
+                // Filtro por lote logístico específico (Visão da Logística)
                 return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
             }
         });
