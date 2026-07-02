@@ -1472,23 +1472,43 @@ export default function App() {
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        /// 1. AS DATAS POSSÍVEIS (Com a opção de 'Mês Atual')
-        const ciclosExistentes = ['Consolidado do Mês', ...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
-        
-        // 2. O FILTRO INTELIGENTE
+        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES (Ex: 30/06 - Ovos, Ciclo Mensal)
+        const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (Ex: Julho/2026, Agosto/2026)
+        // Se o pedido for antigo e não tiver a etiqueta, usa o calendário como salvação para o histórico
+        const pastasFinanceiras = [...new Set(validOrders.map(o => {
+            if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
+            
+            const date = o.date ? new Date(o.date) : new Date();
+            const mes = date.toLocaleString('pt-BR', { month: 'long' });
+            return `Consolidado: ${mes.charAt(0).toUpperCase() + mes.slice(1)}/${date.getFullYear()}`;
+        }))].sort();
+
+        // Une tudo no menu de seleção do topo
+        const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
+
+        // 3. FILTRO INTELIGENTE (PASTAS VS LOTES)
         const currentCycleOrders = validOrders.filter(o => {
-            if (dashCycleFilter === 'Consolidado do Mês') {
-                // Se for consolidado, ignora o lote e olha só para pedidos do mês atual
-                const dataPedido = new Date(o.date);
-                const hoje = new Date();
-                return dataPedido.getMonth() === hoje.getMonth() && dataPedido.getFullYear() === hoje.getFullYear();
+            if (dashCycleFilter.startsWith('Consolidado:')) {
+                const [_, pastaFiltro] = dashCycleFilter.split(': ');
+                
+                if (o.cicloFinanceiro) {
+                    return o.cicloFinanceiro === pastaFiltro;
+                } else {
+                    // Retrocompatibilidade para pedidos antigos sem etiqueta financeira
+                    const datePedido = o.date ? new Date(o.date) : new Date();
+                    const mesPedido = datePedido.toLocaleString('pt-BR', { month: 'long' });
+                    const pastaAntiga = `${mesPedido.charAt(0).toUpperCase() + mesPedido.slice(1)}/${datePedido.getFullYear()}`;
+                    return pastaAntiga === pastaFiltro;
+                }
             } else {
-                // Se for um lote específico, usa a etiqueta
+                // Filtro por lote logístico específico
                 return (o.deliveryDate || 'Ciclo Mensal') === dashCycleFilter;
             }
         });
 
-        // 3. FINANCEIRO DO LOTE
+        // 4. CÁLCULO DAS MÉTRICAS FINANCEIRAS DO FILTRO SELECIONADO
         const faturamentoLote = currentCycleOrders.reduce((sum, o) => sum + (o.total || 0), 0);
         const impostosLote = faturamentoLote * 0.08;
         let custoMercadoriaLote = 0;
@@ -1500,27 +1520,23 @@ export default function App() {
                 const itemCost = prod?.cost || 0; 
                 const quantidade = i.qtd || i.qty || 1;
                 custoMercadoriaLote += (itemCost * quantidade);
-                unidadesVendidas += quantidade; // Conta o volume físico
+                unidadesVendidas += quantidade;
             });
         });
 
         const lucroLiquidoLote = faturamentoLote - custoMercadoriaLote - impostosLote;
         const margemLucroLote = faturamentoLote > 0 ? (lucroLiquidoLote / faturamentoLote) * 100 : 0;
 
-        // 4. MÁGICA: NOVOS VS RECORRENTES
+        // 5. CÁLCULO DE MEMBROS: NOVOS VS RECORRENTES
         const uniqueCustomers = [...new Set(currentCycleOrders.map(o => o.email || o.whatsapp || o.customer))];
         let membrosNovos = 0;
         let membrosRecorrentes = 0;
 
         uniqueCustomers.forEach(customerId => {
-            // Busca data do 1º pedido da pessoa na VIDA (histórico todo)
             const allCustomerOrders = validOrders.filter(o => (o.email || o.whatsapp || o.customer) === customerId);
             const firstOrderEver = Math.min(...allCustomerOrders.map(o => new Date(o.date).getTime()));
-            
-            // Busca data do 1º pedido dela NESTE lote
             const firstOrderThisCycle = Math.min(...currentCycleOrders.filter(o => (o.email || o.whatsapp || o.customer) === customerId).map(o => new Date(o.date).getTime()));
 
-            // Se o 1º pedido da vida for mais antigo que o 1º pedido deste lote = Recorrente
             if (firstOrderEver < firstOrderThisCycle) {
                 membrosRecorrentes++;
             } else {
@@ -1528,7 +1544,7 @@ export default function App() {
             }
         });
 
-        // 5. GRÁFICO DINÂMICO (Apenas os dias em que o lote teve vendas)
+        // 6. DADOS DO GRÁFICO DINÂMICO
         const salesByDay = currentCycleOrders.reduce((acc, o) => {
             if(!o.date) return acc;
             const d = new Date(o.date);
@@ -1542,7 +1558,7 @@ export default function App() {
              const [da, ma] = a.split('/');
              const [db, mb] = b.split('/');
              return new Date(new Date().getFullYear(), parseInt(ma)-1, parseInt(da)) - new Date(new Date().getFullYear(), parseInt(mb)-1, parseInt(db));
-        }).slice(-7); // Mostra no máx os últimos 7 dias de movimento do lote para não quebrar a tela
+        }).slice(-7);
 
         const maxSale = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => salesByDay[d]), 100) : 100;
 
@@ -1551,7 +1567,7 @@ export default function App() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
                 <h2 className="text-2xl font-black text-slate-800">DRE do Lote</h2>
                 
-                {/* O NOVO SELETOR DE LOTE NO TOPO DO DASHBOARD */}
+                {/* O SELETOR DE ANÁLISE INTELIGENTE */}
                 <div className="bg-white p-2 border border-emerald-200 rounded-xl shadow-sm flex items-center gap-3">
                      <span className="font-bold text-slate-500 text-xs pl-2">Analisar:</span>
                      <select value={dashCycleFilter} onChange={e => setDashCycleFilter(e.target.value)} className="p-2 border-none outline-none font-black text-emerald-800 bg-emerald-50 rounded-lg text-sm cursor-pointer">
@@ -1572,27 +1588,26 @@ export default function App() {
                </div>
             </div>
 
-            {/* SUPER DASHBOARD FINANCEIRO (ALINHAMENTO CENTRAL & CONSOLIDADO) */}
+            {/* SUPER DASHBOARD FINANCEIRO (ALINHAMENTO CENTRAL EM DUAS LINHAS) */}
             <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
                 
                 <div className="flex flex-col items-center mb-6 relative z-10 text-center">
-                    <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider">Faturamento Bruto ({dashCycleFilter})</p>
+                    <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider">Faturamento Bruto</p>
                     <p className="text-4xl font-black tracking-tight">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
                 </div>
 
-                {/* BLOCOS DIVIDIDOS EM DUAS LINHAS - CENTRALIZADOS */}
                 <div className="flex flex-col gap-3 border-t border-slate-700 pt-5 relative z-10">
                     
-                    {/* LINHA 1: CLIENTES E VOLUME */}
+                    {/* LINHA 1: CLIENTES E VOLUME (CENTRALIZADOS) */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center text-center">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Membros</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Membros Atendidos</p>
                             <div className="flex flex-col items-center gap-1">
                                 <p className="text-2xl font-black text-white">{uniqueCustomers.length}</p>
                                 <div className="flex gap-2 text-[9px] font-bold">
-                                    <span className="text-emerald-400">+{membrosNovos} Nov.</span>
-                                    <span className="text-blue-400">{membrosRecorrentes} Rec.</span>
+                                    <span className="text-emerald-400">+{membrosNovos} Novos</span>
+                                    <span className="text-blue-400">{membrosRecorrentes} Recorrentes</span>
                                 </div>
                             </div>
                         </div>
@@ -1600,19 +1615,19 @@ export default function App() {
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Volume Físico</p>
                             <div className="flex flex-col items-center gap-1">
                                 <p className="text-2xl font-black text-white">{unidadesVendidas}</p>
-                                <span className="text-[10px] font-normal text-slate-400">unidades</span>
+                                <span className="text-[10px] font-normal text-slate-400">unidades giradas</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* LINHA 2: CUSTOS E LUCRO */}
+                    {/* LINHA 2: CUSTOS, IMPOSTOS E LUCRO (CENTRALIZADOS) */}
                     <div className="grid grid-cols-3 gap-3">
                         <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custos</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custos (CMV)</p>
                             <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
                         </div>
                         <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50 flex flex-col items-center justify-center text-center">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos (8%)</p>
                             <p className="text-sm font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
                         </div>
                         <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 flex flex-col items-center justify-center text-center">
@@ -1624,9 +1639,9 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* GRÁFICO DINÂMICO DOS DIAS DO LOTE */}
+              {/* GRÁFICO DINÂMICO */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-sm text-slate-800 mb-6">Picos de Venda do Lote</h3>
+                    <h3 className="font-bold text-sm text-slate-800 mb-6">Picos de Venda no Período</h3>
                     <div className="flex items-end justify-between h-40 gap-1">
                         {sortedDays.length > 0 ? sortedDays.map((day, i) => {
                             const val = salesByDay[day];
@@ -1646,11 +1661,10 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* FATURAMENTO DO LOTE POR POLO */}
+                {/* DESEMPENHO POR POLO */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                     <h3 className="font-bold text-sm text-slate-800 mb-4">Desempenho por JC</h3>
                     <div className="space-y-3 max-h-40 overflow-y-auto pr-2">
-                        {/* Recalcula na hora para o lote selecionado */}
                         {Object.entries(currentCycleOrders.reduce((acc, o) => {
                             if (!acc[o.polo]) acc[o.polo] = 0;
                             acc[o.polo] += (o.total || 0);
@@ -1661,7 +1675,7 @@ export default function App() {
                                     <MapPin className="w-4 h-4 text-emerald-600"/>
                                     <span className="font-bold text-slate-700 text-xs">{polo}</span>
                                 </div>
-                                <span className="font-black text-emerald-800 text-sm">R$ {valor.toFixed(2)}</span>
+                                <span className="font-black text-emerald-800 text-sm">R$ {valor.toFixed(2).replace('.', ',')}</span>
                             </div>
                         ))}
                     </div>
