@@ -118,6 +118,7 @@ export default function App() {
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
+  const [showMassNotify, setShowMassNotify] = useState(false);
 
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
@@ -1247,14 +1248,80 @@ export default function App() {
               </div>
             </div>
 
+            {/* Botões de Ação do Representante */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <button onClick={() => setShowMassNotify(true)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
+                    <BellRing className="w-5 h-5 mr-2"/> 🚨 Avisar Chegada de Carga
+                </button>
                 <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
-                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio da Unidade
+                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
                 </button>
                 <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
                     ➕ Incluir Pedido Manual
                 </button>
             </div>
+
+            {/* MODAL DE FILA DE NOTIFICAÇÕES */}
+            {showMassNotify && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="bg-blue-600 p-4 flex justify-between items-center text-white shrink-0">
+                     <div>
+                        <h3 className="font-black text-lg flex items-center"><BellRing className="w-5 h-5 mr-2"/> Fila Rápida de Avisos</h3>
+                        <p className="text-blue-100 text-xs font-medium mt-1">Notificando clientes do Lote: {filtroAtivo}</p>
+                     </div>
+                     <button onClick={() => setShowMassNotify(false)} className="bg-blue-700 hover:bg-blue-800 p-2 rounded-lg transition"><X className="w-5 h-5"/></button>
+                  </div>
+                  
+                  <div className="p-4 overflow-y-auto space-y-3 bg-slate-50 flex-1">
+                     <p className="text-sm font-bold text-slate-600 mb-2">Membros aguardando retirada ({pedidosConfirmados.length}):</p>
+                     
+                     {pedidosConfirmados.length === 0 ? (
+                         <p className="text-gray-500 text-center py-8 text-sm font-medium">Nenhum membro pendente para notificar neste lote.</p>
+                     ) : (
+                         pedidosConfirmados.map(o => {
+                             const temFalta = o.faltas && o.faltas.length > 0;
+                             const isNotified = o.notifiedRetirada; // Lê se já foi carimbado no Firebase
+                             
+                             return (
+                                 <div key={o.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-xl border transition-all ${isNotified ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200 shadow-sm'}`}>
+                                     <div className="mb-3 sm:mb-0">
+                                         <p className="font-bold text-slate-800 text-sm flex items-center">
+                                             {o.customer} 
+                                             {isNotified && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-black tracking-widest uppercase">✅ Avisado</span>}
+                                         </p>
+                                         <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                             Total: R$ {(o.total||0).toFixed(2)} 
+                                             {temFalta && <span className="text-orange-500 font-bold ml-1">(Contém faltas)</span>}
+                                         </p>
+                                     </div>
+                                     <button 
+                                         onClick={async () => {
+                                             let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\n`;
+                                             if(temFalta) text += `⚠️ *Aviso:* Tivemos um corte no fornecedor, mas o valor da sua cesta já foi ajustado com o desconto das faltas!\n\n`;
+                                             text += `O total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
+                                             
+                                             // 1. Regista no banco de dados que esta pessoa foi avisada
+                                             try {
+                                                 await updateDoc(doc(db, "orders", o.id), { notifiedRetirada: new Date().toISOString() });
+                                                 setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, notifiedRetirada: new Date().toISOString() } : ord));
+                                             } catch(e) { console.error("Erro ao registrar notificação", e); }
+                                             
+                                             // 2. Abre o WhatsApp na hora
+                                             window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                                         }} 
+                                         className={`w-full sm:w-auto px-4 py-2.5 rounded-lg font-black text-xs transition shadow-sm flex items-center justify-center ${isNotified ? 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                     >
+                                         <MessageCircle className="w-4 h-4 mr-2"/> {isNotified ? 'Reenviar Aviso' : 'Enviar WhatsApp'}
+                                     </button>
+                                 </div>
+                             )
+                         })
+                     )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showManualOrder && (
               <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-lg mt-3 transition-all">
