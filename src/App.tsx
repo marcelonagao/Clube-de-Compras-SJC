@@ -117,6 +117,7 @@ export default function App() {
 
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
+  const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
 
   const [repModalOpen, setRepModalOpen] = useState(false);
   const [repManualCustomer, setRepManualCustomer] = useState('');
@@ -1458,171 +1459,163 @@ export default function App() {
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        const now = new Date();
-        const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
-
-        // Cálculo Dinâmico do Mês Anterior
-        let prevMonth = currentMonth - 1;
-        let prevYear = currentYear;
-        if (prevMonth < 0) {
-            prevMonth = 11;
-            prevYear--;
-        }
-
-        // SEPARAÇÃO: MÊS ATUAL VS MÊS ANTERIOR
-        const currentMonthOrders = validOrders.filter(o => {
-            if(!o.date) return false;
-            const d = new Date(o.date);
-            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
-
-        const prevMonthOrders = validOrders.filter(o => {
-            if(!o.date) return false;
-            const d = new Date(o.date);
-            return d.getMonth() === prevMonth && d.getFullYear() === prevYear;
-        });
-
-        const faturamentoMes = currentMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-        const faturamentoAnterior = prevMonthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+        // 1. RETROCOMPATIBILIDADE: Lê os ciclos e cria 'Ciclo Mensal' para os antigos
+        const ciclosExistentes = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
         
-        // CÁLCULO DE CRESCIMENTO (MoM %)
-        let crescimento = 0;
-        if (faturamentoAnterior > 0) {
-            crescimento = ((faturamentoMes - faturamentoAnterior) / faturamentoAnterior) * 100;
-        } else if (faturamentoMes > 0) {
-            crescimento = 100; // Crescimento puro
-        }
+        // 2. FILTRA OS PEDIDOS SÓ DO CICLO SELECIONADO
+        const currentCycleOrders = validOrders.filter(o => (o.deliveryDate || 'Ciclo Mensal') === dashCycleFilter);
 
-        const impostosMes = faturamentoMes * 0.08;
+        // 3. FINANCEIRO DO LOTE
+        const faturamentoLote = currentCycleOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+        const impostosLote = faturamentoLote * 0.08;
+        let custoMercadoriaLote = 0;
+        let unidadesVendidas = 0;
 
-        let custoMercadoriaMes = 0;
-        currentMonthOrders.forEach(o => {
+        currentCycleOrders.forEach(o => {
             (o.items || []).forEach(i => {
                 const prod = products.find(p => String(p.id) === String(i.id));
                 const itemCost = prod?.cost || 0; 
                 const quantidade = i.qtd || i.qty || 1;
-                custoMercadoriaMes += (itemCost * quantidade);
+                custoMercadoriaLote += (itemCost * quantidade);
+                unidadesVendidas += quantidade; // Conta o volume físico
             });
         });
 
-        const lucroLiquidoMes = faturamentoMes - custoMercadoriaMes - impostosMes;
-        const margemLucroMes = faturamentoMes > 0 ? (lucroLiquidoMes / faturamentoMes) * 100 : 0;
+        const lucroLiquidoLote = faturamentoLote - custoMercadoriaLote - impostosLote;
+        const margemLucroLote = faturamentoLote > 0 ? (lucroLiquidoLote / faturamentoLote) * 100 : 0;
 
-        const faturamentoPorPolo = {};
-        currentMonthOrders.forEach(o => {
-            if (!faturamentoPorPolo[o.polo]) faturamentoPorPolo[o.polo] = 0;
-            faturamentoPorPolo[o.polo] += (o.total || 0);
+        // 4. MÁGICA: NOVOS VS RECORRENTES
+        const uniqueCustomers = [...new Set(currentCycleOrders.map(o => o.email || o.whatsapp || o.customer))];
+        let membrosNovos = 0;
+        let membrosRecorrentes = 0;
+
+        uniqueCustomers.forEach(customerId => {
+            // Busca data do 1º pedido da pessoa na VIDA (histórico todo)
+            const allCustomerOrders = validOrders.filter(o => (o.email || o.whatsapp || o.customer) === customerId);
+            const firstOrderEver = Math.min(...allCustomerOrders.map(o => new Date(o.date).getTime()));
+            
+            // Busca data do 1º pedido dela NESTE lote
+            const firstOrderThisCycle = Math.min(...currentCycleOrders.filter(o => (o.email || o.whatsapp || o.customer) === customerId).map(o => new Date(o.date).getTime()));
+
+            // Se o 1º pedido da vida for mais antigo que o 1º pedido deste lote = Recorrente
+            if (firstOrderEver < firstOrderThisCycle) {
+                membrosRecorrentes++;
+            } else {
+                membrosNovos++;
+            }
         });
 
-        // GRÁFICO 100% BLINDADO CONTRA NAVEGADORES E FUSOS
-        const last7Days = Array.from({length: 7}).map((_, i) => { 
-          const d = new Date(); 
-          d.setDate(now.getDate() - (6 - i)); 
-          return d; 
-      });
+        // 5. GRÁFICO DINÂMICO (Apenas os dias em que o lote teve vendas)
+        const salesByDay = currentCycleOrders.reduce((acc, o) => {
+            if(!o.date) return acc;
+            const d = new Date(o.date);
+            const dateKey = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth()+1).toString().padStart(2, '0')}`;
+            if (!acc[dateKey]) acc[dateKey] = 0;
+            acc[dateKey] += (o.total || 0);
+            return acc;
+        }, {});
+        
+        const sortedDays = Object.keys(salesByDay).sort((a,b) => {
+             const [da, ma] = a.split('/');
+             const [db, mb] = b.split('/');
+             return new Date(new Date().getFullYear(), parseInt(ma)-1, parseInt(da)) - new Date(new Date().getFullYear(), parseInt(mb)-1, parseInt(db));
+        }).slice(-7); // Mostra no máx os últimos 7 dias de movimento do lote para não quebrar a tela
 
-      const salesData = last7Days.map(date => {
-          // Criamos uma "chave" única infalível (Ex: "2026-5-8")
-          const targetKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-          
-          return validOrders.filter(o => {
-             if(!o.date) return false;
-             const d = new Date(o.date);
-             const orderKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-             
-             return targetKey === orderKey;
-          }).reduce((sum, o) => sum + (o.total || 0), 0);
-      });
-      
-      const maxSale = Math.max(...salesData, 100);
+        const maxSale = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => salesByDay[d]), 100) : 100;
 
         return (
           <div className="space-y-6 text-left">
-            <h2 className="text-2xl font-black text-slate-800 mb-2">DRE e Visão Geral (Mês Atual)</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+                <h2 className="text-2xl font-black text-slate-800">DRE do Lote</h2>
+                
+                {/* O NOVO SELETOR DE LOTE NO TOPO DO DASHBOARD */}
+                <div className="bg-white p-2 border border-emerald-200 rounded-xl shadow-sm flex items-center gap-3">
+                     <span className="font-bold text-slate-500 text-xs pl-2">Analisar:</span>
+                     <select value={dashCycleFilter} onChange={e => setDashCycleFilter(e.target.value)} className="p-2 border-none outline-none font-black text-emerald-800 bg-emerald-50 rounded-lg text-sm cursor-pointer">
+                         {ciclosExistentes.map(data => (
+                             <option key={data} value={data}>{data}</option>
+                         ))}
+                     </select>
+                </div>
+            </div>
             
-            {/* Controlador de Fases */}
+            {/* Controlador de Fases da Loja */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
-               <h3 className="font-bold text-sm text-slate-800 mb-3">Ciclo de Vendas (Status da Loja)</h3>
+               <h3 className="font-bold text-sm text-slate-800 mb-3">Status da Loja (Visão do Cliente)</h3>
                <div className="flex flex-col md:flex-row gap-2">
-                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Ciclo Aberto</button>
+                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Aberta (Encomendas)</button>
                    <button onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega</button>
-                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Loja Pausada</button>
+                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Fechada (Pausada)</button>
                </div>
             </div>
 
-           {/* SUPER DASHBOARD FINANCEIRO (Com Comparativo) */}
-           <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
-                {/* Efeito visual de brilho no fundo (Design Premium) */}
+            {/* SUPER DASHBOARD FINANCEIRO */}
+            <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
                 
-                <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider relative z-10">Faturamento Bruto (Mês)</p>
+                <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider relative z-10">Faturamento Bruto ({dashCycleFilter})</p>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6 relative z-10">
-                   <p className="text-4xl font-black tracking-tight">R$ {faturamentoMes.toFixed(2)}</p>
-                   {(faturamentoAnterior > 0 || crescimento > 0) && (
-                       <span className={`w-fit whitespace-nowrap px-2.5 py-1 rounded-lg border font-black text-[10px] flex items-center shadow-sm ${crescimento >= 0 ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
-                           {crescimento >= 0 ? '↗' : '↘'} {Math.abs(crescimento).toFixed(1)}% vs mês passado
-                       </span>
-                   )}
+                   <p className="text-4xl font-black tracking-tight">R$ {faturamentoLote.toFixed(2)}</p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 border-t border-slate-700 pt-5 relative z-10">
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custo Mercadoria</p>
-                        <p className="text-xl font-black text-red-400">- R$ {custoMercadoriaMes.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-center">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos (8%)</p>
-                        <p className="text-xl font-black text-orange-400">- R$ {impostosMes.toFixed(2)}</p>
-                    </div>
-                    <div className="col-span-1 sm:col-span-2 md:col-span-1 bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20 flex flex-col justify-center">
-                        <div className="flex justify-between items-start mb-1">
-                            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Lucro Líquido</p>
-                            <span className="text-[9px] font-black text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">MG: {margemLucroMes.toFixed(1)}%</span>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-slate-700 pt-5 relative z-10">
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Membros</p>
+                        <p className="text-lg font-black text-white">{uniqueCustomers.length}</p>
+                        <div className="flex gap-2 mt-1 text-[9px] font-bold">
+                            <span className="text-emerald-400">+{membrosNovos} Novos</span>
+                            <span className="text-blue-400">{membrosRecorrentes} Voltas</span>
                         </div>
-                        <p className="text-2xl font-black text-emerald-400">R$ {lucroLiquidoMes.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Volume Girado</p>
+                        <p className="text-lg font-black text-white">{unidadesVendidas} <span className="text-xs text-slate-500">un</span></p>
+                    </div>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custo / Impostos</p>
+                        <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2)}</p>
+                        <p className="text-[9px] font-bold text-orange-400 mt-0.5">- R$ {impostosLote.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
+                        <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lucro (MG: {margemLucroLote.toFixed(1)}%)</p>
+                        <p className="text-lg font-black text-emerald-400">R$ {lucroLiquidoLote.toFixed(2)}</p>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* GRÁFICO TENDÊNCIA BLINDADO (CSS CORRIGIDO) */}
+              {/* GRÁFICO DINÂMICO DOS DIAS DO LOTE */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-sm text-slate-800 mb-6">Vendas (Últimos 7 Dias)</h3>
+                    <h3 className="font-bold text-sm text-slate-800 mb-6">Picos de Venda do Lote</h3>
                     <div className="flex items-end justify-between h-40 gap-1">
-                        {salesData.map((val, i) => {
-                        // Limitamos a 75% para a coluna mais alta não vazar por cima do gráfico!
-                        const heightPercentage = Math.max((val / maxSale) * 75, 2);
-                        
-                        return (
-                            // A MÁGICA AQUI: h-full adicionado para dar altura real à coluna
-                            <div key={i} className="flex flex-col justify-end items-center flex-1 group relative h-full">
-                                
-                                {/* Tooltip inteligente que flutua exatamente acima do tamanho da coluna */}
-                                <div className="opacity-0 group-hover:opacity-100 absolute text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10" style={{ bottom: `calc(${heightPercentage}% + 28px)` }}>
-                                    R$ {val.toFixed(0)}
+                        {sortedDays.length > 0 ? sortedDays.map((day, i) => {
+                            const val = salesByDay[day];
+                            const heightPercentage = Math.max((val / maxSale) * 75, 2);
+                            return (
+                                <div key={i} className="flex flex-col justify-end items-center flex-1 group relative h-full">
+                                    <div className="opacity-0 group-hover:opacity-100 absolute text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded shadow-sm transition-opacity whitespace-nowrap z-10" style={{ bottom: `calc(${heightPercentage}% + 28px)` }}>
+                                        R$ {val.toFixed(0)}
+                                    </div>
+                                    <div className="w-full max-w-[32px] bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors" style={{ height: `${heightPercentage}%` }}></div>
+                                    <span className="text-[8px] font-bold text-gray-400 mt-2 h-4 shrink-0">{day}</span>
                                 </div>
-                                
-                                {/* A Coluna Verde */}
-                                <div className="w-full max-w-[32px] bg-emerald-500 rounded-t hover:bg-emerald-400 transition-colors" style={{ height: `${heightPercentage}%` }}></div>
-                                
-                                {/* A Data */}
-                                <span className="text-[8px] font-bold text-gray-400 mt-2 h-4 shrink-0">
-                                    {last7Days[i].getDate()}/{last7Days[i].getMonth()+1}
-                                </span>
-                            </div>
-                        );
-                        })}
+                            );
+                        }) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-300">Nenhuma venda registrada neste lote.</div>
+                        )}
                     </div>
                 </div>
 
-                {/* FATURAMENTO POR POLO */}
+                {/* FATURAMENTO DO LOTE POR POLO */}
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold text-sm text-slate-800 mb-4">Desempenho por Polo (Mês)</h3>
-                    <div className="space-y-3">
-                        {Object.entries(faturamentoPorPolo)
-                            .sort((a, b) => b[1] - a[1]) // Ordena do maior pro menor
-                            .map(([polo, valor]) => (
+                    <h3 className="font-bold text-sm text-slate-800 mb-4">Desempenho por JC</h3>
+                    <div className="space-y-3 max-h-40 overflow-y-auto pr-2">
+                        {/* Recalcula na hora para o lote selecionado */}
+                        {Object.entries(currentCycleOrders.reduce((acc, o) => {
+                            if (!acc[o.polo]) acc[o.polo] = 0;
+                            acc[o.polo] += (o.total || 0);
+                            return acc;
+                        }, {})).sort((a, b) => b[1] - a[1]).map(([polo, valor]) => (
                             <div key={polo} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-gray-100">
                                 <div className="flex items-center gap-2">
                                     <MapPin className="w-4 h-4 text-emerald-600"/>
@@ -1631,7 +1624,6 @@ export default function App() {
                                 <span className="font-black text-emerald-800 text-sm">R$ {valor.toFixed(2)}</span>
                             </div>
                         ))}
-                        {Object.keys(faturamentoPorPolo).length === 0 && <p className="text-xs text-gray-400">Nenhum pedido neste mês ainda.</p>}
                     </div>
                 </div>
             </div>
