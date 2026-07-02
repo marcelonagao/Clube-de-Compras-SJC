@@ -1056,36 +1056,55 @@ export default function App() {
   };
 
   const renderRepDashboard = () => {
-    const viewingPolo = isGestor ? (adminTab === 'logistica_polo_view' || user?.polo || polos[0]) : user?.polo;
+    // Corrige o bug da visão do Gestor
+    const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
     
-    // Filtros de status atualizados
-    const repOrders = orders.filter(o => o.polo === viewingPolo && ['confirmado', 'pago_polo'].includes(o.status) && o.date);
-    const historicoOrders = orders.filter(o => o.polo === viewingPolo && o.status === 'pago' && o.date); // Nova aba de histórico
+    // 1. LÓGICA DE ETIQUETAS E FILTRO (Idêntica à do Dashboard Master)
+    const lotesLogisticos = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     
-    const pedidosConfirmados = orders.filter(o => o.polo === viewingPolo && o.status === 'confirmado');
-    const pedidosPagosPolo = orders.filter(o => o.polo === viewingPolo && o.status === 'pago_polo');
-    
+    const pastasFinanceiras = [...new Set(orders.map(o => {
+        if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
+        
+        // Proteção para pedidos antigos
+        const date = o.date ? new Date(o.date) : new Date();
+        return `Consolidado: ${meses[date.getMonth()]}/${date.getFullYear()}`;
+    }))].sort();
+
+    const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
+    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+
+    // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
+    const poloOrdersFiltered = orders.filter(o => {
+        if (o.polo !== viewingPolo || !o.date) return false;
+        
+        if (filtroAtivo.startsWith('Consolidado:')) {
+            const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+            if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
+            
+            // Retrocompatibilidade
+            const datePedido = o.date ? new Date(o.date) : new Date();
+            const pastaAntiga = `${meses[datePedido.getMonth()]}/${datePedido.getFullYear()}`;
+            return pastaAntiga === pastaFiltro;
+        } else {
+            return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+        }
+    });
+
+    // 3. SEPARA POR STATUS (DENTRO DO CICLO)
+    const repOrders = poloOrdersFiltered.filter(o => ['confirmado', 'pago_polo'].includes(o.status));
+    const historicoOrders = poloOrdersFiltered.filter(o => o.status === 'pago');
+
+    const pedidosConfirmados = repOrders.filter(o => o.status === 'confirmado');
+    const pedidosPagosPolo = repOrders.filter(o => o.status === 'pago_polo');
+
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
-    const totalGeralPolo = totalAindaAReceber + totalArrecadadoPolo; 
-
-    const ordersByMonth = repOrders.reduce((acc, order) => {
-      const d = order.date ? new Date(order.date) : new Date();
-      const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-      const capMonth = `${months[d.getMonth()]} ${d.getFullYear()}`;
-      const sortKey = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-
-      if (!acc[capMonth]) acc[capMonth] = { orders: [], total: 0, count: 0, sortKey };
-      acc[capMonth].orders.push(order);
-      acc[capMonth].total += (order.total || 0);
-      acc[capMonth].count += 1;
-      return acc;
-    }, {});
+    const totalGeralPolo = totalAindaAReceber + totalArrecadadoPolo;
 
     const handleEfetuarRepassePolo = async () => {
       if (pedidosPagosPolo.length === 0) return showToast('Nenhum valor arrecadado para repassar!', 'error');
-      
-      if (window.confirm(`ATENÇÃO REPRESENTANTE:\n\nVocê confirma que realizou o PIX no valor TOTAL de R$ ${totalArrecadadoPolo.toFixed(2)} para a Sede Central?`)) {
+      if (window.confirm(`ATENÇÃO REPRESENTANTE:\n\nVocê confirma que realizou o PIX no valor TOTAL de R$ ${totalArrecadadoPolo.toFixed(2)} para a Sede Central referente a este Lote?`)) {
         try {
           for (const o of pedidosPagosPolo) {
             await updateDoc(doc(db, "orders", o.id), { status: 'pago', dataRepasseSede: new Date().toISOString() });
@@ -1117,27 +1136,25 @@ export default function App() {
 
     const handleSaveManualOrder = async () => {
       if (!manualClientName) return showToast('Digite o nome do membro!', 'error');
-      if (!manualClientWhatsapp || manualClientWhatsapp.length < 10) return showToast('O WhatsApp é obrigatório para notificações!', 'error'); // Regra nova
+      if (!manualClientWhatsapp || manualClientWhatsapp.length < 10) return showToast('O WhatsApp é obrigatório para notificações!', 'error');
       if (manualCart.length === 0) return showToast('Adicione pelo menos 1 produto à lista!', 'error');
-
+      
       const manualTotal = manualCart.reduce((acc, item) => acc + (item.price * item.qty), 0);
-
-      // A MÁGICA DA SEGURANÇA AQUI:
       const poloDestino = isGestor ? (manualSelectedPolo || viewingPolo) : viewingPolo;
 
       const manualOrder = {
         customer: `${manualClientName} (Manual)`, 
         email: '', 
         whatsapp: manualClientWhatsapp, 
-        polo: poloDestino, // 👈 Usa o destino validado
+        polo: poloDestino, 
         cpf: 'Não informado',
         total: manualTotal, 
         method: 'manual', 
         status: 'confirmado', 
         status_nfe: 'pendente',
         date: new Date().toISOString(), 
-        deliveryDate: manualDeliveryDate || 'Ciclo Mensal', 
-        cicloFinanceiro: mesReferenciaGlobal,
+        deliveryDate: sysConfig.loteMensal, // Usa a configuração da nuvem
+        cicloFinanceiro: sysConfig.mesReferencia, // Usa a configuração da nuvem
         items: manualCart, 
         faltas: []
       };
@@ -1149,26 +1166,35 @@ export default function App() {
         setManualClientName('');
         setManualClientWhatsapp('');
         setManualCart([]);
-        setManualSelectedPolo('')
       } catch (e) { showToast('Erro ao salvar', 'error'); }
     };
 
     return (
       <div className="w-full px-4 lg:px-8 mx-auto pt-6 pb-24 font-sans text-left">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-6 gap-4 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
            <div>
              <h2 className="text-2xl font-black text-slate-800 tracking-tight">Gestão do Johrei Center</h2>
              <p className="text-xs font-bold text-emerald-700 bg-emerald-50 inline-flex items-center px-3 py-1.5 rounded-lg mt-2 border border-emerald-100"><MapPin className="w-3 h-3 mr-1.5"/> Unidade: {viewingPolo}</p>
            </div>
            
-           {isGestor && (
-             <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
-                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visão de Mestre</p>
-                 <select onChange={e => {setAdminTab(e.target.value); setUser({...user, polo: e.target.value});}} className="w-full bg-white border border-gray-300 text-slate-800 font-bold px-3 py-2 rounded-lg outline-none text-xs">
-                    {polos.map(p => <option key={p} value={p}>JC: {p}</option>)}
-                 </select>
-             </div>
-           )}
+           <div className="flex flex-col sm:flex-row gap-3">
+               {/* 👇 FILTRO INTELIGENTE PARA O REPRESENTANTE 👇 */}
+               <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                   <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visualizar Ciclo / Lote</p>
+                   <select value={filtroAtivo} onChange={e => setDashCycleFilter(e.target.value)} className="w-full bg-white border border-gray-300 text-emerald-800 font-black px-3 py-2 rounded-lg outline-none text-xs cursor-pointer shadow-sm">
+                       {ciclosExistentes.map(data => <option key={data} value={data}>{data}</option>)}
+                   </select>
+               </div>
+
+               {isGestor && (
+                 <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visão de Mestre</p>
+                     <select value={viewingPolo} onChange={e => setManualSelectedPolo(e.target.value)} className="w-full bg-white border border-gray-300 text-slate-800 font-bold px-3 py-2 rounded-lg outline-none text-xs shadow-sm">
+                        {polos.map(p => <option key={p} value={p}>JC: {p}</option>)}
+                     </select>
+                 </div>
+               )}
+           </div>
         </div>
 
         {CONFIG_APENAS_COLETA && (
@@ -1176,8 +1202,8 @@ export default function App() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Card 1: Fatura Total (Obrigação com a Sede) */}
               <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Ciclo</p>
-                <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2)}</h1>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Lote</p>
+                <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-slate-300 mt-1 font-medium">Soma de todas as encomendas do polo</p>
               </div>
 
@@ -1185,12 +1211,12 @@ export default function App() {
               <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa da Unidade</p>
-                  <h1 className="text-2xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2)}</h1>
+                  <h1 className="text-2xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2).replace('.',',')}</h1>
                   <p className="text-[9px] text-emerald-100 mt-1 font-medium">{pedidosPagosPolo.length} pagamentos recebidos</p>
                 </div>
                 {totalArrecadadoPolo > 0 && (
                   <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black text-[10px] py-2 rounded-xl shadow mt-3 transition">
-                    💸 Enviar Repasse
+                    💸 Enviar Repasse à Sede
                   </button>
                 )}
               </div>
@@ -1198,7 +1224,7 @@ export default function App() {
               {/* Card 3: Fiado / Pendente */}
               <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center">
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber de Clientes</p>
-                <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2)}</h1>
+                <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-orange-600 mt-1 font-medium">{pedidosConfirmados.length} membros pendentes</p>
               </div>
             </div>
@@ -1206,7 +1232,7 @@ export default function App() {
             {/* Botões de Ação do Representante */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
                 <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
-                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
+                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio da Unidade
                 </button>
                 <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
                     ➕ Incluir Pedido Manual
@@ -1219,21 +1245,12 @@ export default function App() {
                   <h3 className="font-bold text-slate-800 text-sm">Novo Pedido Manual</h3>
                   <button onClick={() => setShowManualOrder(false)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                   <input type="text" placeholder="Nome do Membro" value={manualClientName} onChange={e => setManualClientName(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm" />
                   <input type="tel" placeholder="WhatsApp (Ex: 11999999999)" value={manualClientWhatsapp} onChange={e => setManualClientWhatsapp(e.target.value)} className="w-full p-3 border border-gray-200 bg-slate-50 rounded-lg text-sm" />
-                  {/* 👇 NOVO CAMPO PARA O GESTOR ESCOLHER O LOTE 👇 */}
-                  <input type="text" placeholder="Data Entrega (Ex: 30/06)" value={manualDeliveryDate} onChange={e => setManualDeliveryDate(e.target.value)} className="w-full p-3 border border-emerald-200 bg-emerald-50 rounded-lg text-sm font-bold text-emerald-800" />
                 </div>
-                {/* 👇 O SELETOR BLINDADO APENAS PARA GESTORES 👇 */}
-                {isGestor && (
-                  <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Destino do Pedido (Visão Master)</p>
-                    <select value={manualSelectedPolo || viewingPolo} onChange={e => setManualSelectedPolo(e.target.value)} className="w-full p-3 border border-gray-300 bg-white rounded-lg text-sm font-bold text-slate-800 outline-none">
-                        {polos.map(p => <option key={p} value={p}>Lançar para: {p}</option>)}
-                    </select>
-                  </div>
-                )}
+   
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
                   <div className="flex flex-col gap-2">
@@ -1251,6 +1268,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                
                 {manualCart.length > 0 && (
                   <div className="mb-5 space-y-2">
                     {manualCart.map(item => (
@@ -1276,34 +1294,27 @@ export default function App() {
 
         {/* CONTROLE DE ABAS: ATIVOS VS HISTÓRICO */}
         <div className="flex gap-2 mb-6">
-            <button onClick={() => setShowHistory(false)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${!showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>📦 Pedidos Ativos</button>
-            <button onClick={() => setShowHistory(true)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>🕰️ Repasses Anteriores</button>
+            <button onClick={() => setShowHistory(false)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${!showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>📦 Pedidos Pendentes / No JC</button>
+            <button onClick={() => setShowHistory(true)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>🕰️ Repassados à Sede</button>
         </div>
 
         {/* VISÃO DE PEDIDOS ATIVOS */}
         {!showHistory && (
           <div className="space-y-6">
-            {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => (
-              <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                  <div className="p-5 bg-slate-50 border-b border-gray-100 flex justify-between items-center">
-                    <div>
-                        <h3 className="font-black text-slate-800 text-lg capitalize">{month}</h3>
-                        <p className="text-xs font-bold text-gray-500 mt-1 flex items-center"><Package className="w-3 h-3 mr-1.5"/> {data.count} pedidos ativos no JC</p>
-                    </div>
-                  </div>
-                  {/* Grid expandido para Widescreen */}
-                  <div className="p-4 bg-slate-50/30 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {data.orders.slice().reverse().map(o => {
+            {repOrders.length > 0 ? (
+                <div className="p-4 bg-slate-50/30 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 border border-gray-100 rounded-2xl">
+                    {repOrders.slice().reverse().map(o => {
                       const temFalta = o.faltas && o.faltas.length > 0;
                       const uRel = allUsers.find(u=>u.email===o.email);
                       const estornado = temFalta && (uRel?.pendingPixRefund === 0 && uRel?.walletBalance === 0);
+
                       return (
                         <div key={o.id} className={`p-4 bg-white border rounded-xl shadow-sm flex flex-col justify-between gap-4 transition-all h-full ${temFalta ? 'border-orange-200' : 'border-gray-100'}`}>
                           <div className="w-full text-left">
                             <div className="mb-2 flex items-start justify-between gap-2">
                               <p className="font-bold text-slate-800 text-base leading-tight">{o.customer}</p>
                               <span className={`shrink-0 px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase text-center ${o.status === 'confirmado' ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
-                                  {o.status === 'confirmado' ? '⏳ Aguardando JC' : '📦 Pix Recebido'}
+                                 {o.status === 'confirmado' ? '⏳ Aguardando JC' : '📦 Pix Recebido'}
                               </span>
                             </div>
                             <p className="text-[10px] font-semibold text-gray-500 mb-3 flex items-center">
@@ -1351,7 +1362,7 @@ export default function App() {
                               
                               <div className="flex flex-col sm:flex-row gap-2 w-full">
                                 {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
-                                    <button onClick={() => {
+                                  <button onClick={() => {
                                       showConfirm('Confirmar Retirada', `O membro pagou R$ ${(o.total||0).toFixed(2)} via PIX e já retirou a mercadoria?`, async () => {
                                           try {
                                               await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
@@ -1371,7 +1382,7 @@ export default function App() {
                                         const quantidade = i.qtd || i.qty || 1;
                                         text += `• ${quantidade}x ${i.name}\n`;
                                     });
-                                    
+
                                     if(temFalta) {
                                         text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
                                         o.faltas.forEach(f => {
@@ -1380,8 +1391,7 @@ export default function App() {
                                         text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
                                     }
                                     
-                                    text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*. Te aguardamos!`;
-                                    
+                                    text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
                                     window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
                                 }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
                                   <MessageCircle className="w-3 h-3 mr-1.5"/> NOTIFICAR MEMBRO
@@ -1391,13 +1401,11 @@ export default function App() {
                         </div>
                       );
                     })}
-                  </div>
-              </div>
-            ))}
-            {Object.keys(ordersByMonth).length === 0 && (
+                </div>
+            ) : (
               <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
                   <Truck className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
-                  <p className="text-gray-500 font-medium text-sm">Nenhuma caixa pendente no JC no momento.</p>
+                  <p className="text-gray-500 font-medium text-sm">Nenhuma caixa pendente neste ciclo.</p>
               </div>
             )}
           </div>
@@ -1406,9 +1414,9 @@ export default function App() {
         {/* VISÃO DE HISTÓRICO DE REPASSES */}
         {showHistory && (
            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-5">
-              <h3 className="font-black text-slate-800 text-lg mb-4">Repasses Concluídos à Sede</h3>
+              <h3 className="font-black text-slate-800 text-lg mb-4">Repasses Concluídos à Sede ({filtroAtivo})</h3>
               {historicoOrders.length === 0 ? (
-                 <p className="text-gray-500 text-sm">Nenhum repasse registrado no histórico.</p>
+                 <p className="text-gray-500 text-sm">Nenhum repasse registrado neste lote.</p>
               ) : (
                  <div className="space-y-3">
                     {historicoOrders.slice().reverse().map(o => (
@@ -1417,14 +1425,13 @@ export default function App() {
                              <p className="font-bold text-slate-800 text-sm">{o.customer}</p>
                              <p className="text-xs text-gray-500 mt-0.5">Pedido Finalizado • {o.dataRepasseSede ? new Date(o.dataRepasseSede).toLocaleDateString() : 'Data N/D'}</p>
                           </div>
-                          <span className="mt-2 sm:mt-0 font-black text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm w-fit">R$ {(o.total||0).toFixed(2)}</span>
+                          <span className="mt-2 sm:mt-0 font-black text-slate-800 bg-white px-3 py-1.5 rounded-lg border border-gray-200 shadow-sm w-fit">R$ {(o.total||0).toFixed(2).replace('.',',')}</span>
                        </div>
                     ))}
                  </div>
               )}
            </div>
         )}
-
       </div>
     );
   };
