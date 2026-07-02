@@ -558,9 +558,9 @@ export default function App() {
         }
         
         // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
-        //if (item.stock !== newStock) {
-          // try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
-        //}
+        if (item.stock !== newStock) {
+          try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
+        }
     }
     
     const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
