@@ -1650,16 +1650,6 @@ export default function App() {
                      </select>
                 </div>
             </div>
-            
-            {/* Controlador de Fases da Loja */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
-               <h3 className="font-bold text-sm text-slate-800 mb-3">Status da Loja (Visão do Cliente)</h3>
-               <div className="flex flex-col md:flex-row gap-2">
-                   <button onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Aberta (Encomendas)</button>
-                   <button onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega</button>
-                   <button onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3 rounded-xl font-bold text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Fechada (Pausada)</button>
-               </div>
-            </div>
 
             {/* NOVO DASHBOARD FINANCEIRO (LAYOUT WIDESCREEN) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
@@ -2172,7 +2162,6 @@ export default function App() {
         const handleSaveSettings = async (e) => {
             e.preventDefault();
             try {
-                // Grava na nuvem, no mesmo lugar onde já salvamos o storeMode!
                 await setDoc(doc(db, "settings", "global"), { sysConfig: sysConfig }, { merge: true });
                 showToast('Configurações Salvas com Sucesso!');
             } catch(err) {
@@ -2183,6 +2172,22 @@ export default function App() {
         return (
            <div className="space-y-6 text-left max-w-4xl mx-auto pb-10">
                <h2 className="text-2xl font-black text-slate-800 mb-4">Configurações Gerais do Sistema</h2>
+               
+               {/* 🚪 NOVO BLOCO: PORTA DA LOJA (STATUS DA VITRINE) */}
+               <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200">
+                   <div className="flex items-center gap-3 mb-4 border-b border-gray-100 pb-4">
+                       <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0"><Home className="w-5 h-5"/></div>
+                       <div>
+                           <h3 className="font-black text-slate-800 text-lg">Status da Vitrine (Visão do Cliente)</h3>
+                           <p className="text-xs text-gray-500 font-medium">Controle instantâneo da fase operacional da sua loja.</p>
+                       </div>
+                   </div>
+                   <div className="flex flex-col sm:flex-row gap-2">
+                       <button type="button" onClick={() => toggleStoreMode('mensal')} className={`flex-1 p-3.5 rounded-xl font-black text-xs transition-all ${storeMode === 'mensal' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟢 Aberta (Encomendas)</button>
+                       <button type="button" onClick={() => toggleStoreMode('estoque')} className={`flex-1 p-3.5 rounded-xl font-black text-xs transition-all ${storeMode === 'estoque' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🟠 Pronta Entrega</button>
+                       <button type="button" onClick={() => toggleStoreMode('pausado')} className={`flex-1 p-3.5 rounded-xl font-black text-xs transition-all ${storeMode === 'pausado' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'}`}>🔴 Fechada (Pausada)</button>
+                   </div>
+               </div>
                
                <form onSubmit={handleSaveSettings} className="space-y-6">
                    
@@ -2202,7 +2207,7 @@ export default function App() {
                            </div>
                            <div>
                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Lote Logístico (Carnes)</label>
-                               <input type="text" value={sysConfig.loteMensal} onChange={e => setSysConfig({...sysConfig, loteMensal: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: Ciclo Mensal - Agosto"/>
+                               <input type="text" value={sysConfig.loteMensal} onChange={e => setSysConfig({...sysConfig, loteMensal: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: Ciclo|Lote - Agosto"/>
                            </div>
                        </div>
                    </div>
@@ -2220,7 +2225,6 @@ export default function App() {
                                </div>
                            </div>
                            
-                           {/* BOTÃO MÁGICO DE LIGAR/DESLIGAR */}
                            <button type="button" onClick={() => setSysConfig({...sysConfig, ofertaAtiva: !sysConfig.ofertaAtiva})} className={`px-4 py-2 rounded-xl font-black text-xs transition-colors shadow-sm border ${sysConfig.ofertaAtiva ? 'bg-red-600 text-white border-red-700' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
                                {sysConfig.ofertaAtiva ? '🟢 OFERTA LIGADA' : '🔴 OFERTA DESLIGADA'}
                            </button>
