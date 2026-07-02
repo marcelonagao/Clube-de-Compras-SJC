@@ -1549,36 +1549,42 @@ export default function App() {
                </div>
             </div>
 
-            {/* SUPER DASHBOARD FINANCEIRO */}
+            {/* SUPER DASHBOARD FINANCEIRO (MELHORADO) */}
             <div className="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 -mt-4 -mr-4 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
                 
                 <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-wider relative z-10">Faturamento Bruto ({dashCycleFilter})</p>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6 relative z-10">
-                   <p className="text-4xl font-black tracking-tight">R$ {faturamentoLote.toFixed(2)}</p>
+                   <p className="text-4xl font-black tracking-tight">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 border-t border-slate-700 pt-5 relative z-10">
+                {/* 👇 AGORA COM 5 COLUNAS PARA RESPIRAR MELHOR 👇 */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 border-t border-slate-700 pt-5 relative z-10">
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Membros</p>
                         <p className="text-lg font-black text-white">{uniqueCustomers.length}</p>
                         <div className="flex gap-2 mt-1 text-[9px] font-bold">
-                            <span className="text-emerald-400">+{membrosNovos} Novos</span>
-                            <span className="text-blue-400">{membrosRecorrentes} Voltas</span>
+                            <span className="text-emerald-400">+{membrosNovos} Nov.</span>
+                            <span className="text-blue-400">{membrosRecorrentes} Rec.</span>
                         </div>
                     </div>
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Volume Girado</p>
-                        <p className="text-lg font-black text-white">{unidadesVendidas} <span className="text-xs text-slate-500">un</span></p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Vol. Físico</p>
+                        <p className="text-lg font-black text-white">{unidadesVendidas} <span className="text-[10px] font-normal text-slate-400">un.</span></p>
                     </div>
+                    {/* CUSTOS SEPARADOS */}
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custo / Impostos</p>
-                        <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2)}</p>
-                        <p className="text-[9px] font-bold text-orange-400 mt-0.5">- R$ {impostosLote.toFixed(2)}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Custos</p>
+                        <p className="text-sm font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                    </div>
+                    {/* IMPOSTOS SEPARADOS */}
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Impostos</p>
+                        <p className="text-sm font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
                     </div>
                     <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-                        <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lucro (MG: {margemLucroLote.toFixed(1)}%)</p>
-                        <p className="text-lg font-black text-emerald-400">R$ {lucroLiquidoLote.toFixed(2)}</p>
+                        <p className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-1">Lucro ({margemLucroLote.toFixed(1)}%)</p>
+                        <p className="text-lg font-black text-emerald-400">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
                     </div>
                 </div>
             </div>
