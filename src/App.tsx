@@ -122,24 +122,31 @@ export default function App() {
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
 
-  // --- CONFIGURAÇÕES GLOBAIS DO SISTEMA ---
-  // 1. A TUA PASTA FINANCEIRA ATUAL (Mudas isto no dia 1 de cada mês/ciclo)
-  const mesReferenciaGlobal = "Julho/2026"; 
+  // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
+  const [sysConfig, setSysConfig] = useState({
+    mesReferencia: "Julho/2026",
+    loteMensal: "Ciclo Mensal - Julho",
+    ofertaAtiva: false,
+    ofertaTitulo: "🚨 OFERTA RELÂMPAGO",
+    ofertaProduto: "Bandeja de Ovos Jumbo (30 un)",
+    ofertaPreco: 25.35,
+    ofertaEntrega: "30/06 - Ovos"
+  });
 
-  const campanhaAtiva = {
-    ativo: true, 
-    titulo: "🚨 OFERTA RELÂMPAGO",
-    produtoNome: "Bandeja de Ovos Jumbo (30 un)",
-    preco: 25.35, 
-    dataEntrega: "30/06 - Ovos", // A etiqueta que vai para a Logística
-    mesReferencia: mesReferenciaGlobal, // A etiqueta que vai para o Dashboard (Julho)
-    cor: "bg-red-600"
-};
-
-  // 2. O CICLO LOGÍSTICO DAS CARNES
+  // A PONTE MÁGICA: Conecta o Firebase ao resto do seu sistema automaticamente!
+  const mesReferenciaGlobal = sysConfig.mesReferencia;
   const cicloMensalAtivo = {
-      dataEntrega: "Ciclo Mensal - Julho", 
-      mesReferencia: mesReferenciaGlobal 
+    dataEntrega: sysConfig.loteMensal, 
+    mesReferencia: sysConfig.mesReferencia 
+  };
+  const campanhaAtiva = {
+    ativo: sysConfig.ofertaAtiva, 
+    titulo: sysConfig.ofertaTitulo,
+    produtoNome: sysConfig.ofertaProduto,
+    preco: Number(sysConfig.ofertaPreco), 
+    dataEntrega: sysConfig.ofertaEntrega, 
+    mesReferencia: sysConfig.mesReferencia, 
+    cor: "bg-red-600"
   };
 
   const [repModalOpen, setRepModalOpen] = useState(false);
@@ -195,9 +202,13 @@ export default function App() {
           setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           setAllUsers(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
           
-          if(configSnap.exists() && configSnap.data().storeMode) {
-             setStoreMode(configSnap.data().storeMode);
-          }
+          // 👇 NOVO BLOCO SUBSTITUÍDO AQUI 👇
+          if(configSnap.exists()) {
+            const cData = configSnap.data();
+            if(cData.storeMode) setStoreMode(cData.storeMode);
+            if(cData.sysConfig) setSysConfig(cData.sysConfig); 
+         }
+         // 👆 FIM DO NOVO BLOCO 👆
         } catch (e) { console.error("Erro ao ler DB", e); }
       };
       fetchData();
@@ -2157,6 +2168,92 @@ export default function App() {
          )
       }
 
+      if (adminTab === 'config') {
+        const handleSaveSettings = async (e) => {
+            e.preventDefault();
+            try {
+                // Grava na nuvem, no mesmo lugar onde já salvamos o storeMode!
+                await setDoc(doc(db, "settings", "global"), { sysConfig: sysConfig }, { merge: true });
+                showToast('Configurações Salvas com Sucesso!');
+            } catch(err) {
+                showToast('Erro ao salvar as configurações.', 'error');
+            }
+        };
+
+        return (
+           <div className="space-y-6 text-left max-w-4xl mx-auto pb-10">
+               <h2 className="text-2xl font-black text-slate-800 mb-4">Configurações Gerais do Sistema</h2>
+               
+               <form onSubmit={handleSaveSettings} className="space-y-6">
+                   
+                   {/* BLOCO 1: PARAMETRIZAÇÃO DO CICLO */}
+                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200">
+                       <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0"><LayoutDashboard className="w-5 h-5"/></div>
+                           <div>
+                               <h3 className="font-black text-slate-800 text-lg">Parâmetros do Ciclo Vigente</h3>
+                               <p className="text-xs text-gray-500 font-medium">Define para onde vão os pedidos principais (Carnes, etc).</p>
+                           </div>
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Pasta Financeira (DRE)</label>
+                               <input type="text" value={sysConfig.mesReferencia} onChange={e => setSysConfig({...sysConfig, mesReferencia: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: Agosto/2026"/>
+                           </div>
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Lote Logístico (Carnes)</label>
+                               <input type="text" value={sysConfig.loteMensal} onChange={e => setSysConfig({...sysConfig, loteMensal: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: Ciclo Mensal - Agosto"/>
+                           </div>
+                       </div>
+                   </div>
+
+                   {/* BLOCO 2: CAMPANHA RELÂMPAGO */}
+                   <div className="bg-white p-6 rounded-3xl shadow-sm border border-red-100 relative overflow-hidden">
+                       <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl -mt-10 -mr-10"></div>
+                       
+                       <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4 relative z-10">
+                           <div className="flex items-center gap-3">
+                               <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center shrink-0"><Package className="w-5 h-5"/></div>
+                               <div>
+                                   <h3 className="font-black text-slate-800 text-lg">Oferta Relâmpago (Expressa)</h3>
+                                   <p className="text-xs text-gray-500 font-medium">Banner inteligente na vitrine com botão de 1-Clique.</p>
+                               </div>
+                           </div>
+                           
+                           {/* BOTÃO MÁGICO DE LIGAR/DESLIGAR */}
+                           <button type="button" onClick={() => setSysConfig({...sysConfig, ofertaAtiva: !sysConfig.ofertaAtiva})} className={`px-4 py-2 rounded-xl font-black text-xs transition-colors shadow-sm border ${sysConfig.ofertaAtiva ? 'bg-red-600 text-white border-red-700' : 'bg-gray-100 text-gray-500 border-gray-200'}`}>
+                               {sysConfig.ofertaAtiva ? '🟢 OFERTA LIGADA' : '🔴 OFERTA DESLIGADA'}
+                           </button>
+                       </div>
+
+                       <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10 transition-opacity ${!sysConfig.ofertaAtiva && 'opacity-50 grayscale-[30%]'}`}>
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Título no Banner</label>
+                               <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaTitulo} onChange={e => setSysConfig({...sysConfig, ofertaTitulo: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm"/>
+                           </div>
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Nome do Produto</label>
+                               <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaProduto} onChange={e => setSysConfig({...sysConfig, ofertaProduto: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm"/>
+                           </div>
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Lote/Entrega (Vai para a Van)</label>
+                               <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaEntrega} onChange={e => setSysConfig({...sysConfig, ofertaEntrega: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm" placeholder="Ex: 30/06 - Ovos"/>
+                           </div>
+                           <div>
+                               <label className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-1 block">Preço de Venda (R$)</label>
+                               <input type="number" step="0.01" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaPreco} onChange={e => setSysConfig({...sysConfig, ofertaPreco: e.target.value})} className="w-full p-3 bg-orange-50 border border-orange-200 rounded-xl outline-none font-black text-orange-900 text-sm"/>
+                           </div>
+                       </div>
+                   </div>
+
+                   <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-xl hover:bg-slate-900 transition flex items-center justify-center text-sm">
+                      <CheckCircle className="w-5 h-5 mr-2"/> Gravar e Atualizar Loja Agora
+                   </button>
+               </form>
+           </div>
+        );
+    }
+
       if (adminTab === 'financeiro') {
         const estornosPendentes = allUsers.filter(u => u.pendingPixRefund > 0);
         return (
@@ -2207,6 +2304,7 @@ export default function App() {
             <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
             <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
             <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
+            <button onClick={() => {setAdminTab('config'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='config'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>⚙️ Configurações Globais</button>
             {!CONFIG_APENAS_COLETA && (
                <button onClick={() => {setAdminTab('financeiro'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='financeiro'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Financeiro (Estornos)</button>
             )}            
