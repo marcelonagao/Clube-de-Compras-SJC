@@ -1121,7 +1121,21 @@ export default function App() {
 
     const handleAddToManualCart = () => {
       if (!manualItemProduct) return showToast('Selecione um produto!', 'error');
-      const prod = products.find(p => String(p.id) === String(manualItemProduct));
+      
+      let prod;
+      
+      // 🌟 MÁGICA: Se ele escolher a oferta expressa, cria o produto na hora!
+      if (manualItemProduct === 'oferta-1') {
+          prod = { 
+              id: 'oferta-1', 
+              name: sysConfig.ofertaProduto, 
+              price: Number(sysConfig.ofertaPreco) 
+          };
+      } else {
+          // Senão, procura normalmente no catálogo
+          prod = products.find(p => String(p.id) === String(manualItemProduct));
+      }
+      
       if (!prod) return;
       
       const existing = manualCart.find(i => i.id === prod.id);
@@ -1257,9 +1271,20 @@ export default function App() {
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
                   <div className="flex flex-col gap-2">
-                    <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
+                  <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
                       <option value="">Selecione o Produto...</option>
-                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
+                      
+                      {/* 🌟 INJETA A OFERTA EXPRESSA SE ELA ESTIVER LIGADA NO PAINEL GLOBAL 🌟 */}
+                      {sysConfig.ofertaAtiva && (
+                          <option value="oferta-1" className="font-black text-red-600 bg-red-50">
+                              🔥 OFERTA: {sysConfig.ofertaProduto} - R$ {Number(sysConfig.ofertaPreco).toFixed(2)}
+                          </option>
+                      )}
+
+                      {/* LISTA O RESTO DO CATÁLOGO NORMALMENTE */}
+                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
+                          <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>
+                      ))}
                     </select>
                     <div className="flex gap-2 justify-end">
                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
