@@ -1780,48 +1780,48 @@ useEffect(() => {
                 </div>
             </div>
 
-            {/* 🚀 GRID ESTRATÉGICO: 4 CARDS EXECUTIVOS EM ALTA HARMONIA */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+           {/* 🚀 GRID ESTRATÉGICO: 4 CARDS (2x2 no Celular) */}
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
                 
-                {/* Card 1: Faturamento Bruto (Estilo Premium Escuro) */}
-                <div className="bg-slate-800 p-5 rounded-3xl shadow-xl text-white border border-slate-700 relative overflow-hidden flex flex-col justify-between min-h-[135px]">
-                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                {/* Card 1: Faturamento Bruto */}
+                <div className="bg-slate-800 p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xl text-white border border-slate-700 relative overflow-hidden flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Faturamento Bruto</p>
-                        <h3 className="text-2xl font-black tracking-tight leading-none mt-2 text-white">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</h3>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 line-clamp-1">Faturamento Bruto</p>
+                        <h3 className="text-lg sm:text-2xl font-black tracking-tight leading-none mt-1 sm:mt-2 text-white truncate">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</h3>
                     </div>
-                    <p className="text-[9px] text-slate-400 font-medium">Total transacionado no lote</p>
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-medium mt-2 leading-tight">Total transacionado</p>
                 </div>
 
                 {/* Card 2: Lucro Líquido */}
-                <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[135px]">
+                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
                     <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Lucro Líquido</p>
-                        <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none mt-2">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</h3>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Lucro Líquido</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</h3>
                     </div>
                     <div className="mt-2">
-                        <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200 font-black">Margem: {margemLucroLote.toFixed(1)}%</span>
+                        <span className="text-[8px] sm:text-[9px] bg-emerald-50 text-emerald-700 px-1.5 sm:px-2 py-0.5 rounded border border-emerald-200 font-black truncate block w-fit">Margem: {margemLucroLote.toFixed(1)}%</span>
                     </div>
                 </div>
 
-                {/* Card 3: Capital em Estoque (O dinheiro que está na prateleira) */}
-                <div className="bg-emerald-50 p-5 rounded-3xl border border-emerald-200/60 flex flex-col justify-between min-h-[135px]">
+                {/* Card 3: Capital em Estoque */}
+                <div className="bg-emerald-50 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-200/60 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
                     <div>
-                        <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
-                        <h3 className="text-2xl font-black text-emerald-900 tracking-tight leading-none mt-2">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h3>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1 line-clamp-1">Capital em Estoque</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-emerald-900 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h3>
                     </div>
-                    <p className="text-[9px] font-bold text-emerald-600">{totalItensEstoque} produtos a pronta entrega</p>
+                    <p className="text-[8px] sm:text-[9px] font-bold text-emerald-600 mt-2 leading-tight truncate">{totalItensEstoque} un a pronta entrega</p>
                 </div>
 
-                {/* Card 4: Comunidade (Membros Atendidos) */}
-                <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[135px]">
+                {/* Card 4: Comunidade */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
                     <div>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Membros Atendidos</p>
-                        <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none mt-2">{uniqueCustomers.length}</h3>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Membros Atendidos</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2">{uniqueCustomers.length}</h3>
                     </div>
-                    <div className="flex gap-1.5 text-[8px] font-black uppercase tracking-wider">
-                        <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded">+{membrosNovos} Novos</span>
-                        <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded">{membrosRecorrentes} Retornos</span>
+                    <div className="flex flex-wrap gap-1 sm:gap-1.5 text-[8px] font-black uppercase tracking-wider mt-2">
+                        <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded w-fit">+{membrosNovos} Novos</span>
+                        <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded w-fit">{membrosRecorrentes} Voltas</span>
                     </div>
                 </div>
 
