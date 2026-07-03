@@ -1780,84 +1780,80 @@ useEffect(() => {
                 </div>
             </div>
 
-            {/* NOVO DASHBOARD FINANCEIRO (LAYOUT WIDESCREEN) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+            {/* 🚀 GRID ESTRATÉGICO: 4 CARDS EXECUTIVOS EM ALTA HARMONIA */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
                 
-                {/* 📊 BLOCO PRINCIPAL: FINANCEIRO (Lado Esquerdo) */}
-                <div className="lg:col-span-2 bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl border border-slate-700 text-white relative overflow-hidden flex flex-col justify-between">
-                    {/* Efeito de brilho de fundo */}
-                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl"></div>
-                    
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 relative z-10 mb-8">
-                        <div>
-                            <p className="text-[11px] font-bold text-emerald-400 mb-1.5 uppercase tracking-widest">Faturamento Bruto</p>
-                            <p className="text-4xl sm:text-5xl font-black tracking-tight leading-none">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
-                        </div>
-                        <div className="text-left sm:text-right bg-slate-900/60 p-4 rounded-2xl border border-slate-700/50 w-full sm:w-auto shadow-inner">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Lucro Líquido ({margemLucroLote.toFixed(1)}%)</p>
-                            <p className="text-2xl sm:text-3xl font-black text-emerald-400 leading-none">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
-                        </div>
+                {/* Card 1: Faturamento Bruto (Estilo Premium Escuro) */}
+                <div className="bg-slate-800 p-5 rounded-3xl shadow-xl text-white border border-slate-700 relative overflow-hidden flex flex-col justify-between min-h-[135px]">
+                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Faturamento Bruto</p>
+                        <h3 className="text-2xl font-black tracking-tight leading-none mt-2 text-white">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</h3>
                     </div>
+                    <p className="text-[9px] text-slate-400 font-medium">Total transacionado no lote</p>
+                </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-700/60 relative z-10">
-                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Custos (CMV)</p>
-                            <p className="text-lg sm:text-xl font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Impostos (8%)</p>
-                            <p className="text-lg sm:text-xl font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
-                         </div>
+                {/* Card 2: Lucro Líquido */}
+                <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[135px]">
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Lucro Líquido</p>
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none mt-2">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</h3>
+                    </div>
+                    <div className="mt-2">
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200 font-black">Margem: {margemLucroLote.toFixed(1)}%</span>
                     </div>
                 </div>
 
-                {/* 👥 BLOCO SECUNDÁRIO: OPERACIONAL (Lado Direito) */}
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex flex-col gap-4 justify-between h-full">
-                    {/* Total de Membros */}
-                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Membros Atendidos</p>
-                            <p className="text-3xl font-black text-emerald-900 leading-none">{uniqueCustomers.length}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
-                            <Users className="w-6 h-6 text-emerald-500"/>
-                        </div>
+                {/* Card 3: Capital em Estoque (O dinheiro que está na prateleira) */}
+                <div className="bg-emerald-50 p-5 rounded-3xl border border-emerald-200/60 flex flex-col justify-between min-h-[135px]">
+                    <div>
+                        <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
+                        <h3 className="text-2xl font-black text-emerald-900 tracking-tight leading-none mt-2">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h3>
                     </div>
-                    
-                    {/* Separação Novos/Recorrentes */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Novos</p>
-                            <p className="text-xl font-black text-emerald-600 leading-none">+{membrosNovos}</p>
-                        </div>
-                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Retornos</p>
-                            <p className="text-xl font-black text-blue-600 leading-none">{membrosRecorrentes}</p>
-                        </div>
-                    </div>
+                    <p className="text-[9px] font-bold text-emerald-600">{totalItensEstoque} produtos a pronta entrega</p>
+                </div>
 
-                    {/* 👇 MINI-GRID PARA DEIXAR OS DOIS CARDS LADO A LADO 👇 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                        {/* Volume Físico */}
-                        <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex items-center justify-between text-white shadow-sm">
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
-                                <p className="text-lg font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">un</span></p>
-                            </div>
-                            <Package className="w-5 h-5 text-slate-500 opacity-50 shrink-0 ml-2"/>
-                        </div>
+                {/* Card 4: Comunidade (Membros Atendidos) */}
+                <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[135px]">
+                    <div>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Membros Atendidos</p>
+                        <h3 className="text-2xl font-black text-slate-800 tracking-tight leading-none mt-2">{uniqueCustomers.length}</h3>
+                    </div>
+                    <div className="flex gap-1.5 text-[8px] font-black uppercase tracking-wider">
+                        <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded">+{membrosNovos} Novos</span>
+                        <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded">{membrosRecorrentes} Retornos</span>
+                    </div>
+                </div>
 
-                        {/* Capital em Estoque */}
-                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-sm">
-                            <div>
-                                <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
-                                <p className="text-lg font-black text-emerald-900 leading-none">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</p>
-                            </div>
-                            <div className="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center shrink-0 border border-emerald-100 ml-2">
-                                <Leaf className="w-4 h-4 text-emerald-500"/>
-                            </div>
+            </div>
+
+            {/* 📊 SEÇÃO DE DETALHAMENTO: CUSTOS LOGÍSTICOS E OPERACIONAIS */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+                
+                {/* Bloco de Deduções DRE (CMV e Impostos alinhados horizontalmente) */}
+                <div className="lg:col-span-2 bg-slate-100/50 p-5 rounded-3xl border border-gray-200/60 flex flex-col justify-center">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 pl-1">Demonstrativo de Custos do Fornecedor</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Custos de Compra (CMV)</p>
+                            <p className="text-lg font-black text-red-500">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Impostos Retidos (8%)</p>
+                            <p className="text-lg font-black text-orange-500">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
                         </div>
                     </div>
+                </div>
+
+                {/* Volume Girado (Focado na Logística da Sede) */}
+                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 text-white flex items-center justify-between shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-6 -mr-6 w-24 h-24 bg-slate-700/30 rounded-full blur-xl"></div>
+                    <div className="relative z-10">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Total Girado</p>
+                        <p className="text-2xl font-black text-white mt-1 leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
+                        <p className="text-[9px] text-slate-400 mt-2.5 font-medium">Movimentadas fisicamente pela van</p>
+                    </div>
+                    <Package className="w-10 h-10 text-slate-600 opacity-40 shrink-0 relative z-10"/>
                 </div>
 
             </div>
