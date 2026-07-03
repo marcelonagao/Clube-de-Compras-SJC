@@ -1760,6 +1760,10 @@ useEffect(() => {
 
         const maxSale = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => salesByDay[d]), 100) : 100;
 
+        // 7. CÁLCULO DO ESTOQUE ATUAL (Capital Imobilizado)
+        const totalItensEstoque = products.reduce((sum, p) => sum + (p.stock || 0), 0);
+        const capitalImobilizado = products.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
+
         return (
           <div className="space-y-6 text-left">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
@@ -1834,11 +1838,23 @@ useEffect(() => {
 
                     {/* Volume Físico */}
                     <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 mt-2 flex items-center justify-between text-white shadow-sm">
-                         <div>
+                        <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
                             <p className="text-xl font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
                         </div>
                         <Package className="w-6 h-6 text-slate-500 opacity-50"/>
+                    </div>
+
+                    {/* Novo Card: Valor em Estoque */}
+                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-sm mt-1">
+                        <div>
+                            <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
+                            <p className="text-xl font-black text-emerald-900 leading-none">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</p>
+                            <p className="text-[9px] font-bold text-emerald-600 mt-1.5">{totalItensEstoque} produtos a pronta entrega</p>
+                        </div>
+                        <div className="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center shrink-0 border border-emerald-100">
+                            <Leaf className="w-5 h-5 text-emerald-500"/>
+                        </div>
                     </div>
                 </div>
 
