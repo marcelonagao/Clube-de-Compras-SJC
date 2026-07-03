@@ -1836,24 +1836,26 @@ useEffect(() => {
                         </div>
                     </div>
 
-                    {/* Volume Físico */}
-                    <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 mt-2 flex items-center justify-between text-white shadow-sm">
-                        <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
-                            <p className="text-xl font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
+                    {/* 👇 MINI-GRID PARA DEIXAR OS DOIS CARDS LADO A LADO 👇 */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                        {/* Volume Físico */}
+                        <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 flex items-center justify-between text-white shadow-sm">
+                            <div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
+                                <p className="text-lg font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">un</span></p>
+                            </div>
+                            <Package className="w-5 h-5 text-slate-500 opacity-50 shrink-0 ml-2"/>
                         </div>
-                        <Package className="w-6 h-6 text-slate-500 opacity-50"/>
-                    </div>
 
-                    {/* Novo Card: Valor em Estoque */}
-                    <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-sm mt-1">
-                        <div>
-                            <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
-                            <p className="text-xl font-black text-emerald-900 leading-none">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</p>
-                            <p className="text-[9px] font-bold text-emerald-600 mt-1.5">{totalItensEstoque} produtos a pronta entrega</p>
-                        </div>
-                        <div className="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center shrink-0 border border-emerald-100">
-                            <Leaf className="w-5 h-5 text-emerald-500"/>
+                        {/* Capital em Estoque */}
+                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between shadow-sm">
+                            <div>
+                                <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital em Estoque</p>
+                                <p className="text-lg font-black text-emerald-900 leading-none">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                            <div className="w-8 h-8 bg-white rounded-lg shadow-sm flex items-center justify-center shrink-0 border border-emerald-100 ml-2">
+                                <Leaf className="w-4 h-4 text-emerald-500"/>
+                            </div>
                         </div>
                     </div>
                 </div>
