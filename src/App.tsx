@@ -355,6 +355,22 @@ useEffect(() => {
       };
 
       const orderRef = await addDoc(collection(db, "orders"), newOrder);
+
+      // 👇 BAIXA DE ESTOQUE AUTOMÁTICA DOS CLIENTES (SOMENTE NA PRONTA ENTREGA) 👇
+      if (storeMode === 'estoque') {
+        for (const item of cart) {
+            if (item.id !== 'oferta-1') {
+                const prodRef = doc(db, "products", item.id);
+                const prodDoc = await getDoc(prodRef);
+                if (prodDoc.exists()) {
+                    const estoqueAtual = prodDoc.data().stock || 0;
+                    // Usa item.qtd porque o carrinho do cliente chama a quantidade assim
+                    await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qtd) });
+                }
+            }
+        }
+    }
+    // 👆 FIM DA BAIXA DE CLIENTES 👆
       
       // Se usou saldo total (cobriu 100% do pedido)
       if (finalTotal <= 0) {
@@ -1215,22 +1231,18 @@ useEffect(() => {
         // 1. Salva o pedido no banco de dados
         await addDoc(collection(db, "orders"), manualOrder);
 
-        // 👇 2. A MÁGICA: DA BAIXA NO ESTOQUE AUTOMATICAMENTE 👇
-        for (const item of manualCart) {
-            // Ignora a baixa se for a oferta relâmpago genérica (ela não tem estoque fixo)
-            if (item.id !== 'oferta-1') {
-                const prodRef = doc(db, "products", item.id);
-                const prodDoc = await getDoc(prodRef);
-                
-                if (prodDoc.exists()) {
-                    const estoqueAtual = prodDoc.data().stock || 0;
-                    // Subtrai a quantidade (garantindo que não fica negativo)
-                    const novoEstoque = Math.max(0, estoqueAtual - item.qty);
-                    await updateDoc(prodRef, { stock: novoEstoque });
-                }
-            }
-        }
-        // 👆 FIM DA BAIXA DE ESTOQUE 👆
+        if (storeMode === 'estoque') {
+          for (const item of manualCart) {
+              if (item.id !== 'oferta-1') {
+                  const prodRef = doc(db, "products", item.id);
+                  const prodDoc = await getDoc(prodRef);
+                  if (prodDoc.exists()) {
+                      const estoqueAtual = prodDoc.data().stock || 0;
+                      await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qty) });
+                  }
+              }
+          }
+      }
 
         showToast('Pedido Manual Salvo com Sucesso e Estoque Baixado!');
         setShowManualOrder(false);
