@@ -164,12 +164,35 @@ export default function App() {
   const getActivePrice = (p) => (p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price) ? p.promotionalPrice : p.price;
   const cartTotal = cart.reduce((sum, item) => sum + (getActivePrice(item) * item.qtd), 0);
 
- // 🌟 O NOVO CÉREBRO EM TEMPO REAL E ECONÔMICO 🌟
+ // 1. MOTOR DE LOGIN (Nunca deve ser apagado)
  useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    if (firebaseUser) {
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+      
+      if (userDoc.exists() && userDoc.data().polo) {
+        const userData = userDoc.data();
+        setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
+        setCurrentScreen('shop');
+      } else {
+        setTempGoogleUser(firebaseUser);
+        setAuthMode('complete_google');
+        setCurrentScreen('login');
+      }
+    } else {
+      setUser(null);
+      setCurrentScreen('login');
+    }
+    setAuthLoading(false);
+  });
+  return () => unsubscribe();
+}, []);
+
+// 2. MOTOR DE DADOS EM TEMPO REAL (O que estanca as milhares de leituras)
+useEffect(() => {
   // Só abre o canal com o banco se o usuário estiver logado
   if (!user) return; 
 
-  // O onSnapshot mantém a tela sempre atualizada automaticamente e gasta o mínimo possível
   const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
   });
@@ -190,14 +213,14 @@ export default function App() {
       }
   });
 
-  // Função de Limpeza de Memória: Desliga tudo se o usuário fechar a tela!
+  // Função de Limpeza: Desliga tudo se o usuário sair
   return () => {
       unsubProducts();
       unsubOrders();
       unsubUsers();
       unsubConfig();
   };
-}, [user]); // 🛡️ A MÁGICA DA BLINDAGEM: O gatilho agora é só o Login do Usuário!
+}, [user]);
 
   useEffect(() => {
     if (currentScreen !== 'login' && !isPrintMode) {
