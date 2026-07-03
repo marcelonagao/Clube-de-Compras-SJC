@@ -1212,13 +1212,35 @@ useEffect(() => {
       };
 
       try {
+        // 1. Salva o pedido no banco de dados
         await addDoc(collection(db, "orders"), manualOrder);
-        showToast('Pedido Manual Salvo com Sucesso!');
+
+        // 👇 2. A MÁGICA: DA BAIXA NO ESTOQUE AUTOMATICAMENTE 👇
+        for (const item of manualCart) {
+            // Ignora a baixa se for a oferta relâmpago genérica (ela não tem estoque fixo)
+            if (item.id !== 'oferta-1') {
+                const prodRef = doc(db, "products", item.id);
+                const prodDoc = await getDoc(prodRef);
+                
+                if (prodDoc.exists()) {
+                    const estoqueAtual = prodDoc.data().stock || 0;
+                    // Subtrai a quantidade (garantindo que não fica negativo)
+                    const novoEstoque = Math.max(0, estoqueAtual - item.qty);
+                    await updateDoc(prodRef, { stock: novoEstoque });
+                }
+            }
+        }
+        // 👆 FIM DA BAIXA DE ESTOQUE 👆
+
+        showToast('Pedido Manual Salvo com Sucesso e Estoque Baixado!');
         setShowManualOrder(false);
         setManualClientName('');
         setManualClientWhatsapp('');
         setManualCart([]);
-      } catch (e) { showToast('Erro ao salvar', 'error'); }
+      } catch (e) { 
+        console.error("ERRO AO SALVAR PEDIDO MANUAL:", e);
+        showToast('Erro ao salvar pedido manual', 'error'); 
+      }
     };
 
     return (
