@@ -4,11 +4,11 @@ import {
   CreditCard, QrCode, Edit2, Trash2, ArrowLeft, ArrowRight, 
   Printer, Upload, ImageIcon, Download, Clock, MessageCircle, 
   LayoutDashboard, Eye, Wallet, Loader2, Home, Search, Menu, X, 
-  LineChart, AlertTriangle, LogOut, Truck, ChevronDown, ChevronUp, FileSpreadsheet,BellRing, Users
+  LineChart, AlertTriangle, LogOut, Truck, ChevronDown, ChevronUp, FileSpreadsheet, Users
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -118,7 +118,6 @@ export default function App() {
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
-  const [showMassNotify, setShowMassNotify] = useState(false);
 
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
@@ -164,63 +163,30 @@ export default function App() {
   const getActivePrice = (p) => (p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price) ? p.promotionalPrice : p.price;
   const cartTotal = cart.reduce((sum, item) => sum + (getActivePrice(item) * item.qtd), 0);
 
- // 1. MOTOR DE LOGIN (Nunca deve ser apagado)
- useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-      
-      if (userDoc.exists() && userDoc.data().polo) {
-        const userData = userDoc.data();
-        setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
-        setCurrentScreen('shop');
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        
+        if (userDoc.exists() && userDoc.data().polo) {
+          // Usuário existe e tem os dados completos. Pode entrar na loja!
+          const userData = userDoc.data();
+          setUser({ uid: firebaseUser.uid, email: firebaseUser.email, ...userData });
+          setCurrentScreen('shop');
+        } else {
+          // INTERCEPTADOR: Logou com Google, mas não tem cadastro no banco de dados!
+          setTempGoogleUser(firebaseUser);
+          setAuthMode('complete_google');
+          setCurrentScreen('login');
+        }
       } else {
-        setTempGoogleUser(firebaseUser);
-        setAuthMode('complete_google');
+        setUser(null);
         setCurrentScreen('login');
       }
-    } else {
-      setUser(null);
-      setCurrentScreen('login');
-    }
-    setAuthLoading(false);
-  });
-  return () => unsubscribe();
-}, []);
-
-// 2. MOTOR DE DADOS EM TEMPO REAL (O que estanca as milhares de leituras)
-useEffect(() => {
-  // Só abre o canal com o banco se o usuário estiver logado
-  if (!user) return; 
-
-  const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
-      setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
-
-  const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
-      setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
-
-  const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
-      setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-  });
-
-  const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-      if(docSnap.exists()) {
-          const cData = docSnap.data();
-          if(cData.storeMode) setStoreMode(cData.storeMode);
-          if(cData.sysConfig) setSysConfig(cData.sysConfig); 
-      }
-  });
-
-  // Função de Limpeza: Desliga tudo se o usuário sair
-  return () => {
-      unsubProducts();
-      unsubOrders();
-      unsubUsers();
-      unsubConfig();
-  };
-}, [user]);
+      setAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (currentScreen !== 'login' && !isPrintMode) {
@@ -355,22 +321,6 @@ useEffect(() => {
       };
 
       const orderRef = await addDoc(collection(db, "orders"), newOrder);
-
-      // 👇 BAIXA DE ESTOQUE AUTOMÁTICA DOS CLIENTES (SOMENTE NA PRONTA ENTREGA) 👇
-      if (storeMode === 'estoque') {
-        for (const item of cart) {
-            if (item.id !== 'oferta-1') {
-                const prodRef = doc(db, "products", item.id);
-                const prodDoc = await getDoc(prodRef);
-                if (prodDoc.exists()) {
-                    const estoqueAtual = prodDoc.data().stock || 0;
-                    // Usa item.qtd porque o carrinho do cliente chama a quantidade assim
-                    await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qtd) });
-                }
-            }
-        }
-    }
-    // 👆 FIM DA BAIXA DE CLIENTES 👆
       
       // Se usou saldo total (cobriu 100% do pedido)
       if (finalTotal <= 0) {
@@ -456,29 +406,29 @@ useEffect(() => {
 
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
+    
     const ordersToUpdate = orders.filter(o => 
        ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
        (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct))
     );
+    
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
-    // MÁGICA NOVA: Pega o nome do produto diretamente do pedido, ignorando o catálogo
-    let foundProductName = '';
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
-       if (item && !foundProductName) foundProductName = item.name;
        const quantidade = item.qtd || item.qty;
        return { 
            orderId: order.id, customer: order.customer, userEmail: order.email, 
            itemPrice: (item.price || 0), maxQty: quantidade, itemData: item, polo: order.polo 
        };
     });
+    
+    // O sistema ainda marca a falta total por padrão para agilizar, mas agora você pode diminuir!
     const initialSelections = {};
     impact.forEach(imp => { initialSelections[imp.orderId] = imp.maxQty; });
-    
-    // Injeta o produto fantasma direto na tela de impacto
+
     setShortagePreview({ 
-      product: { id: shortageSelectedProduct, name: foundProductName }, 
+      product: products.find(p => String(p.id) === String(shortageSelectedProduct)), 
       impact 
     });
     setShortageSelectedOrders(initialSelections);
@@ -608,7 +558,7 @@ useEffect(() => {
         
         // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
         if (item.stock !== newStock) {
-          try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
+           try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
         }
     }
     
@@ -1106,25 +1056,23 @@ useEffect(() => {
   };
 
   const renderRepDashboard = () => {
-    // Corrige a visão do Gestor caso esteja a "espreitar" outras unidades
+    // Corrige o bug da visão do Gestor
     const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
     
-    // 1. LÓGICA DE ETIQUETAS E FILTRO BLINDADA (Igual à do Dashboard Central)
+    // 1. LÓGICA DE ETIQUETAS E FILTRO (Idêntica à do Dashboard Master)
     const lotesLogisticos = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     
     const pastasFinanceiras = [...new Set(orders.map(o => {
-        // Se o pedido já tem a etiqueta financeira, usa-a
         if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
         
-        // 🌟 CORREÇÃO CIRÚRGICA: Pedidos antigos ou antecipados ignoram o calendário
-        // e vão diretamente para a pasta ativa definida no teu Firebase
-        return `Consolidado: ${sysConfig.mesReferencia}`;
+        // Proteção para pedidos antigos
+        const date = o.date ? new Date(o.date) : new Date();
+        return `Consolidado: ${meses[date.getMonth()]}/${date.getFullYear()}`;
     }))].sort();
 
     const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
-    
-    // Âncora de segurança para o "Estado Fantasma" do React
-    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : `Consolidado: ${sysConfig.mesReferencia}`;
+    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
     // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
     const poloOrdersFiltered = orders.filter(o => {
@@ -1132,20 +1080,18 @@ useEffect(() => {
         
         if (filtroAtivo.startsWith('Consolidado:')) {
             const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+            if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
             
-            if (o.cicloFinanceiro) {
-                return o.cicloFinanceiro === pastaFiltro;
-            } else {
-                // 🌟 CORREÇÃO CIRÚRGICA NO FILTRO: Força a retrocompatibilidade com o Firebase
-                return sysConfig.mesReferencia === pastaFiltro;
-            }
+            // Retrocompatibilidade
+            const datePedido = o.date ? new Date(o.date) : new Date();
+            const pastaAntiga = `${meses[datePedido.getMonth()]}/${datePedido.getFullYear()}`;
+            return pastaAntiga === pastaFiltro;
         } else {
-            // Filtro por lote logístico específico (Ex: 30/06 - Ovos)
             return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
         }
     });
 
-    // 3. SEPARA OS PEDIDOS POR STATUS DENTRO DO FILTRO SELECIONADO
+    // 3. SEPARA POR STATUS (DENTRO DO CICLO)
     const repOrders = poloOrdersFiltered.filter(o => ['confirmado', 'pago_polo'].includes(o.status));
     const historicoOrders = poloOrdersFiltered.filter(o => o.status === 'pago');
 
@@ -1171,21 +1117,7 @@ useEffect(() => {
 
     const handleAddToManualCart = () => {
       if (!manualItemProduct) return showToast('Selecione um produto!', 'error');
-      
-      let prod;
-      
-      // 🌟 MÁGICA: Se ele escolher a oferta expressa, cria o produto na hora!
-      if (manualItemProduct === 'oferta-1') {
-          prod = { 
-              id: 'oferta-1', 
-              name: sysConfig.ofertaProduto, 
-              price: Number(sysConfig.ofertaPreco) 
-          };
-      } else {
-          // Senão, procura normalmente no catálogo
-          prod = products.find(p => String(p.id) === String(manualItemProduct));
-      }
-      
+      const prod = products.find(p => String(p.id) === String(manualItemProduct));
       if (!prod) return;
       
       const existing = manualCart.find(i => i.id === prod.id);
@@ -1221,38 +1153,20 @@ useEffect(() => {
         status: 'confirmado', 
         status_nfe: 'pendente',
         date: new Date().toISOString(), 
-        deliveryDate: sysConfig.loteMensal, 
-        cicloFinanceiro: sysConfig.mesReferencia, 
+        deliveryDate: sysConfig.loteMensal, // Usa a configuração da nuvem
+        cicloFinanceiro: sysConfig.mesReferencia, // Usa a configuração da nuvem
         items: manualCart, 
         faltas: []
       };
 
       try {
-        // 1. Salva o pedido no banco de dados
         await addDoc(collection(db, "orders"), manualOrder);
-
-        if (storeMode === 'estoque') {
-          for (const item of manualCart) {
-              if (item.id !== 'oferta-1') {
-                  const prodRef = doc(db, "products", item.id);
-                  const prodDoc = await getDoc(prodRef);
-                  if (prodDoc.exists()) {
-                      const estoqueAtual = prodDoc.data().stock || 0;
-                      await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qty) });
-                  }
-              }
-          }
-      }
-
-        showToast('Pedido Manual Salvo com Sucesso e Estoque Baixado!');
+        showToast('Pedido Manual Salvo com Sucesso!');
         setShowManualOrder(false);
         setManualClientName('');
         setManualClientWhatsapp('');
         setManualCart([]);
-      } catch (e) { 
-        console.error("ERRO AO SALVAR PEDIDO MANUAL:", e);
-        showToast('Erro ao salvar pedido manual', 'error'); 
-      }
+      } catch (e) { showToast('Erro ao salvar', 'error'); }
     };
 
     return (
@@ -1264,7 +1178,7 @@ useEffect(() => {
            </div>
            
            <div className="flex flex-col sm:flex-row gap-3">
-               {/* SELETOR DE ANÁLISE ATUALIZADO PARA FILTROATIVO */}
+               {/* 👇 FILTRO INTELIGENTE PARA O REPRESENTANTE 👇 */}
                <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visualizar Ciclo / Lote</p>
                    <select value={filtroAtivo} onChange={e => setDashCycleFilter(e.target.value)} className="w-full bg-white border border-gray-300 text-emerald-800 font-black px-3 py-2 rounded-lg outline-none text-xs cursor-pointer shadow-sm">
@@ -1286,14 +1200,14 @@ useEffect(() => {
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Card 1: Título dinâmico baseado no filtro selecionado */}
+              {/* Card 1: Fatura Total (Obrigação com a Sede) */}
               <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">📋 {filtroAtivo}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Lote</p>
                 <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-slate-300 mt-1 font-medium">Soma de todas as encomendas do polo</p>
               </div>
 
-              {/* Card 2: Caixa do JC */}
+              {/* Card 2: Caixa do JC (O que já está no bolso) */}
               <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa da Unidade</p>
@@ -1307,7 +1221,7 @@ useEffect(() => {
                 )}
               </div>
 
-              {/* Card 3: Pendente */}
+              {/* Card 3: Fiado / Pendente */}
               <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center">
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber de Clientes</p>
                 <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
@@ -1317,78 +1231,13 @@ useEffect(() => {
 
             {/* Botões de Ação do Representante */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <button onClick={() => setShowMassNotify(true)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
-                    <BellRing className="w-5 h-5 mr-2"/> 🚨 Avisar Chegada de Carga
-                </button>
                 <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
-                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
+                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio da Unidade
                 </button>
                 <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
                     ➕ Incluir Pedido Manual
                 </button>
             </div>
-
-            {/* MODAL DE FILA DE NOTIFICAÇÕES */}
-            {showMassNotify && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                  <div className="bg-blue-600 p-4 flex justify-between items-center text-white shrink-0">
-                     <div>
-                        <h3 className="font-black text-lg flex items-center"><BellRing className="w-5 h-5 mr-2"/> Fila Rápida de Avisos</h3>
-                        <p className="text-blue-100 text-xs font-medium mt-1">Notificando clientes do Lote: {filtroAtivo}</p>
-                     </div>
-                     <button onClick={() => setShowMassNotify(false)} className="bg-blue-700 hover:bg-blue-800 p-2 rounded-lg transition"><X className="w-5 h-5"/></button>
-                  </div>
-                  
-                  <div className="p-4 overflow-y-auto space-y-3 bg-slate-50 flex-1">
-                     <p className="text-sm font-bold text-slate-600 mb-2">Membros aguardando retirada ({pedidosConfirmados.length}):</p>
-                     
-                     {pedidosConfirmados.length === 0 ? (
-                         <p className="text-gray-500 text-center py-8 text-sm font-medium">Nenhum membro pendente para notificar neste lote.</p>
-                     ) : (
-                         pedidosConfirmados.map(o => {
-                             const temFalta = o.faltas && o.faltas.length > 0;
-                             const isNotified = o.notifiedRetirada; // Lê se já foi carimbado no Firebase
-                             
-                             return (
-                                 <div key={o.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-xl border transition-all ${isNotified ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200 shadow-sm'}`}>
-                                     <div className="mb-3 sm:mb-0">
-                                         <p className="font-bold text-slate-800 text-sm flex items-center">
-                                             {o.customer} 
-                                             {isNotified && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-black tracking-widest uppercase">✅ Avisado</span>}
-                                         </p>
-                                         <p className="text-xs text-gray-500 mt-0.5 font-medium">
-                                             Total: R$ {(o.total||0).toFixed(2)} 
-                                             {temFalta && <span className="text-orange-500 font-bold ml-1">(Contém faltas)</span>}
-                                         </p>
-                                     </div>
-                                     <button 
-                                         onClick={async () => {
-                                             let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\n`;
-                                             if(temFalta) text += `⚠️ *Aviso:* Tivemos um corte no fornecedor, mas o valor da sua cesta já foi ajustado com o desconto das faltas!\n\n`;
-                                             text += `O total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
-                                             
-                                             // 1. Regista no banco de dados que esta pessoa foi avisada
-                                             try {
-                                                 await updateDoc(doc(db, "orders", o.id), { notifiedRetirada: new Date().toISOString() });
-                                                 setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, notifiedRetirada: new Date().toISOString() } : ord));
-                                             } catch(e) { console.error("Erro ao registrar notificação", e); }
-                                             
-                                             // 2. Abre o WhatsApp na hora
-                                             window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
-                                         }} 
-                                         className={`w-full sm:w-auto px-4 py-2.5 rounded-lg font-black text-xs transition shadow-sm flex items-center justify-center ${isNotified ? 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                     >
-                                         <MessageCircle className="w-4 h-4 mr-2"/> {isNotified ? 'Reenviar Aviso' : 'Enviar WhatsApp'}
-                                     </button>
-                                 </div>
-                             )
-                         })
-                     )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {showManualOrder && (
               <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-lg mt-3 transition-all">
@@ -1405,31 +1254,9 @@ useEffect(() => {
                 <div className="bg-slate-50 p-3 rounded-lg border border-gray-200 mb-4">
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Adicionar Produtos</p>
                   <div className="flex flex-col gap-2">
-                  <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
+                    <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
                       <option value="">Selecione o Produto...</option>
-                      
-                      {/* 🌟 INJETA A OFERTA EXPRESSA SE ELA ESTIVER LIGADA NO PAINEL GLOBAL 🌟 */}
-                      {sysConfig.ofertaAtiva && (
-                          <option value="oferta-1" className="font-black text-red-600 bg-red-50">
-                              🔥 OFERTA: {sysConfig.ofertaProduto} - R$ {Number(sysConfig.ofertaPreco).toFixed(2)}
-                          </option>
-                      )}
-
-                      {/* LISTA O RESTO DO CATÁLOGO NORMALMENTE */}
-                      {/* LISTA O RESTO DO CATÁLOGO NORMALMENTE (AGORA COM FILTRO INTELIGENTE) */}
-                      {[...products]
-                          .filter(p => {
-                              // Se estivermos na Feira (Pronta Entrega), só mostra o que tem estoque!
-                              if (storeMode === 'estoque') return (p.stock || 0) > 0 && !p.pausado;
-                              // Se for o Ciclo Normal do mês, mostra tudo que não estiver pausado
-                              return !p.pausado;
-                          })
-                          .sort((a, b) => a.name.localeCompare(b.name))
-                          .map(p => (
-                              <option key={p.id} value={p.id}>
-                                  {p.name} - R$ {(p.price || 0).toFixed(2)} {storeMode === 'estoque' ? `(Restam: ${p.stock})` : ''}
-                              </option>
-                      ))}
+                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
                     </select>
                     <div className="flex gap-2 justify-end">
                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
@@ -1465,11 +1292,13 @@ useEffect(() => {
           </div>
         )}
 
+        {/* CONTROLE DE ABAS: ATIVOS VS HISTÓRICO */}
         <div className="flex gap-2 mb-6">
             <button onClick={() => setShowHistory(false)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${!showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>📦 Pedidos Pendentes / No JC</button>
             <button onClick={() => setShowHistory(true)} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-sm ${showHistory ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'}`}>🕰️ Repassados à Sede</button>
         </div>
 
+        {/* VISÃO DE PEDIDOS ATIVOS */}
         {!showHistory && (
           <div className="space-y-6">
             {repOrders.length > 0 ? (
@@ -1494,6 +1323,7 @@ useEffect(() => {
                             </p>
                             
                             <div className="flex flex-col gap-1.5 mt-2">
+                              {/* ITENS ATIVOS NA CAIXA */}
                               {(o.items || []).map((i, idx) => {
                                 const quantidade = i.qtd || i.qty || 1; 
                                 const totalDoItem = (i.price || 0) * quantidade;
@@ -1508,6 +1338,7 @@ useEffect(() => {
                                 )
                               })}
                               
+                              {/* ITENS CORTADOS (FALTAS) */}
                               {(o.faltas || []).map((f, idx) => {
                                 return (
                                   <div key={`falta-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border flex items-center justify-between shadow-sm w-full bg-red-50 text-red-700 border-red-200 opacity-80">
@@ -1530,13 +1361,13 @@ useEffect(() => {
                               )}
                               
                               <div className="flex flex-col sm:flex-row gap-2 w-full">
+                                {/* BOTÃO 1: CONFIRMAR PIX (Aparece se estiver pendente) */}
                                 {CONFIG_APENAS_COLETA && o.status === 'confirmado' && (
                                   <button onClick={() => {
                                       showConfirm('Confirmar Retirada', `O membro pagou R$ ${(o.total||0).toFixed(2)} via PIX e já retirou a mercadoria?`, async () => {
                                           try {
                                               await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' });
                                               showToast('Baixa efetuada! Valor guardado no JC.');
-                                              setOrders(prev => prev.map(ord => ord.id === o.id ? { ...ord, status: 'pago_polo' } : ord));
                                           } catch(e) { showToast('Erro ao dar baixa', 'error'); }
                                       });
                                   }} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-bold text-[10px] flex justify-center items-center transition shadow-sm">
@@ -1544,13 +1375,29 @@ useEffect(() => {
                                   </button>
                                 )}
 
+                                {/* 👇 O NOVO BOTÃO MÁGICO DE DESFAZER (Aparece se já estiver pago) 👇 */}
+                                {CONFIG_APENAS_COLETA && o.status === 'pago_polo' && (
+                                  <button onClick={() => {
+                                      showConfirm('Desfazer Baixa', `O cliente desistiu ou houve um erro no PIX? O pedido voltará para pendente.`, async () => {
+                                          try {
+                                              // Volta o status para confirmado (Pendente)
+                                              await updateDoc(doc(db, "orders", o.id), { status: 'confirmado' });
+                                              showToast('Desfeito! Pedido voltou a ficar pendente.');
+                                          } catch(e) { showToast('Erro ao desfazer', 'error'); }
+                                      });
+                                  }} className="flex-1 bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-orange-100 transition-colors shadow-sm">
+                                    <ArrowLeft className="w-3 h-3 mr-1.5"/> DESFAZER PIX
+                                  </button>
+                                )}
+
+                                {/* BOTÃO DE WHATSAPP (Sempre Visível) */}
                                 <button onClick={() => {
                                     let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
                                     (o.items || []).forEach(i => {
                                         const q = i.qtd || i.qty || 1;
                                         text += `• ${q}x ${i.name}\n`;
                                     });
-                                    if(temFalta) {
+                                    if(o.faltas && o.faltas.length > 0) {
                                         text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
                                         o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
                                         text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
@@ -1575,6 +1422,7 @@ useEffect(() => {
           </div>
         )}
 
+        {/* VISÃO DE HISTÓRICO DE REPASSES */}
         {showHistory && (
            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-5">
               <h3 className="font-black text-slate-800 text-lg mb-4">Repasses Concluídos à Sede ({filtroAtivo})</h3>
@@ -1805,10 +1653,6 @@ useEffect(() => {
 
         const maxSale = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => salesByDay[d]), 100) : 100;
 
-        // 7. CÁLCULO DO ESTOQUE ATUAL (Capital Imobilizado)
-        const totalItensEstoque = products.reduce((sum, p) => sum + (p.stock || 0), 0);
-        const capitalImobilizado = products.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
-
         return (
           <div className="space-y-6 text-left">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
@@ -1825,80 +1669,70 @@ useEffect(() => {
                 </div>
             </div>
 
-           {/* 🚀 GRID ESTRATÉGICO: 4 CARDS (2x2 no Celular) */}
-           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
-                
-                {/* Card 1: Faturamento Bruto */}
-                <div className="bg-slate-800 p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xl text-white border border-slate-700 relative overflow-hidden flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
-                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
-                    <div>
-                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 line-clamp-1">Faturamento Bruto</p>
-                        <h3 className="text-lg sm:text-2xl font-black tracking-tight leading-none mt-1 sm:mt-2 text-white truncate">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</h3>
-                    </div>
-                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-medium mt-2 leading-tight">Total transacionado</p>
-                </div>
-
-                {/* Card 2: Lucro Líquido */}
-                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
-                    <div>
-                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Lucro Líquido</p>
-                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</h3>
-                    </div>
-                    <div className="mt-2">
-                        <span className="text-[8px] sm:text-[9px] bg-emerald-50 text-emerald-700 px-1.5 sm:px-2 py-0.5 rounded border border-emerald-200 font-black truncate block w-fit">Margem: {margemLucroLote.toFixed(1)}%</span>
-                    </div>
-                </div>
-
-                {/* Card 3: Capital em Estoque */}
-                <div className="bg-emerald-50 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-200/60 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
-                    <div>
-                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1 line-clamp-1">Capital em Estoque</p>
-                        <h3 className="text-lg sm:text-2xl font-black text-emerald-900 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h3>
-                    </div>
-                    <p className="text-[8px] sm:text-[9px] font-bold text-emerald-600 mt-2 leading-tight truncate">{totalItensEstoque} un a pronta entrega</p>
-                </div>
-
-                {/* Card 4: Comunidade */}
-                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
-                    <div>
-                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Membros Atendidos</p>
-                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2">{uniqueCustomers.length}</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-1 sm:gap-1.5 text-[8px] font-black uppercase tracking-wider mt-2">
-                        <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded w-fit">+{membrosNovos} Novos</span>
-                        <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded w-fit">{membrosRecorrentes} Voltas</span>
-                    </div>
-                </div>
-
-            </div>
-
-            {/* 📊 SEÇÃO DE DETALHAMENTO: CUSTOS LOGÍSTICOS E OPERACIONAIS */}
+            {/* NOVO DASHBOARD FINANCEIRO (LAYOUT WIDESCREEN) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
                 
-                {/* Bloco de Deduções DRE (CMV e Impostos alinhados horizontalmente) */}
-                <div className="lg:col-span-2 bg-slate-100/50 p-5 rounded-3xl border border-gray-200/60 flex flex-col justify-center">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 pl-1">Demonstrativo de Custos do Fornecedor</p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Custos de Compra (CMV)</p>
-                            <p className="text-lg font-black text-red-500">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                {/* 📊 BLOCO PRINCIPAL: FINANCEIRO (Lado Esquerdo) */}
+                <div className="lg:col-span-2 bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl border border-slate-700 text-white relative overflow-hidden flex flex-col justify-between">
+                    {/* Efeito de brilho de fundo */}
+                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl"></div>
+                    
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 relative z-10 mb-8">
+                        <div>
+                            <p className="text-[11px] font-bold text-emerald-400 mb-1.5 uppercase tracking-widest">Faturamento Bruto</p>
+                            <p className="text-4xl sm:text-5xl font-black tracking-tight leading-none">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
                         </div>
-                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Impostos Retidos (8%)</p>
-                            <p className="text-lg font-black text-orange-500">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
+                        <div className="text-left sm:text-right bg-slate-900/60 p-4 rounded-2xl border border-slate-700/50 w-full sm:w-auto shadow-inner">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Lucro Líquido ({margemLucroLote.toFixed(1)}%)</p>
+                            <p className="text-2xl sm:text-3xl font-black text-emerald-400 leading-none">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
                         </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-700/60 relative z-10">
+                         <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Custos (CMV)</p>
+                            <p className="text-lg sm:text-xl font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                         </div>
+                         <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Impostos (8%)</p>
+                            <p className="text-lg sm:text-xl font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
+                         </div>
                     </div>
                 </div>
 
-                {/* Volume Girado (Focado na Logística da Sede) */}
-                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 text-white flex items-center justify-between shadow-lg relative overflow-hidden">
-                    <div className="absolute top-0 right-0 -mt-6 -mr-6 w-24 h-24 bg-slate-700/30 rounded-full blur-xl"></div>
-                    <div className="relative z-10">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Total Girado</p>
-                        <p className="text-2xl font-black text-white mt-1 leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
-                        <p className="text-[9px] text-slate-400 mt-2.5 font-medium">Movimentadas fisicamente pela van</p>
+                {/* 👥 BLOCO SECUNDÁRIO: OPERACIONAL (Lado Direito) */}
+                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex flex-col gap-4 justify-between h-full">
+                    {/* Total de Membros */}
+                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Membros Atendidos</p>
+                            <p className="text-3xl font-black text-emerald-900 leading-none">{uniqueCustomers.length}</p>
+                        </div>
+                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
+                            <Users className="w-6 h-6 text-emerald-500"/>
+                        </div>
                     </div>
-                    <Package className="w-10 h-10 text-slate-600 opacity-40 shrink-0 relative z-10"/>
+                    
+                    {/* Separação Novos/Recorrentes */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Novos</p>
+                            <p className="text-xl font-black text-emerald-600 leading-none">+{membrosNovos}</p>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
+                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Retornos</p>
+                            <p className="text-xl font-black text-blue-600 leading-none">{membrosRecorrentes}</p>
+                        </div>
+                    </div>
+
+                    {/* Volume Físico */}
+                    <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 mt-2 flex items-center justify-between text-white shadow-sm">
+                         <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
+                            <p className="text-xl font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
+                        </div>
+                        <Package className="w-6 h-6 text-slate-500 opacity-50"/>
+                    </div>
                 </div>
 
             </div>
@@ -2008,41 +1842,7 @@ useEffect(() => {
                                         </div>
                                         <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
                                            <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
-                                           <button onClick={(e) => { 
-                                              e.stopPropagation();
-                                              showConfirm(
-                                                  'Cancelar Pedido', 
-                                                  `Deseja realmente excluir o pedido de ${o.customer}?`, 
-                                                  async () => {
-                                                      try {
-                                                          // 👇 A MÁGICA INTELIGENTE: SÓ DEVOLVE O ESTOQUE SE FOR PRONTA ENTREGA 👇
-                                                          if (storeMode === 'estoque') {
-                                                              for (const item of (o.items || [])) {
-                                                                  if (item.id !== 'oferta-1') {
-                                                                      const prodRef = doc(db, "products", item.id);
-                                                                      const prodDoc = await getDoc(prodRef);
-                                                                      if (prodDoc.exists()) {
-                                                                          const estoqueAtual = prodDoc.data().stock || 0;
-                                                                          const quantidadeDevolvida = item.qtd || item.qty || 1;
-                                                                          await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
-                                                                      }
-                                                                  }
-                                                              }
-                                                          }
-                                                          // 👆 FIM DO ESTORNO INTELIGENTE 👆
-
-                                                          // Exclui o recibo do banco de dados (Vale para qualquer ciclo!)
-                                                          await deleteDoc(doc(db, "orders", o.id)); 
-                                                          showToast(storeMode === 'estoque' ? 'Pedido cancelado e estoque estornado!' : 'Pedido do ciclo cancelado com sucesso!');
-                                                      } catch(err) {
-                                                          showToast('Erro ao cancelar pedido', 'error');
-                                                      }
-                                                  }, 
-                                                  'danger'
-                                              );
-                                          }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded">
-                                              <Trash2 className="w-3 h-3 mr-1"/> Cancelar Pedido
-                                          </button>
+                                           <button onClick={async (e)=>{ e.stopPropagation(); await deleteDoc(doc(db,"orders",o.id)); showToast('Excluído'); }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3 h-3 mr-1"/> Excluir</button>
                                         </div>
                                       </div>
                                     ))}
@@ -2627,22 +2427,14 @@ useEffect(() => {
                     className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500"
                   >
                     <option value="">Selecione o produto ausente...</option>
-                    {(() => {
-                        // LÊ TODOS OS ITENS REALMENTE VENDIDOS NO CICLO
-                        const itemsMap = new Map();
-                        orders.forEach(order => {
-                          if (['confirmado', 'pago_polo', 'pago'].includes(order.status)) {
-                            (order.items || []).forEach(item => {
-                              if (!itemsMap.has(item.id)) itemsMap.set(item.id, item.name);
-                            });
-                          }
-                        });
-                        return Array.from(itemsMap.entries())
-                          .sort((a, b) => a[1].localeCompare(b[1]))
-                          .map(([id, name]) => (
-                            <option key={id} value={id}>{name}</option>
-                          ));
-                    })()}
+                    {products
+                      .filter(p => orders.some(order => 
+                         ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
+                         (order.items || []).some(item => String(item.id) === String(p.id))
+                      ))
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
                   </select>
                  </div>
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
