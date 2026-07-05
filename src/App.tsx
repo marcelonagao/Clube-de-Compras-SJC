@@ -1416,8 +1416,19 @@ useEffect(() => {
                       )}
 
                       {/* LISTA O RESTO DO CATÁLOGO NORMALMENTE */}
-                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                          <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>
+                      {/* LISTA O RESTO DO CATÁLOGO NORMALMENTE (AGORA COM FILTRO INTELIGENTE) */}
+                      {[...products]
+                          .filter(p => {
+                              // Se estivermos na Feira (Pronta Entrega), só mostra o que tem estoque!
+                              if (storeMode === 'estoque') return (p.stock || 0) > 0 && !p.pausado;
+                              // Se for o Ciclo Normal do mês, mostra tudo que não estiver pausado
+                              return !p.pausado;
+                          })
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(p => (
+                              <option key={p.id} value={p.id}>
+                                  {p.name} - R$ {(p.price || 0).toFixed(2)} {storeMode === 'estoque' ? `(Restam: ${p.stock})` : ''}
+                              </option>
                       ))}
                     </select>
                     <div className="flex gap-2 justify-end">
