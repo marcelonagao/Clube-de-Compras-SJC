@@ -1998,37 +1998,40 @@ useEffect(() => {
                                         <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
                                            <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
                                            <button onClick={(e) => { 
-    e.stopPropagation();
-    // 1. Pede confirmação antes de apagar (para evitar cliques acidentais)
-    showConfirm(
-        'Cancelar Pedido', 
-        `Deseja realmente excluir o pedido de ${o.customer}? Os itens voltarão para o estoque local.`, 
-        async () => {
-            try {
-                // 2. A MÁGICA: Devolve o estoque produto por produto
-                for (const item of (o.items || [])) {
-                    if (item.id !== 'oferta-1') {
-                        const prodRef = doc(db, "products", item.id);
-                        const prodDoc = await getDoc(prodRef);
-                        if (prodDoc.exists()) {
-                            const estoqueAtual = prodDoc.data().stock || 0;
-                            const quantidadeDevolvida = item.qtd || item.qty || 1;
-                            await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
-                        }
-                    }
-                }
-                // 3. Exclui o pedido do banco de dados
-                await deleteDoc(doc(db, "orders", o.id)); 
-                showToast('Pedido cancelado e estoque estornado!');
-            } catch(err) {
-                showToast('Erro ao cancelar pedido', 'error');
-            }
-        }, 
-        'danger'
-    );
-}} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded">
-    <Trash2 className="w-3 h-3 mr-1"/> Cancelar Pedido
-</button>
+                                              e.stopPropagation();
+                                              showConfirm(
+                                                  'Cancelar Pedido', 
+                                                  `Deseja realmente excluir o pedido de ${o.customer}?`, 
+                                                  async () => {
+                                                      try {
+                                                          // 👇 A MÁGICA INTELIGENTE: SÓ DEVOLVE O ESTOQUE SE FOR PRONTA ENTREGA 👇
+                                                          if (storeMode === 'estoque') {
+                                                              for (const item of (o.items || [])) {
+                                                                  if (item.id !== 'oferta-1') {
+                                                                      const prodRef = doc(db, "products", item.id);
+                                                                      const prodDoc = await getDoc(prodRef);
+                                                                      if (prodDoc.exists()) {
+                                                                          const estoqueAtual = prodDoc.data().stock || 0;
+                                                                          const quantidadeDevolvida = item.qtd || item.qty || 1;
+                                                                          await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
+                                                                      }
+                                                                  }
+                                                              }
+                                                          }
+                                                          // 👆 FIM DO ESTORNO INTELIGENTE 👆
+
+                                                          // Exclui o recibo do banco de dados (Vale para qualquer ciclo!)
+                                                          await deleteDoc(doc(db, "orders", o.id)); 
+                                                          showToast(storeMode === 'estoque' ? 'Pedido cancelado e estoque estornado!' : 'Pedido do ciclo cancelado com sucesso!');
+                                                      } catch(err) {
+                                                          showToast('Erro ao cancelar pedido', 'error');
+                                                      }
+                                                  }, 
+                                                  'danger'
+                                              );
+                                          }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded">
+                                              <Trash2 className="w-3 h-3 mr-1"/> Cancelar Pedido
+                                          </button>
                                         </div>
                                       </div>
                                     ))}
