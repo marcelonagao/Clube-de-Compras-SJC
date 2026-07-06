@@ -1764,6 +1764,57 @@ export default function App() {
         // 7. CÁLCULO DO ESTOQUE ATUAL (Capital Imobilizado)
         const totalItensEstoque = products.reduce((sum, p) => sum + (p.stock || 0), 0);
         const capitalImobilizado = products.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
+        // 8. MOTORES DE EXPORTAÇÃO RÁPIDA (CSV) COM SKU E QUANTIDADES
+        const exportarRelatorioEstoque = () => {
+          // O \ufeff força o Excel a ler acentos corretamente (UTF-8)
+          let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;PRODUTO;CATEGORIA;ESTOQUE_ATUAL;CUSTO_UNITARIO;CAPITAL_IMOBILIZADO\n";
+          const rows = [...products]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(p => {
+                  const stock = p.stock || 0;
+                  const cost = p.cost || 0;
+                  const totalVal = stock * cost;
+                  return `${p.sku || '-'};${p.name};${p.category || '-'};${stock};${cost.toFixed(2).replace('.',',')};${totalVal.toFixed(2).replace('.',',')}`;
+              });
+          csvContent += rows.join("\n");
+          const link = document.createElement("a");
+          link.href = encodeURI(csvContent);
+          link.download = `Posicao_Estoque_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
+          link.click();
+          showToast("Relatório de Estoque baixado!");
+      };
+
+      const exportarRelatorioVendas = () => {
+          let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;PRODUTO;QTD_VENDIDA;PRECO_MEDIO;TOTAL_ARRECADADO\n";
+          const currentStats = {};
+          
+          // Varre o lote e soma as quantidades vendidas de cada produto
+          currentCycleOrders.forEach(o => (o.items || []).forEach(i => {
+             if (!currentStats[i.id]) {
+                 // Busca o SKU original do produto no catálogo
+                 const prodCatalogo = products.find(p => String(p.id) === String(i.id));
+                 const sku = prodCatalogo ? (prodCatalogo.sku || '-') : '-';
+                 currentStats[i.id] = { sku: sku, name: i.name, qty: 0, val: 0 };
+             }
+             const qtd = i.qtd || i.qty || 1;
+             currentStats[i.id].qty += qtd; 
+             currentStats[i.id].val += ((i.price || 0) * qtd);
+          }));
+
+          // Organiza do que vendeu mais para o que vendeu menos
+          const rows = Object.values(currentStats)
+              .sort((a,b) => b.qty - a.qty)
+              .map(p => {
+                  const avgPrice = p.qty > 0 ? p.val / p.qty : 0;
+                  return `${p.sku};${p.name};${p.qty};${avgPrice.toFixed(2).replace('.',',')};${p.val.toFixed(2).replace('.',',')}`;
+              });
+          csvContent += rows.join("\n");
+          const link = document.createElement("a");
+          link.href = encodeURI(csvContent);
+          link.download = `Vendas_${filtroAtivo.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+          link.click();
+          showToast("Relatório de Vendas baixado!");
+      };
 
         return (
           <div className="space-y-6 text-left">
@@ -1779,6 +1830,16 @@ export default function App() {
                          ))}
                      </select>
                 </div>
+                {/* BOTÕES DE RELATÓRIO RÁPIDO */}
+                <div className="flex flex-wrap gap-3 mb-6">
+                    <button onClick={exportarRelatorioEstoque} className="bg-white border border-gray-200 text-slate-700 hover:bg-gray-50 font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center transition-colors">
+                        <Download className="w-4 h-4 mr-2 text-orange-500"/> Baixar Posição de Estoque (Atual)
+                    </button>
+                    <button onClick={exportarRelatorioVendas} className="bg-white border border-gray-200 text-slate-700 hover:bg-gray-50 font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center transition-colors">
+                        <Download className="w-4 h-4 mr-2 text-emerald-600"/> Baixar Vendas do Lote
+                    </button>
+                </div>
+
             </div>
 
            {/* 🚀 GRID ESTRATÉGICO: 4 CARDS (2x2 no Celular) */}
