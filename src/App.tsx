@@ -154,6 +154,9 @@ export default function App() {
   const [repManualCustomer, setRepManualCustomer] = useState('');
   const [repManualItems, setRepManualItems] = useState([]);
   const [mesaDateFilter, setMesaDateFilter] = useState('Todos');
+  const [vendasSearchTerm, setVendasSearchTerm] = useState('');
+  const [expandedPolos, setExpandedPolos] = useState({}); 
+  const [editingAdminOrder, setEditingAdminOrder] = useState(null);
 
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
@@ -1967,7 +1970,14 @@ export default function App() {
       }
    
       if (adminTab === 'vendas') {
-        const ordersByMonth = validOrders.reduce((acc, order) => {
+        // 1. FILTRO DE BUSCA: Por nome do cliente ou número do pedido
+        const filteredVendas = validOrders.filter(o => 
+            (o.customer || '').toLowerCase().includes(vendasSearchTerm.toLowerCase()) || 
+            (o.id || '').toLowerCase().includes(vendasSearchTerm.toLowerCase())
+        );
+
+        // 2. AGRUPAMENTO POR MÊS
+        const ordersByMonth = filteredVendas.reduce((acc, order) => {
           const d = new Date(order.date);
           const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
           const capMonth = `${months[d.getMonth()]} ${d.getFullYear()}`;
@@ -1984,7 +1994,23 @@ export default function App() {
 
         return (
           <div className="space-y-6 text-left max-w-6xl mx-auto">
-            <h2 className="text-2xl font-black text-slate-800 mb-4">Histórico de Vendas</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <h2 className="text-2xl font-black text-slate-800">Histórico de Vendas</h2>
+                
+                {/* BARRA DE BUSCA */}
+                <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-72 focus-within:border-emerald-500 transition-colors">
+                    <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                    <input 
+                        type="text" 
+                        placeholder="Buscar cliente ou #PED..." 
+                        value={vendasSearchTerm}
+                        onChange={(e) => setVendasSearchTerm(e.target.value)}
+                        className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                    />
+                    {vendasSearchTerm && <button onClick={() => setVendasSearchTerm('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                </div>
+            </div>
+
             {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => {
               const isExpanded = expandedMonths[month];
               return (
@@ -2004,64 +2030,77 @@ export default function App() {
                  </div>
                  
                  {isExpanded && (
-                   <div className="p-5 space-y-8">
+                   <div className="p-5 space-y-6">
                        {Object.entries(data.ordersByPolo).map(([polo, poloOrders]) => {
                           const poloTotal = poloOrders.reduce((s,o)=>s+(o.total||0), 0);
+                          const poloKey = `${month}-${polo}`;
+                          const isPoloExpanded = expandedPolos[poloKey];
+                          
+                          // 3. ORDENAÇÃO: Do mais recente para o mais antigo
+                          const sortedOrders = poloOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
                           return (
                               <div key={polo} className="space-y-4">
-                                  <div className="flex items-center gap-2 border-b border-gray-200 pb-2">
+                                  <div onClick={() => setExpandedPolos(prev => ({...prev, [poloKey]: !prev[poloKey]}))} className="flex items-center gap-2 border-b border-gray-200 pb-2 cursor-pointer hover:bg-gray-50 p-1 rounded transition-colors">
+                                      {isPoloExpanded ? <ChevronUp className="w-4 h-4 text-emerald-600"/> : <ChevronDown className="w-4 h-4 text-gray-400"/>}
                                       <MapPin className="w-4 h-4 text-emerald-600"/>
                                       <h4 className="font-black text-slate-800 text-sm flex-1">JC {polo}</h4>
                                       <span className="font-bold text-emerald-800 text-xs bg-emerald-50 px-2 py-1.5 border border-emerald-100 rounded-lg shadow-sm">R$ {poloTotal.toFixed(2)}</span>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pl-2 sm:pl-6">
-                                    {poloOrders.slice().reverse().map(o => (
-                                      <div key={o.id} className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col justify-between gap-3 hover:border-emerald-200 transition-colors">
-                                        <div>
-                                          <p className="font-bold text-slate-800 text-sm mb-1">{o.customer}</p>
-                                          <p className="text-[10px] font-medium text-gray-500 font-mono bg-gray-50 inline-block px-1.5 py-0.5 rounded border border-gray-100">#{o.id.slice(0,5).toUpperCase()}</p>
-                                          <p className="text-[10px] font-medium text-gray-500 mt-1">{new Date(o.date).toLocaleDateString()}</p>
+                                  
+                                  {isPoloExpanded && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pl-2 sm:pl-6">
+                                      {sortedOrders.map(o => (
+                                        <div key={o.id} className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col justify-between gap-3 hover:border-emerald-200 transition-colors">
+                                          <div>
+                                            <p className="font-bold text-slate-800 text-sm mb-1">{o.customer}</p>
+                                            <p className="text-[10px] font-medium text-gray-500 font-mono bg-gray-50 inline-block px-1.5 py-0.5 rounded border border-gray-100">#{o.id.slice(0,5).toUpperCase()}</p>
+                                            <p className="text-[10px] font-medium text-gray-500 mt-1">{new Date(o.date).toLocaleString('pt-BR')}</p>
+                                          </div>
+                                          <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
+                                             <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
+                                             <div className="flex items-center gap-1.5">
+                                                {/* BOTÃO DE EDITAR */}
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingAdminOrder(o); }} className="text-blue-500 hover:text-blue-700 text-[10px] font-bold flex items-center bg-blue-50 px-2 py-1 rounded transition-colors">
+                                                    <Edit2 className="w-3 h-3 mr-1"/> Editar
+                                                </button>
+                                                
+                                                {/* BOTÃO DE EXCLUIR */}
+                                                <button onClick={(e) => { 
+                                                    e.stopPropagation();
+                                                    showConfirm(
+                                                        'Cancelar Pedido', 
+                                                        `Deseja realmente excluir o pedido de ${o.customer}?`, 
+                                                        async () => {
+                                                            try {
+                                                                const isPedidoFeira = (o.deliveryDate || '').toLowerCase().includes('pronta entrega');
+                                                                if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
+                                                                    for (const item of (o.items || [])) {
+                                                                        if (item.id !== 'oferta-1') {
+                                                                            const prodRef = doc(db, "products", item.id);
+                                                                            const prodDoc = await getDoc(prodRef);
+                                                                            if (prodDoc.exists()) {
+                                                                                const estoqueAtual = prodDoc.data().stock || 0;
+                                                                                const quantidadeDevolvida = item.qtd || item.qty || 1;
+                                                                                await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                                await deleteDoc(doc(db, "orders", o.id)); 
+                                                                showToast('Pedido cancelado e resolvido!');
+                                                            } catch(err) { showToast('Erro ao cancelar', 'error'); }
+                                                        }, 'danger'
+                                                    );
+                                                }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded transition-colors">
+                                                    <Trash2 className="w-3 h-3 mr-1"/> Excluir
+                                                </button>
+                                             </div>
+                                          </div>
                                         </div>
-                                        <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
-                                           <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
-                                           <button onClick={(e) => { 
-    e.stopPropagation();
-    showConfirm(
-        'Cancelar Pedido', 
-        `Deseja realmente excluir o pedido de ${o.customer}?`, 
-        async () => {
-            try {
-                // 👇 A BLINDAGEM MÁXIMA DO ESTOQUE 👇
-                // Verifica se a loja está no modo feira AGORA, ou se o pedido FOI FEITO na feira (olhando a etiqueta)
-                const isPedidoFeira = (o.deliveryDate || '').toLowerCase().includes('pronta entrega');
-                
-                if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
-                    for (const item of (o.items || [])) {
-                        if (item.id !== 'oferta-1') {
-                            const prodRef = doc(db, "products", item.id);
-                            const prodDoc = await getDoc(prodRef);
-                            if (prodDoc.exists()) {
-                                const estoqueAtual = prodDoc.data().stock || 0;
-                                const quantidadeDevolvida = item.qtd || item.qty || 1;
-                                await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
-                            }
-                        }
-                    }
-                }
-                // 👆 FIM DA BLINDAGEM 👆
-
-                await deleteDoc(doc(db, "orders", o.id)); 
-                showToast('Pedido cancelado e resolvido!');
-            } catch(err) { showToast('Erro ao cancelar', 'error'); }
-        }, 'danger'
-    );
-}} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded">
-    <Trash2 className="w-3 h-3 mr-1"/> Excluir
-</button>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
+                                      ))}
+                                    </div>
+                                  )}
                               </div>
                           );
                        })}
@@ -2069,9 +2108,25 @@ export default function App() {
                  )}
               </div>
             )})}
+
+            {/* MODAL DE EDIÇÃO DE PEDIDO (ESQUELETO) */}
+            {editingAdminOrder && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl border border-gray-100">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-black text-slate-800 text-lg">Editar Pedido</h3>
+                            <button onClick={() => setEditingAdminOrder(null)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
+                        </div>
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-sm font-medium mb-4">
+                            Você está editando o pedido de <strong>{editingAdminOrder.customer}</strong>.
+                        </div>
+                        <button className="w-full bg-slate-800 text-white font-black py-3 rounded-lg mt-2" onClick={() => { showToast('Edição salva!'); setEditingAdminOrder(null); }}>Salvar Alterações</button>
+                    </div>
+                </div>
+            )}
           </div>
         );
-     }
+      }
 
      if (adminTab === 'compras') {
       // 1. O SISTEMA LÊ AS DATAS AQUI:
