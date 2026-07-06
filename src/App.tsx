@@ -1287,7 +1287,21 @@ export default function App() {
                   <div className="flex flex-col gap-2">
                     <select value={manualItemProduct} onChange={e => setManualItemProduct(e.target.value)} className="w-full p-3 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate">
                       <option value="">Selecione o Produto...</option>
-                      {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>)}
+                      {[...products]
+                          .filter(p => {
+                              // Se estiver na Feira (Pronta Entrega), só mostra o que tem estoque!
+                              if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+                                  return (p.stock || 0) > 0 && !p.pausado;
+                              }
+                              // Se for o Ciclo Normal do mês, mostra tudo que não estiver pausado
+                              return !p.pausado;
+                          })
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(p => (
+                              <option key={p.id} value={p.id}>
+                                  {p.name} - R$ {(p.price || 0).toFixed(2)} {(storeMode === 'estoque' || storeMode === 'pronta_entrega') ? `(Restam: ${p.stock})` : ''}
+                              </option>
+                      ))}
                     </select>
                     <div className="flex gap-2 justify-end">
                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
@@ -1880,7 +1894,11 @@ export default function App() {
         `Deseja realmente excluir o pedido de ${o.customer}?`, 
         async () => {
             try {
-                if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+                // 👇 A BLINDAGEM MÁXIMA DO ESTOQUE 👇
+                // Verifica se a loja está no modo feira AGORA, ou se o pedido FOI FEITO na feira (olhando a etiqueta)
+                const isPedidoFeira = (o.deliveryDate || '').toLowerCase().includes('pronta entrega');
+                
+                if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
                     for (const item of (o.items || [])) {
                         if (item.id !== 'oferta-1') {
                             const prodRef = doc(db, "products", item.id);
@@ -1893,6 +1911,8 @@ export default function App() {
                         }
                     }
                 }
+                // 👆 FIM DA BLINDAGEM 👆
+
                 await deleteDoc(doc(db, "orders", o.id)); 
                 showToast('Pedido cancelado e resolvido!');
             } catch(err) { showToast('Erro ao cancelar', 'error'); }
