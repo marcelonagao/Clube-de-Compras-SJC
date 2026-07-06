@@ -4,11 +4,11 @@ import {
   CreditCard, QrCode, Edit2, Trash2, ArrowLeft, ArrowRight, 
   Printer, Upload, ImageIcon, Download, Clock, MessageCircle, 
   LayoutDashboard, Eye, Wallet, Loader2, Home, Search, Menu, X, 
-  LineChart, AlertTriangle, LogOut, Truck, ChevronDown, ChevronUp, FileSpreadsheet, Users
+  LineChart, AlertTriangle, LogOut, Truck, ChevronDown, ChevronUp, FileSpreadsheet, BellRing, Users
 } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where } from "firebase/firestore";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -118,6 +118,7 @@ export default function App() {
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
+  const [showMassNotify, setShowMassNotify] = useState(false);
 
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
@@ -188,32 +189,33 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // 2. MOTOR DE DADOS EM TEMPO REAL (O que estanca as milhares de leituras)
   useEffect(() => {
-    if (currentScreen !== 'login' && !isPrintMode) {
-      const fetchData = async () => {
-        try {
-          const [pSnap, oSnap, uSnap, configSnap] = await Promise.all([
-            getDocs(collection(db, "products")),
-            getDocs(collection(db, "orders")),
-            getDocs(collection(db, "users")),
-            getDoc(doc(db, "settings", "global"))
-          ]);
-          setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          setAllUsers(uSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-          
-          // 👇 NOVO BLOCO SUBSTITUÍDO AQUI 👇
-          if(configSnap.exists()) {
-            const cData = configSnap.data();
+    if (!user) return; // Só abre o canal com o banco se o usuário estiver logado
+  
+    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+        setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  
+    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+        setOrders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  
+    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+        setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  
+    const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+        if(docSnap.exists()) {
+            const cData = docSnap.data();
             if(cData.storeMode) setStoreMode(cData.storeMode);
             if(cData.sysConfig) setSysConfig(cData.sysConfig); 
-         }
-         // 👆 FIM DO NOVO BLOCO 👆
-        } catch (e) { console.error("Erro ao ler DB", e); }
-      };
-      fetchData();
-    }
-  }, [currentScreen, toast, isPrintMode]);
+        }
+    });
+  
+    // Função de Limpeza: Desliga tudo se o usuário sair
+    return () => { unsubProducts(); unsubOrders(); unsubUsers(); unsubConfig(); };
+  }, [user]);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -1262,13 +1264,75 @@ export default function App() {
 
             {/* Botões de Ação do Representante */}
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <button onClick={() => setShowMassNotify(true)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
+                    <BellRing className="w-5 h-5 mr-2"/> 🚨 Avisar Chegada de Carga
+                </button>
                 <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
-                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio da Unidade
+                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
                 </button>
                 <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
                     ➕ Incluir Pedido Manual
                 </button>
             </div>
+
+            {/* MODAL DE FILA DE NOTIFICAÇÕES */}
+            {showMassNotify && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                  <div className="bg-blue-600 p-4 flex justify-between items-center text-white shrink-0">
+                     <div>
+                        <h3 className="font-black text-lg flex items-center"><BellRing className="w-5 h-5 mr-2"/> Fila Rápida de Avisos</h3>
+                        <p className="text-blue-100 text-xs font-medium mt-1">Notificando clientes do Lote: {filtroAtivo}</p>
+                     </div>
+                     <button onClick={() => setShowMassNotify(false)} className="bg-blue-700 hover:bg-blue-800 p-2 rounded-lg transition"><X className="w-5 h-5"/></button>
+                  </div>
+                  
+                  <div className="p-4 overflow-y-auto space-y-3 bg-slate-50 flex-1">
+                     <p className="text-sm font-bold text-slate-600 mb-2">Membros aguardando retirada ({pedidosConfirmados.length}):</p>
+                     
+                     {pedidosConfirmados.length === 0 ? (
+                         <p className="text-gray-500 text-center py-8 text-sm font-medium">Nenhum membro pendente para notificar neste lote.</p>
+                     ) : (
+                         pedidosConfirmados.map(o => {
+                             const temFalta = o.faltas && o.faltas.length > 0;
+                             const isNotified = o.notifiedRetirada; 
+                             
+                             return (
+                                 <div key={o.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-xl border transition-all ${isNotified ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200 shadow-sm'}`}>
+                                     <div className="mb-3 sm:mb-0">
+                                         <p className="font-bold text-slate-800 text-sm flex items-center">
+                                             {o.customer} 
+                                             {isNotified && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-black tracking-widest uppercase">✅ Avisado</span>}
+                                         </p>
+                                         <p className="text-xs text-gray-500 mt-0.5 font-medium">
+                                             Total: R$ {(o.total||0).toFixed(2)} 
+                                             {temFalta && <span className="text-orange-500 font-bold ml-1">(Contém faltas)</span>}
+                                         </p>
+                                     </div>
+                                     <button 
+                                         onClick={async () => {
+                                             let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\n`;
+                                             if(temFalta) text += `⚠️ *Aviso:* Tivemos um corte no fornecedor, mas o valor da sua cesta já foi ajustado com o desconto das faltas!\n\n`;
+                                             text += `O total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
+                                             
+                                             try {
+                                                 await updateDoc(doc(db, "orders", o.id), { notifiedRetirada: new Date().toISOString() });
+                                             } catch(e) { console.error("Erro ao registrar notificação", e); }
+                                             
+                                             window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                                         }} 
+                                         className={`w-full sm:w-auto px-4 py-2.5 rounded-lg font-black text-xs transition shadow-sm flex items-center justify-center ${isNotified ? 'bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-50' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                     >
+                                         <MessageCircle className="w-4 h-4 mr-2"/> {isNotified ? 'Reenviar Aviso' : 'Enviar WhatsApp'}
+                                     </button>
+                                 </div>
+                             )
+                         })
+                     )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showManualOrder && (
               <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-lg mt-3 transition-all">
@@ -1697,6 +1761,9 @@ export default function App() {
         }).slice(-7);
 
         const maxSale = sortedDays.length > 0 ? Math.max(...sortedDays.map(d => salesByDay[d]), 100) : 100;
+        // 7. CÁLCULO DO ESTOQUE ATUAL (Capital Imobilizado)
+        const totalItensEstoque = products.reduce((sum, p) => sum + (p.stock || 0), 0);
+        const capitalImobilizado = products.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
 
         return (
           <div className="space-y-6 text-left">
@@ -1714,72 +1781,50 @@ export default function App() {
                 </div>
             </div>
 
-            {/* NOVO DASHBOARD FINANCEIRO (LAYOUT WIDESCREEN) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-                
-                {/* 📊 BLOCO PRINCIPAL: FINANCEIRO (Lado Esquerdo) */}
-                <div className="lg:col-span-2 bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl border border-slate-700 text-white relative overflow-hidden flex flex-col justify-between">
-                    {/* Efeito de brilho de fundo */}
-                    <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-3xl"></div>
-                    
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 relative z-10 mb-8">
-                        <div>
-                            <p className="text-[11px] font-bold text-emerald-400 mb-1.5 uppercase tracking-widest">Faturamento Bruto</p>
-                            <p className="text-4xl sm:text-5xl font-black tracking-tight leading-none">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</p>
-                        </div>
-                        <div className="text-left sm:text-right bg-slate-900/60 p-4 rounded-2xl border border-slate-700/50 w-full sm:w-auto shadow-inner">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Lucro Líquido ({margemLucroLote.toFixed(1)}%)</p>
-                            <p className="text-2xl sm:text-3xl font-black text-emerald-400 leading-none">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</p>
-                        </div>
+           {/* 🚀 GRID ESTRATÉGICO: 4 CARDS (2x2 no Celular) */}
+           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6">
+               
+                {/* Card 1: Faturamento Bruto */}
+                <div className="bg-slate-800 p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-xl text-white border border-slate-700 relative overflow-hidden flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+                    <div className="absolute top-0 right-0 -mt-4 -mr-4 w-16 h-16 sm:w-24 sm:h-24 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                    <div>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 line-clamp-1">Faturamento Bruto</p>
+                        <h3 className="text-lg sm:text-2xl font-black tracking-tight leading-none mt-1 sm:mt-2 text-white truncate">R$ {faturamentoLote.toFixed(2).replace('.', ',')}</h3>
                     </div>
+                    <p className="text-[8px] sm:text-[9px] text-slate-400 font-medium mt-2 leading-tight">Total transacionado</p>
+                </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-6 border-t border-slate-700/60 relative z-10">
-                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Custos (CMV)</p>
-                            <p className="text-lg sm:text-xl font-black text-red-400">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
-                         </div>
-                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Impostos (8%)</p>
-                            <p className="text-lg sm:text-xl font-black text-orange-400">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
-                         </div>
+                {/* Card 2: Lucro Líquido */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+                    <div>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Lucro Líquido</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {lucroLiquidoLote.toFixed(2).replace('.', ',')}</h3>
+                    </div>
+                    <div className="mt-2">
+                        <span className="text-[8px] sm:text-[9px] bg-emerald-50 text-emerald-700 px-1.5 sm:px-2 py-0.5 rounded border border-emerald-200 font-black truncate block w-fit">Margem: {margemLucroLote.toFixed(1)}%</span>
                     </div>
                 </div>
 
-                {/* 👥 BLOCO SECUNDÁRIO: OPERACIONAL (Lado Direito) */}
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 flex flex-col gap-4 justify-between h-full">
-                    {/* Total de Membros */}
-                    <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Membros Atendidos</p>
-                            <p className="text-3xl font-black text-emerald-900 leading-none">{uniqueCustomers.length}</p>
-                        </div>
-                        <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
-                            <Users className="w-6 h-6 text-emerald-500"/>
-                        </div>
+                {/* Card 3: Capital em Estoque */}
+                <div className="bg-emerald-50 p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-emerald-200/60 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+                    <div>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1 line-clamp-1">Capital em Estoque</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-emerald-900 tracking-tight leading-none mt-1 sm:mt-2 truncate">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h3>
                     </div>
-                    
-                    {/* Separação Novos/Recorrentes */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Novos</p>
-                            <p className="text-xl font-black text-emerald-600 leading-none">+{membrosNovos}</p>
-                        </div>
-                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-100 text-center">
-                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Retornos</p>
-                            <p className="text-xl font-black text-blue-600 leading-none">{membrosRecorrentes}</p>
-                        </div>
-                    </div>
-
-                    {/* Volume Físico */}
-                    <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 mt-2 flex items-center justify-between text-white shadow-sm">
-                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Girado</p>
-                            <p className="text-xl font-black text-white leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
-                        </div>
-                        <Package className="w-6 h-6 text-slate-500 opacity-50"/>
-                    </div>
+                    <p className="text-[8px] sm:text-[9px] font-bold text-emerald-600 mt-2 leading-tight truncate">{totalItensEstoque} un a pronta entrega</p>
                 </div>
 
+                {/* Card 4: Comunidade */}
+                <div className="bg-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-sm border border-gray-200 flex flex-col justify-between min-h-[120px] sm:min-h-[135px]">
+                    <div>
+                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 line-clamp-1">Membros Atendidos</p>
+                        <h3 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight leading-none mt-1 sm:mt-2">{uniqueCustomers.length}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-1 sm:gap-1.5 text-[8px] font-black uppercase tracking-wider mt-2">
+                        <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded w-fit">+{membrosNovos} Novos</span>
+                        <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded w-fit">{membrosRecorrentes} Voltas</span>
+                    </div>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
