@@ -1825,8 +1825,10 @@ export default function App() {
                         <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded w-fit">{membrosRecorrentes} Voltas</span>
                     </div>
                   </div>
-                  {/* 📊 SEÇÃO DE DETALHAMENTO: CUSTOS LOGÍSTICOS E OPERACIONAIS */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+            </div>
+          
+           {/* 📊 SEÇÃO DE DETALHAMENTO: CUSTOS LOGÍSTICOS E OPERACIONAIS */}
+           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
                 
                 {/* Bloco de Deduções DRE (CMV e Impostos alinhados horizontalmente) */}
                 <div className="lg:col-span-2 bg-slate-100/50 p-5 rounded-3xl border border-gray-200/60 flex flex-col justify-center">
@@ -1854,7 +1856,6 @@ export default function App() {
                     <Package className="w-10 h-10 text-slate-600 opacity-40 shrink-0 relative z-10"/>
                 </div>
 
-            </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
