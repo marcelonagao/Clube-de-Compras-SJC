@@ -2235,7 +2235,7 @@ export default function App() {
                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
                      <h3 className="font-black text-slate-800 text-lg mb-4">Produtos Cadastrados ({products.length})</h3>
                      <div className="space-y-2">
-                       {products.map(p => (
+                     {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
                          <div key={p.id} className="p-3 border border-gray-100 rounded-xl flex items-center justify-between hover:border-emerald-200 transition-colors bg-white">
                            <div className="flex items-center gap-3 truncate">
                              <div className="w-12 h-12 bg-gray-50 rounded-md flex items-center justify-center shrink-0 border border-gray-100 overflow-hidden">
