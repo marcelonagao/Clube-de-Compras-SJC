@@ -115,6 +115,8 @@ export default function App() {
   const [manualItemProduct, setManualItemProduct] = useState('');
   const [manualItemQty, setManualItemQty] = useState(1);
 
+  const [expandedCatalogCats, setExpandedCatalogCats] = useState({});
+
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
@@ -2344,17 +2346,13 @@ export default function App() {
      }
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
-          // CABEÇALHO ATUALIZADO COM OS NOVOS CAMPOS
-          let csvContent = "data:text/csv;charset=utf-8,SKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA;CUSTO_COMPRA;QTD_CAIXA\n";
-          
+          let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA;CUSTO_COMPRA;QTD_CAIXA\n";
           if (products && products.length > 0) {
-              // Exporta a base inteira incluindo Custo e Caixa
               const rows = products.map(p => `${p.sku || ''};${p.name || ''};${p.category || 'Geral'};${(p.price || 0).toFixed(2)};${(p.cost || 0).toFixed(2)};${p.minBox || 1}`);
               csvContent += rows.join("\n");
           } else {
               csvContent += "EX-001;Sobrecoxa de Frango 1Kg;Carnes;22.50;15.00;1\nEX-002;Arroz Orgânico 5Kg;Mercearia;25.90;18.00;1";
           }
-          
           const link = document.createElement("a");
           link.href = encodeURI(csvContent);
           link.download = "Catalogo_Produtos.csv";
@@ -2362,7 +2360,6 @@ export default function App() {
       };
 
       const handleZerarEstoque = async () => {
-        // ALERTA VERMELHO DE PERIGO ('danger')
         showConfirm('Zerar Estoque', 'ATENÇÃO: Você tem certeza que deseja ZERAR o estoque local de TODOS os produtos? Essa ação não pode ser desfeita.', async () => {
             try {
                 for (const p of products) {
@@ -2374,18 +2371,24 @@ export default function App() {
                 setProducts(prev => prev.map(prod => ({...prod, stock: 0})));
             } catch(e) { showToast('Erro ao zerar estoque', 'error'); }
         }, 'danger');
-    };
-    const handleTogglePausa = async (produtoId, estadoAtual) => {
-      try {
-          await updateDoc(doc(db, "products", produtoId), { pausado: !estadoAtual });
-          showToast(estadoAtual ? 'Produto reativado na vitrine!' : 'Produto pausado com sucesso!');
-          // Atualiza a tela imediatamente sem precisar recarregar
-          setProducts(prev => prev.map(p => p.id === produtoId ? { ...p, pausado: !estadoAtual } : p));
-      } catch(e) {
-          showToast('Erro ao atualizar status', 'error');
-      }
-  };
-      // Extrai a lista de categorias únicas existentes para o Dropdown
+      };
+
+      const handleTogglePausa = async (produtoId, estadoAtual) => {
+        try {
+            await updateDoc(doc(db, "products", produtoId), { pausado: !estadoAtual });
+            showToast(estadoAtual ? 'Produto reativado na vitrine!' : 'Produto pausado com sucesso!');
+            setProducts(prev => prev.map(p => p.id === produtoId ? { ...p, pausado: !estadoAtual } : p));
+        } catch(e) { showToast('Erro ao atualizar status', 'error'); }
+      };
+
+      // 1. INTELIGÊNCIA: Agrupa os produtos por Categoria automaticamente
+      const productsByCategory = products.reduce((acc, p) => {
+        const cat = p.category || 'Geral';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
+        return acc;
+      }, {});
+
       const uniqueCategories = Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort();
 
       return (
@@ -2394,156 +2397,193 @@ export default function App() {
           
           {/* BARRA DE IMPORTAÇÃO */}
           <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-2xl mb-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-             <div>
-                 <h3 className="font-black text-emerald-900 text-sm">Importação & Edição em Lote (CSV)</h3>
-                 <p className="text-xs text-emerald-700 mt-0.5 font-medium">Planilha completa integrada: SKU, Nome, Categoria, Preço, Custo e Caixa do Fornecedor.</p>
-             </div>
-             
-             <div className="flex flex-wrap items-center gap-2">
-                   <button onClick={handleZerarEstoque} className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2.5 rounded-lg font-black hover:bg-orange-100 shadow-sm inline-flex items-center text-xs transition-colors">
+              <div>
+                  <h3 className="font-black text-emerald-900 text-sm">Importação & Edição em Lote (CSV)</h3>
+                  <p className="text-xs text-emerald-700 mt-0.5 font-medium">Planilha completa integrada: SKU, Nome, Categoria, Preço, Custo e Caixa do Fornecedor.</p>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                   <button onClick={handleZerarEstoque} className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2.5 rounded-lg font-black hover:bg-orange-100 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
                      <Trash2 className="w-4 h-4 mr-2"/> Zerar Estoque Geral
                    </button>
-                   <button onClick={baixarModeloCSV} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-lg font-black hover:bg-emerald-100 shadow-sm inline-flex items-center text-xs transition-colors">
+                   <button onClick={baixarModeloCSV} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-lg font-black hover:bg-emerald-100 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
                      <Download className="w-4 h-4 mr-2"/> Baixar Base (.CSV)
                    </button>
-                 <label className="bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-black cursor-pointer hover:bg-emerald-800 shadow-sm inline-flex items-center text-xs transition-colors m-0">
+                 <label className="bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-black cursor-pointer hover:bg-emerald-800 shadow-sm inline-flex items-center text-xs transition-colors m-0 w-full sm:w-auto justify-center">
                    <Upload className="w-4 h-4 mr-2"/> Subir Tabela Atualizada
                    <input type="file" accept=".csv" className="hidden" onChange={handleCSVUpload}/>
                  </label>
-             </div>
+              </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-             
-             {/* LADO ESQUERDO: FORMULÁRIO */}
-             <div className="w-full lg:col-span-5 lg:sticky lg:top-20 bg-transparent">
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                     <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center justify-between">
-                         {editingProduct ? '✏️ Editando Produto' : '✨ Novo Produto'}
-                         {editingProduct && <button onClick={() => setEditingProduct(null)} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded hover:bg-gray-200">Cancelar</button>}
-                     </h3>
-                     
-                     <form key={editingProduct?.id || 'new'} onSubmit={async(e) => {
-                       e.preventDefault();
-                       const fd = new FormData(e.target);
-                       const np = { 
-                        name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
-                        price: parseFloat(fd.get('price').replace(',','.')), 
-                        promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
-                        cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
-                        stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
-                        image: editingProduct?.image || '📦',
-                        pausado: editingProduct?.pausado || false // <-- Regra adicionada!
-                     };
-                     const fileInput = e.target.querySelector('input[type="file"]');
-                     if (fileInput.files[0]) { 
-                         // 1. Comprime a imagem gerando o Blob
-                         const imageBlob = await compressImage(fileInput.files[0]);
-                         
-                         // 2. Cria uma referência lá no Storage com um nome único (Data + Nome do arquivo)
-                         const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
-                         const imageRef = ref(storage, imageName);
-                         
-                         // 3. Faz o upload do pacote para o Firebase Storage
-                         await uploadBytes(imageRef, imageBlob);
-                         
-                         // 4. Pega o link seguro (.jpg) que o Storage gerou e salva na variável do produto!
-                         np.image = await getDownloadURL(imageRef);
-                     }
-
-                       try { 
-                          if(editingProduct) await updateDoc(doc(db,"products",editingProduct.id), np);
-                          else await addDoc(collection(db,"products"), np); 
-                          setEditingProduct(null); e.target.reset(); showToast('Salvo!');
-                       } catch(er){ showToast('Erro', 'error'); }
-                     }} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              
+              {/* LADO ESQUERDO: FORMULÁRIO */}
+              <div className="w-full lg:col-span-5 lg:sticky lg:top-20 bg-transparent">
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                      <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center justify-between">
+                          {editingProduct ? '✏️ Editando Produto' : '✨ Novo Produto'}
+                          {editingProduct && <button onClick={() => setEditingProduct(null)} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded hover:bg-gray-200">Cancelar</button>}
+                      </h3>
+                      
+                      <form key={editingProduct?.id || 'new'} onSubmit={async(e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target);
+                        const np = { 
+                         name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
+                         price: parseFloat(fd.get('price').replace(',','.')), 
+                         promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
+                         cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
+                         stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
+                         image: editingProduct?.image || '📦',
+                         pausado: editingProduct?.pausado || false
+                        };
+                        const fileInput = e.target.querySelector('input[type="file"]');
+                        if (fileInput.files[0]) { 
+                            const imageBlob = await compressImage(fileInput.files[0]);
+                            const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
+                            const imageRef = ref(storage, imageName);
+                            await uploadBytes(imageRef, imageBlob);
+                            np.image = await getDownloadURL(imageRef);
+                        }
+                        try { 
+                           if(editingProduct) await updateDoc(doc(db,"products",editingProduct.id), np);
+                           else await addDoc(collection(db,"products"), np); 
+                           setEditingProduct(null); e.target.reset(); showToast('Salvo!');
+                        } catch(er){ showToast('Erro', 'error'); }
+                      }} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                         
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
-                             <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                {editingProduct?.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
-                             </div>
-                             <label className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-emerald-100">Escolher Foto <input type="file" accept="image/*" className="hidden" /></label>
-                          </div>
-                          
-                          <input name="name" defaultValue={editingProduct?.name} placeholder="Nome do Produto" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                          
-                          <div className="grid grid-cols-2 gap-3">
-                              <input name="sku" defaultValue={editingProduct?.sku} placeholder="SKU (Código)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                              
-                              {/* O CAMPO CATEGORIA AGORA É UM DROPDOWN/LIST INTELIGENTE */}
-                              <input name="category" defaultValue={editingProduct?.category} placeholder="Selecione ou Digite..." list="categories-datalist" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium bg-white" />
-                              <datalist id="categories-datalist">
-                                  {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                              </datalist>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                              <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                              <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Promoção (R$)" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
-                          </div>
-                          
-                          <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Custo de Compra (R$)" required className="w-full p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
-                          
-                          <div className="grid grid-cols-2 gap-3 items-end">
-                             <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1 truncate">Itens por Caixa</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
-                             <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Estoque Local</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
-                          </div>
-                          
-                          <button type="submit" className="w-full bg-slate-800 text-white font-black py-3 rounded-lg shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
-                              {editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}
-                          </button>
-                        </div>
-                     </form>
-                 </div>
-             </div>
-
-             {/* LADO DIREITO: LISTA DE PRODUTOS */}
-             <div className="lg:col-span-7">
-                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                     <h3 className="font-black text-slate-800 text-lg mb-4">Produtos Cadastrados ({products.length})</h3>
-                     <div className="space-y-2">
-                     {[...products].sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                         <div key={p.id} className="p-3 border border-gray-100 rounded-xl flex items-center justify-between hover:border-emerald-200 transition-colors bg-white">
-                           <div className="flex items-center gap-3 truncate">
-                             <div className="w-12 h-12 bg-gray-50 rounded-md flex items-center justify-center shrink-0 border border-gray-100 overflow-hidden">
-                               {p.image?.length > 50 ? <img src={p.image} className="w-full h-full object-cover"/> : <span className="text-sm">📦</span>}
-                             </div>
-                             <div className="truncate text-left">
-                             <p className="font-bold text-slate-800 text-sm truncate leading-tight">
-                                    {p.name}
-                                    {p.pausado && <span className="ml-2 bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-black">Pausado</span>}
-                                 </p>
-                                 <p className="text-[10px] text-gray-400 mt-0.5 font-medium">SKU: {p.sku} • Categoria: {p.category}</p>
-                                 
-                                 {/* EXIBIÇÃO COMPLETA DOS DEMAIS CAMPOS NOS CARDS */}
-                                 <div className="flex flex-wrap gap-1.5 mt-1 text-[9px] font-bold font-mono">
-                                     <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100">Custo: R$ {(p.cost || 0).toFixed(2)}</span>
-                                     <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-gray-200">Cx: {p.minBox || 1} un</span>
-                                     <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded border border-orange-100">Estoque: {p.stock || 0}</span>
-                                 </div>
-                             </div>
+                         <div className="flex flex-col gap-3">
+                           <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
+                              <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                                 {editingProduct?.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
+                              </div>
+                              <label className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-emerald-100">Escolher Foto <input type="file" accept="image/*" className="hidden" /></label>
                            </div>
-                           <div className="flex flex-col items-end gap-2 shrink-0 ml-2">
-                             <span className="font-black text-slate-800 text-sm">R$ {p.price.toFixed(2)}</span>
-                             <div className="flex gap-1.5">
-                                 <button onClick={() => handleTogglePausa(p.id, p.pausado)} className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center text-[10px] font-bold ${p.pausado ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}>
-                                    {p.pausado ? '▶ Ativar' : '⏸ Pausar'}
-                                 </button>
-                                 <button onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"><Edit2 className="w-3 h-3 mr-1"/> Editar</button>
-                                 <button onClick={() => { showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => { await deleteDoc(doc(db,"products",p.id)); }, 'danger'); }} className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"><Trash2 className="w-3 h-3"/></button>
-                             </div>
+                           
+                           <input name="name" defaultValue={editingProduct?.name} placeholder="Nome do Produto" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                           
+                           <div className="grid grid-cols-2 gap-3">
+                               <input name="sku" defaultValue={editingProduct?.sku} placeholder="SKU (Código)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                               <input name="category" defaultValue={editingProduct?.category} placeholder="Selecione ou Digite..." list="categories-datalist" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium bg-white" />
+                               <datalist id="categories-datalist">
+                                   {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                               </datalist>
                            </div>
+
+                           <div className="grid grid-cols-2 gap-3">
+                               <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                               <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Promoção (R$)" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
+                           </div>
+                           
+                           <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Custo de Compra (R$)" required className="w-full p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
+                           
+                           <div className="grid grid-cols-2 gap-3 items-end">
+                              <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1 truncate">Itens por Caixa</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
+                              <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Estoque Local</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
+                           </div>
+                           
+                           <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
+                               {editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}
+                           </button>
                          </div>
-                       ))}
-                     </div>
-                 </div>
-             </div>
+                      </form>
+                  </div>
+              </div>
+
+              {/* LADO DIREITO: LISTA DE PRODUTOS ORGANIZADA POR CATEGORIAS COLAPSÁVEIS */}
+              <div className="lg:col-span-7 space-y-3">
+                  <h3 className="font-black text-slate-800 text-lg mb-4">Produtos Cadastrados ({products.length})</h3>
+                  
+                  {Object.entries(productsByCategory).sort((a, b) => a[0].localeCompare(b[0])).map(([categoryName, catProducts]) => {
+                      const isCatExpanded = expandedCatalogCats[categoryName];
+                      const sortedCatProducts = [...catProducts].sort((a, b) => a.name.localeCompare(b.name));
+
+                      return (
+                          <div key={categoryName} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all">
+                              {/* CABEÇALHO DA CATEGORIA (SANFONA) */}
+                              <div 
+                                  onClick={() => setExpandedCatalogCats(prev => ({...prev, [categoryName]: !prev[categoryName]}))}
+                                  className="p-4 bg-slate-50 border-b border-gray-100 flex justify-between items-center cursor-pointer hover:bg-slate-100 transition-colors"
+                              >
+                                  <div className="flex items-center gap-2">
+                                      {isCatExpanded ? <ChevronUp className="w-5 h-5 text-emerald-600"/> : <ChevronDown className="w-5 h-5 text-gray-400"/>}
+                                      <span className="font-black text-slate-800 text-sm capitalize">{categoryName}</span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-lg">
+                                      {catProducts.length} {catProducts.length === 1 ? 'item' : 'itens'}
+                                  </span>
+                              </div>
+
+                              {/* LISTA DE PRODUTOS DA CATEGORIA */}
+                              {isCatExpanded && (
+                                  <div className="p-3 space-y-2.5 bg-slate-50/40">
+                                      {sortedCatProducts.map(p => (
+                                          <div key={p.id} className="p-3 border border-gray-100 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-emerald-200 transition-colors bg-white shadow-sm">
+                                              
+                                              {/* Bloco Superior/Esquerdo: Detalhes do Produto */}
+                                              <div className="flex items-start gap-3 text-left flex-1 min-w-0">
+                                                  <div className="w-12 h-12 bg-gray-50 rounded-md flex items-center justify-center shrink-0 border border-gray-100 overflow-hidden">
+                                                      {p.image?.length > 50 ? <img src={p.image} className="w-full h-full object-cover"/> : <span className="text-sm">📦</span>}
+                                                  </div>
+                                                  <div className="flex-1 min-w-0">
+                                                      <p className="font-bold text-slate-800 text-sm leading-tight break-words">
+                                                          {p.name}
+                                                          {p.pausado && <span className="ml-2 bg-orange-100 text-orange-800 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-black inline-block">Pausado</span>}
+                                                      </p>
+                                                      <p className="text-[10px] text-gray-400 mt-0.5 font-medium">SKU: {p.sku}</p>
+                                                      
+                                                      {/* Badges de Custo, Caixa e Estoque */}
+                                                      <div className="flex flex-wrap gap-1.5 mt-2 text-[9px] font-bold font-mono">
+                                                          <span className="bg-red-50 text-red-700 px-1.5 py-0.5 rounded border border-red-100">Custo: R$ {(p.cost || 0).toFixed(2).replace('.',',')}</span>
+                                                          <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-gray-200">Cx: {p.minBox || 1} un</span>
+                                                          <span className="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded border border-orange-100">Estoque: {p.stock || 0}</span>
+                                                      </div>
+                                                  </div>
+                                              </div>
+
+                                              {/* Bloco Inferior/Direito: Preço de Venda e Botões de Ação */}
+                                              <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 shrink-0">
+                                                  <div className="text-left sm:text-right">
+                                                      <p className="text-[8px] font-bold text-gray-400 uppercase sm:hidden leading-none mb-0.5">Preço</p>
+                                                      <span className="font-black text-slate-800 text-base">R$ {p.price.toFixed(2).replace('.',',')}</span>
+                                                  </div>
+                                                  
+                                                  <div className="flex items-center gap-1.5">
+                                                      <button 
+                                                          onClick={() => handleTogglePausa(p.id, p.pausado)} 
+                                                          className={`px-2.5 py-1.5 rounded-md transition-colors flex items-center text-[10px] font-bold ${p.pausado ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-orange-50 text-orange-600 hover:bg-orange-100'}`}
+                                                      >
+                                                          {p.pausado ? '▶ Ativar' : '⏸ Pausar'}
+                                                      </button>
+                                                      <button 
+                                                          onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} 
+                                                          className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"
+                                                      >
+                                                          <Edit2 className="w-3 h-3 mr-1"/> Editar
+                                                      </button>
+                                                      <button 
+                                                          onClick={() => { showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => { await deleteDoc(doc(db,"products",p.id)); }, 'danger'); }} 
+                                                          className="bg-red-50 text-red-600 p-1.5 rounded-md hover:bg-red-100 transition-colors"
+                                                      >
+                                                          <Trash2 className="w-3.5 h-3.5"/>
+                                                      </button>
+                                                  </div>
+                                              </div>
+
+                                          </div>
+                                      ))}
+                                  </div>
+                              )}
+                          </div>
+                      );
+                  })}
+              </div>
 
           </div>
         </div>
       );
-    }
+     }
 
       if (adminTab === 'clientes') {
          return (
