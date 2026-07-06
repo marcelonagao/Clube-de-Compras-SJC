@@ -1824,6 +1824,36 @@ export default function App() {
                         <span className="bg-slate-100 text-emerald-600 px-1.5 py-0.5 rounded w-fit">+{membrosNovos} Novos</span>
                         <span className="bg-slate-100 text-blue-600 px-1.5 py-0.5 rounded w-fit">{membrosRecorrentes} Voltas</span>
                     </div>
+                    {/* 📊 SEÇÃO DE DETALHAMENTO: CUSTOS LOGÍSTICOS E OPERACIONAIS */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+                
+                {/* Bloco de Deduções DRE (CMV e Impostos alinhados horizontalmente) */}
+                <div className="lg:col-span-2 bg-slate-100/50 p-5 rounded-3xl border border-gray-200/60 flex flex-col justify-center">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 pl-1">Demonstrativo de Custos do Fornecedor</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Custos de Compra (CMV)</p>
+                            <p className="text-lg font-black text-red-500">- R$ {custoMercadoriaLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Impostos Retidos (8%)</p>
+                            <p className="text-lg font-black text-orange-500">- R$ {impostosLote.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Volume Girado (Focado na Logística da Sede) */}
+                <div className="bg-slate-800 p-5 rounded-3xl border border-slate-700 text-white flex items-center justify-between shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-6 -mr-6 w-24 h-24 bg-slate-700/30 rounded-full blur-xl"></div>
+                    <div className="relative z-10">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Volume Total Girado</p>
+                        <p className="text-2xl font-black text-white mt-1 leading-none">{unidadesVendidas} <span className="text-xs font-medium text-slate-400">unidades</span></p>
+                        <p className="text-[9px] text-slate-400 mt-2.5 font-medium">Movimentadas fisicamente pela van</p>
+                    </div>
+                    <Package className="w-10 h-10 text-slate-600 opacity-40 shrink-0 relative z-10"/>
+                </div>
+
+            </div>
                 </div>
             </div>
 
