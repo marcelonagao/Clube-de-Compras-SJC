@@ -119,6 +119,8 @@ export default function App() {
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
   const [showMassNotify, setShowMassNotify] = useState(false);
+  const [editCart, setEditCart] = useState([]);
+  const [editItemProduct, setEditItemProduct] = useState('');
 
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
@@ -2061,7 +2063,12 @@ export default function App() {
                                              <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
                                              <div className="flex items-center gap-1.5">
                                                 {/* BOTÃO DE EDITAR */}
-                                                <button onClick={(e) => { e.stopPropagation(); setEditingAdminOrder(o); }} className="text-blue-500 hover:text-blue-700 text-[10px] font-bold flex items-center bg-blue-50 px-2 py-1 rounded transition-colors">
+                                                <button onClick={(e) => { 
+                                                    e.stopPropagation(); 
+                                                    setEditingAdminOrder(o);
+                                                    // Cria uma cópia exata dos itens do pedido para podermos brincar com eles na tela!
+                                                    setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
+                                                }} className="text-blue-500 hover:text-blue-700 text-[10px] font-bold flex items-center bg-blue-50 px-2 py-1 rounded transition-colors">
                                                     <Edit2 className="w-3 h-3 mr-1"/> Editar
                                                 </button>
                                                 
@@ -2110,17 +2117,131 @@ export default function App() {
             )})}
 
             {/* MODAL DE EDIÇÃO DE PEDIDO (ESQUELETO) */}
+            {/* MODAL DE EDIÇÃO DE PEDIDO (COMPLETO E INTELIGENTE) */}
             {editingAdminOrder && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl border border-gray-100">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-black text-slate-800 text-lg">Editar Pedido</h3>
-                            <button onClick={() => setEditingAdminOrder(null)} className="text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded"><X className="w-4 h-4"/></button>
+                    <div className="bg-white p-6 rounded-3xl w-full max-w-lg shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-center mb-4 shrink-0 border-b border-gray-100 pb-4">
+                            <div>
+                                <h3 className="font-black text-slate-800 text-lg">Editar Pedido</h3>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Membro: {editingAdminOrder.customer}</p>
+                            </div>
+                            <button onClick={() => {setEditingAdminOrder(null); setEditItemProduct('');}} className="text-gray-400 hover:text-red-500 bg-gray-100 p-2 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
                         </div>
-                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-blue-800 text-sm font-medium mb-4">
-                            Você está editando o pedido de <strong>{editingAdminOrder.customer}</strong>.
+                        
+                        {/* AREA DE ADICIONAR NOVO PRODUTO */}
+                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-200 mb-4 shrink-0 flex gap-2">
+                            <select value={editItemProduct} onChange={e => setEditItemProduct(e.target.value)} className="flex-1 p-2.5 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate bg-white">
+                                <option value="">Adicionar novo produto ao pedido...</option>
+                                {[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
+                                    <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>
+                                ))}
+                            </select>
+                            <button onClick={() => {
+                                if(!editItemProduct) return;
+                                const p = products.find(prod => prod.id === editItemProduct);
+                                if(!p) return;
+                                const existing = editCart.find(i => i.id === p.id);
+                                if(existing) {
+                                    setEditCart(editCart.map(i => i.id === p.id ? {...i, qty: (i.qty||i.qtd||0) + 1, qtd: (i.qty||i.qtd||0) + 1} : i));
+                                } else {
+                                    setEditCart([...editCart, {id: p.id, name: p.name, price: p.price, qty: 1, qtd: 1}]);
+                                }
+                                setEditItemProduct('');
+                            }} className="bg-emerald-100 text-emerald-800 px-4 rounded-lg font-black text-xs hover:bg-emerald-200 transition">Adicionar</button>
                         </div>
-                        <button className="w-full bg-slate-800 text-white font-black py-3 rounded-lg mt-2" onClick={() => { showToast('Edição salva!'); setEditingAdminOrder(null); }}>Salvar Alterações</button>
+
+                        {/* LISTA DE ITENS DO PEDIDO (EDITÁVEL) */}
+                        <div className="overflow-y-auto space-y-2 mb-4 flex-1 pr-1">
+                            {editCart.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 text-sm shadow-sm">
+                                    <div className="flex-1 truncate pr-2">
+                                        <p className="font-bold text-slate-700 truncate">{item.name}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold">R$ {(item.price || 0).toFixed(2)} / un</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 shrink-0">
+                                        <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shrink-0">
+                                            <button onClick={() => {
+                                                const currentQty = item.qty || item.qtd || 1;
+                                                if (currentQty <= 1) {
+                                                    setEditCart(editCart.filter(i => i.id !== item.id));
+                                                } else {
+                                                    setEditCart(editCart.map(i => i.id === item.id ? {...i, qty: currentQty - 1, qtd: currentQty - 1} : i));
+                                                }
+                                            }} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors font-black">-</button>
+                                            <span className="w-8 text-center font-black text-slate-800 text-xs">{item.qty || item.qtd || 1}</span>
+                                            <button onClick={() => {
+                                                const currentQty = item.qty || item.qtd || 1;
+                                                setEditCart(editCart.map(i => i.id === item.id ? {...i, qty: currentQty + 1, qtd: currentQty + 1} : i));
+                                            }} className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors font-black">+</button>
+                                        </div>
+                                        <button onClick={() => setEditCart(editCart.filter(i => i.id !== item.id))} className="text-red-400 hover:text-red-600 p-1.5 bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                                    </div>
+                                </div>
+                            ))}
+                            {editCart.length === 0 && <p className="text-center text-sm font-bold text-gray-400 py-6">O pedido está vazio.</p>}
+                        </div>
+
+                        {/* RODAPÉ COM TOTAL E BOTÃO SALVAR */}
+                        <div className="border-t border-gray-100 pt-4 shrink-0">
+                            <div className="flex justify-between items-end mb-4 px-2">
+                                <span className="font-bold text-gray-400 text-xs uppercase tracking-widest">Novo Total:</span>
+                                <span className="font-black text-2xl text-emerald-700">
+                                    R$ {editCart.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.qtd || 1)), 0).toFixed(2)}
+                                </span>
+                            </div>
+                            <button onClick={async () => {
+                                try {
+                                    const newTotal = editCart.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.qtd || 1)), 0);
+                                    
+                                    // 👇 INTELIGÊNCIA DE DIFERENÇA DE ESTOQUE 👇
+                                    const isPedidoFeira = (editingAdminOrder.deliveryDate || '').toLowerCase().includes('pronta entrega');
+                                    if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
+                                        // Mapeia o que tinha antes
+                                        const oldMap = {};
+                                        (editingAdminOrder.items || []).forEach(i => oldMap[i.id] = (i.qty || i.qtd || 1));
+                                        
+                                        // Mapeia como ficou agora
+                                        const newMap = {};
+                                        editCart.forEach(i => newMap[i.id] = (i.qty || i.qtd || 1));
+                                        
+                                        const allItemIds = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
+                                        
+                                        for (const id of allItemIds) {
+                                            if (id === 'oferta-1') continue;
+                                            const oldQ = oldMap[id] || 0;
+                                            const newQ = newMap[id] || 0;
+                                            const diff = newQ - oldQ; // Se for Positivo: pegou mais. Se for Negativo: devolveu.
+                                            
+                                            if (diff !== 0) {
+                                                const prodRef = doc(db, "products", id);
+                                                const prodDoc = await getDoc(prodRef);
+                                                if (prodDoc.exists()) {
+                                                    const currentStock = prodDoc.data().stock || 0;
+                                                    // Ajusta o estoque baseando na diferença
+                                                    await updateDoc(prodRef, { stock: Math.max(0, currentStock - diff) });
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // 👆 FIM DA INTELIGÊNCIA DE ESTOQUE 👆
+
+                                    // Grava o novo pedido no banco
+                                    await updateDoc(doc(db, "orders", editingAdminOrder.id), {
+                                        items: editCart,
+                                        total: newTotal
+                                    });
+
+                                    showToast('Pedido atualizado com sucesso!');
+                                    setEditingAdminOrder(null);
+                                    setEditItemProduct('');
+                                } catch(err) {
+                                    showToast('Erro ao atualizar pedido.', 'error');
+                                }
+                            }} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-lg hover:bg-slate-900 transition flex items-center justify-center">
+                                <CheckCircle className="w-5 h-5 mr-2"/> Gravar Novo Pedido
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
