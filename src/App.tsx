@@ -330,20 +330,34 @@ export default function App() {
         return;
       }
       
+      
       // FASE 1: Se for apenas coleta, finaliza direto!
       if (CONFIG_APENAS_COLETA) {
-          // CORREÇÃO: Desconta o saldo da carteira mesmo se o pagamento for parcial!
-          if (walletDiscount > 0) {
-              await updateDoc(doc(db,"users", user.uid), { walletBalance: Math.max(0, (user.walletBalance || 0) - walletDiscount) });
-              setUser(prev => ({...prev, walletBalance: Math.max(0, (prev.walletBalance || 0) - walletDiscount)})); // Atualiza a tela na hora!
-          }
+        if (walletDiscount > 0) {
+            await updateDoc(doc(db,"users", user.uid), { walletBalance: Math.max(0, (user.walletBalance || 0) - walletDiscount) });
+            setUser(prev => ({...prev, walletBalance: Math.max(0, (prev.walletBalance || 0) - walletDiscount)})); 
+        }
 
-          setCart([]); 
-          setIsProcessingPayment(false); 
-          setCurrentScreen('success');
-          showToast('O pagamento será feito na retirada!', 'success');
-          return;
-      }
+        // 👇 MÁGICA DO ESTOQUE RESTAURADA 👇
+        if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+            for (const item of cart) {
+                const prodRef = doc(db, "products", item.id);
+                const prodDoc = await getDoc(prodRef);
+      if (prodDoc.exists()) {
+        const estoqueAtual = prodDoc.data().stock || 0;
+        await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qtd) });
+            }
+            }
+        }
+        // 👆 FIM DA MÁGICA 👆
+
+        setCart([]); 
+        setIsProcessingPayment(false); 
+        setPendingOrder({ id: orderRef.id }); // Restaura a Senha Gigante!
+        setCurrentScreen('success');
+        showToast('O pagamento será feito na retirada!', 'success');
+        return;
+    }
 
       // FASE 2 (Futuro): Vai para a tela do PIX
       setPendingOrder({ id: orderRef.id, ...newOrder });
@@ -1076,31 +1090,36 @@ export default function App() {
 
     // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
     const poloOrdersFiltered = orders.filter(o => {
-        if (o.polo !== viewingPolo || !o.date) return false;
-        
-        if (filtroAtivo.startsWith('Consolidado:')) {
-            const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-            if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
-            
-            // Retrocompatibilidade
-            const datePedido = o.date ? new Date(o.date) : new Date();
-            const pastaAntiga = `${meses[datePedido.getMonth()]}/${datePedido.getFullYear()}`;
-            return pastaAntiga === pastaFiltro;
-        } else {
-            return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
-        }
-    });
+      if (o.polo !== viewingPolo || !o.date) return false;
+      
+      if (filtroAtivo.startsWith('Consolidado:')) {
+          const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+          if (o.cicloFinanceiro) {
+              return o.cicloFinanceiro === pastaFiltro;
+          } else {
+              // A MÁGICA: Iguala à regra do Dashboard da Gestão (força para o mês atual se não tiver etiqueta)
+              return mesReferenciaGlobal === pastaFiltro;
+          }
+      } else {
+          return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+      }
+  });
 
-    // 3. SEPARA POR STATUS (DENTRO DO CICLO)
+    // 3. SEPARA POR STATUS E CORRIGE O CONSOLIDADO DA LOGÍSTICA
     const repOrders = poloOrdersFiltered.filter(o => ['confirmado', 'pago_polo'].includes(o.status));
     const historicoOrders = poloOrdersFiltered.filter(o => o.status === 'pago');
 
-    const pedidosConfirmados = repOrders.filter(o => o.status === 'confirmado');
-    const pedidosPagosPolo = repOrders.filter(o => o.status === 'pago_polo');
+    // Mudança fundamental: Lê direto da base para não perder os pedidos já pagos/repassados!
+    const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
+    const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
+    const pedidosRepassados = poloOrdersFiltered.filter(o => o.status === 'pago'); 
 
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
-    const totalGeralPolo = totalAindaAReceber + totalArrecadadoPolo;
+    const totalRepassado = pedidosRepassados.reduce((acc, o) => acc + (o.total || 0), 0);
+    
+    // O Total do Lote agora soma tudo (Pendentes + No Caixa + Já repassados para a Sede)
+    const totalGeralPolo = totalAindaAReceber + totalArrecadadoPolo + totalRepassado;
 
     const handleEfetuarRepassePolo = async () => {
       if (pedidosPagosPolo.length === 0) return showToast('Nenhum valor arrecadado para repassar!', 'error');
@@ -1160,6 +1179,18 @@ export default function App() {
       };
 
       try {
+        // 👇 MÁGICA DO ESTOQUE (PEDIDO MANUAL) 👇
+        if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+            for (const item of manualCart) {
+                const prodRef = doc(db, "products", item.id);
+                const prodDoc = await getDoc(prodRef);
+                if (prodDoc.exists()) {
+                    const estoqueAtual = prodDoc.data().stock || 0;
+                    await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qty) });
+                }
+            }
+        }
+        
         await addDoc(collection(db, "orders"), manualOrder);
         showToast('Pedido Manual Salvo com Sucesso!');
         setShowManualOrder(false);
@@ -1842,7 +1873,34 @@ export default function App() {
                                         </div>
                                         <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
                                            <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
-                                           <button onClick={async (e)=>{ e.stopPropagation(); await deleteDoc(doc(db,"orders",o.id)); showToast('Excluído'); }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded"><Trash2 className="w-3 h-3 mr-1"/> Excluir</button>
+                                           <button onClick={(e) => { 
+    e.stopPropagation();
+    showConfirm(
+        'Cancelar Pedido', 
+        `Deseja realmente excluir o pedido de ${o.customer}?`, 
+        async () => {
+            try {
+                if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+                    for (const item of (o.items || [])) {
+                        if (item.id !== 'oferta-1') {
+                            const prodRef = doc(db, "products", item.id);
+                            const prodDoc = await getDoc(prodRef);
+                            if (prodDoc.exists()) {
+                                const estoqueAtual = prodDoc.data().stock || 0;
+                                const quantidadeDevolvida = item.qtd || item.qty || 1;
+                                await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
+                            }
+                        }
+                    }
+                }
+                await deleteDoc(doc(db, "orders", o.id)); 
+                showToast('Pedido cancelado e resolvido!');
+            } catch(err) { showToast('Erro ao cancelar', 'error'); }
+        }, 'danger'
+    );
+}} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded">
+    <Trash2 className="w-3 h-3 mr-1"/> Excluir
+</button>
                                         </div>
                                       </div>
                                     ))}
