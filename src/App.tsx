@@ -662,7 +662,7 @@ export default function App() {
   // --- RENDERS ---
 
   const renderShop = () => {
-    const filteredProducts = products.filter(p => !p.pausado && (shopCategory === 'Todos' || p.category === shopCategory) && (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredProducts = products.filter(p => !p.pausado && (shopCategory === 'Todos' || p.category === shopCategory) && (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())).sort((a, b) => a.name.localeCompare(b.name));
     const promoProducts = products.filter(p => !p.pausado && Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price));
 
     return (
