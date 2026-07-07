@@ -1227,13 +1227,22 @@ export default function App() {
                </div>
 
                {isGestor && (
-                 <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
-                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visão de Mestre</p>
-                     <select value={viewingPolo} onChange={e => setManualSelectedPolo(e.target.value)} className="w-full bg-white border border-gray-300 text-slate-800 font-bold px-3 py-2 rounded-lg outline-none text-xs shadow-sm">
-                        {polos.map(p => <option key={p} value={p}>JC: {p}</option>)}
-                     </select>
-                 </div>
-               )}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-gray-200">
+                      <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Visão de Mestre</p>
+                      {/* CORREÇÃO: Altera o filtro do React com setManualSelectedPolo */}
+                      <select 
+                          value={viewingPolo} 
+                          onChange={e => {
+                              setManualSelectedPolo(e.target.value);
+                              // Força o estado a atualizar o filtro da planilha local imediatamente
+                              setDashCycleFilter(prev => prev);
+                          }} 
+                          className="w-full bg-white border border-gray-300 text-slate-800 font-bold px-3 py-2 rounded-lg outline-none text-xs shadow-sm cursor-pointer"
+                      >
+                         {polos.map(p => <option key={p} value={p}>JC: {p}</option>)}
+                      </select>
+                  </div>
+                )}
            </div>
         </div>
 
@@ -1577,7 +1586,8 @@ export default function App() {
     // A MÁGICA AQUI: O Romaneio agora obedece a etiqueta de Lote (Data de Entrega)
     const validOrders = orders.filter(o => {
         const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
-        const hasValidPolo = isGestor ? true : o.polo === user?.polo;
+        // CORREÇÃO: Se for Gestor Central, o PDF obedece ao polo selecionado na caixinha da tela!
+        const hasValidPolo = isGestor ? (o.polo === viewingPolo) : (o.polo === user?.polo);
         const hasDate = !!o.date;
 
         // Regra de Retrocompatibilidade e Filtro
