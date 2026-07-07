@@ -1622,9 +1622,17 @@ export default function App() {
                });
            });
 
+           // 👇 A MÁGICA ENTRA AQUI: Calcula o valor total global que este Polo movimentou 👇
+           const totalGeralDoPolo = data.customers.reduce((acc, cust) => acc + (cust.total || 0), 0);
+
            return (
             <div key={poloName} style={{ pageBreakBefore: index === 0 ? 'auto' : 'always' }} className="mb-10 page-break-after">
-              <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black">Destino: Unidade {poloName}</div>
+              
+              {/* BANNER DO POLO ATUALIZADO COM VALOR DO REPASSE */}
+              <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
+                  <span>Destino: Unidade {poloName}</span>
+                  <span className="text-sm">Valor Total do Repasse à Sede: R$ {totalGeralDoPolo.toFixed(2).replace('.', ',')}</span>
+              </div>
               
               <div style={{ pageBreakInside: 'avoid' }} className="mb-6 border border-black p-4">
                 <h3 className="font-bold underline mb-2">Resumo Total para a Van:</h3>
