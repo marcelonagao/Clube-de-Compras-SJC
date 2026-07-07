@@ -1583,11 +1583,16 @@ export default function App() {
   };
 
   const renderDispatchPDF = () => {
+    // 👇 1. ENSINAMOS O PDF A LER O POLO SELECIONADO NA TELA 👇
+    const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
+
     // A MÁGICA AQUI: O Romaneio agora obedece a etiqueta de Lote (Data de Entrega)
     const validOrders = orders.filter(o => {
         const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
-        // CORREÇÃO: Se for Gestor Central, o PDF obedece ao polo selecionado na caixinha da tela!
-        const hasValidPolo = isGestor ? (o.polo === viewingPolo) : (o.polo === user?.polo);
+        
+        // 👇 2. AGORA ELE USA O VIEWING POLO SEM DAR ERRO 👇
+        const hasValidPolo = o.polo === viewingPolo;
+        
         const hasDate = !!o.date;
 
         // Regra de Retrocompatibilidade e Filtro
