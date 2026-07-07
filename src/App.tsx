@@ -1591,7 +1591,9 @@ export default function App() {
         const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
         
         // 👇 2. AGORA ELE USA O VIEWING POLO SEM DAR ERRO 👇
-        const hasValidPolo = o.polo === viewingPolo;
+        // 🌟 RETROCOMPATIBILIDADE DA SEDE: Se o PDF for aberto na tela de 'compras' (Gestão), 
+        // ele ignora os filtros e traz TODOS os polos do lote! Se for na Logística, separa por unidade.
+        const hasValidPolo = currentScreen === 'dashboard_admin' ? true : (o.polo === viewingPolo);
         
         const hasDate = !!o.date;
 
