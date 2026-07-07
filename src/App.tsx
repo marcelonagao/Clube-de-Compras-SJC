@@ -1318,9 +1318,18 @@ export default function App() {
                                      </div>
                                      <button 
                                          onClick={async () => {
-                                             let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\n`;
-                                             if(temFalta) text += `⚠️ *Aviso:* Tivemos um corte no fornecedor, mas o valor da sua cesta já foi ajustado com o desconto das faltas!\n\n`;
-                                             text += `O total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
+                                          let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                          (o.items || []).forEach(i => {
+                                              const q = i.qtd || i.qty || 1;
+                                              const totalItem = (i.price || 0) * q;
+                                              text += `• ${q}x ${i.name} (R$ ${totalItem.toFixed(2).replace('.', ',')})\n`;
+                                          });
+                                          if(temFalta) {
+                                              text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
+                                              o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
+                                              text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
+                                          }
+                                          text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2).replace('.', ',')}*.\nTe aguardamos!`;
                                              
                                              try {
                                                  await updateDoc(doc(db, "orders", o.id), { notifiedRetirada: new Date().toISOString() });
@@ -1511,14 +1520,15 @@ export default function App() {
                                     let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
                                     (o.items || []).forEach(i => {
                                         const q = i.qtd || i.qty || 1;
-                                        text += `• ${q}x ${i.name}\n`;
+                                        const totalItem = (i.price || 0) * q;
+                                        text += `• ${q}x ${i.name} (R$ ${totalItem.toFixed(2).replace('.', ',')})\n`;
                                     });
-                                    if(o.faltas && o.faltas.length > 0) {
+                                    if(temFalta) {
                                         text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
                                         o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
                                         text += `O valor da sua cesta já foi ajustado com o desconto das faltas!\n`;
                                     }
-                                    text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2)}*.\nTe aguardamos!`;
+                                    text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2).replace('.', ',')}*.\nTe aguardamos!`;
                                     window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
                                 }} className="flex-1 bg-emerald-100 text-emerald-800 py-2 rounded-lg font-bold text-[10px] flex justify-center items-center hover:bg-emerald-200 transition-colors shadow-sm">
                                   <MessageCircle className="w-3 h-3 mr-1.5"/> NOTIFICAR MEMBRO
@@ -1631,16 +1641,29 @@ export default function App() {
                 <h3 className="font-bold mb-3">Separação por Cliente:</h3>
                 {data.customers.map(cust => (
                    <div key={cust.id} style={{ pageBreakInside: 'avoid' }} className="mb-4 border-b border-black pb-2">
-                     <p className="font-bold bg-gray-100 p-1">Cliente: {cust.customer} (Pedido #{cust.id.slice(0,5)})</p>
-                     <div className="pl-4 mt-1">
-                        {(cust.items || []).map((it, idx) => (
-                           <div key={idx} className="flex items-center gap-2 mb-1">
-                              <div className="w-4 h-4 border border-black inline-block"></div>
-                              <span>{it.qtd || it.qty || 1}x {it.name}</span>
-                           </div>
-                        ))}
-                     </div>
+                   {/* CABEÇALHO DO CLIENTE COM O TOTAL */}
+                   <div className="font-bold bg-gray-100 p-1 flex justify-between items-center px-2">
+                       <span>Cliente: {cust.customer} (Pedido #{cust.id.slice(0,5)})</span>
+                       <span className="text-sm">Total: R$ {(cust.total || 0).toFixed(2).replace('.', ',')}</span>
                    </div>
+                   
+                   {/* LISTA DE ITENS COM OS VALORES UNITÁRIOS E TOTAIS */}
+                   <div className="pl-4 mt-1">
+                     {(cust.items || []).map((it, idx) => {
+                         const q = it.qtd || it.qty || 1;
+                         const totalItem = (it.price || 0) * q;
+                         return (
+                           <div key={idx} className="flex items-center justify-between gap-2 mb-1 pr-4">
+                              <div className="flex items-center gap-2">
+                                  <div className="w-4 h-4 border border-black shrink-0"></div>
+                                  <span>{q}x {it.name} <span className="text-[10px] text-gray-500 font-normal ml-1">(R$ {(it.price || 0).toFixed(2).replace('.', ',')} /un)</span></span>
+                              </div>
+                              <span className="font-bold">R$ {totalItem.toFixed(2).replace('.', ',')}</span>
+                           </div>
+                         )
+                     })}
+                   </div>
+                 </div>
                 ))}
               </div>
             </div>
