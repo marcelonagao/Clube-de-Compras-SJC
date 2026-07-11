@@ -126,6 +126,8 @@ export default function App() {
 
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
+  const [valorRecebido, setValorRecebido] = useState('');
+
 
   // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
   const [sysConfig, setSysConfig] = useState({
@@ -853,6 +855,19 @@ export default function App() {
 
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
           <div className="space-y-3 mb-5">
+          {cart.length > 0 && (
+              <button 
+                  onClick={() => {
+                      showConfirm('Esvaziar Carrinho', 'Tem certeza que deseja cancelar esta venda e limpar todos os itens?', () => {
+                          setCart([]);
+                          setValorRecebido('');
+                      }, 'danger');
+                  }} 
+                  className="mb-3 w-full bg-red-50 text-red-600 border border-red-200 font-bold text-xs px-3 py-2 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center"
+              >
+                  <Trash2 className="w-4 h-4 mr-2"/> Esvaziar Carrinho (Cancelar Venda)
+              </button>
+          )}  
           {cart.map(item => (
               <div key={item.id} className="flex flex-col sm:flex-row sm:justify-between sm:items-center text-sm border-b border-gray-50 pb-4 last:border-0 last:pb-0 gap-3">
                 <span className="font-bold text-slate-700 flex-1 leading-snug">{item.name}</span>
