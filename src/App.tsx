@@ -2127,27 +2127,7 @@ export default function App() {
                                           <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
                                              <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
                                              <div className="flex items-center gap-1.5">
-                                              {/* BOTÃO DE MARCAR COMO ENTREGUE */}
-                                                {o.status !== 'entregue' && (
-                                                    <button onClick={async (e) => { 
-                                                        e.stopPropagation();
-                                                        try {
-                                                            await updateDoc(doc(db, "orders", o.id), { status: 'entregue' });
-                                                            showToast('Pedido marcado como entregue!');
-                                                        } catch(err) { 
-                                                            showToast('Erro ao atualizar status', 'error'); 
-                                                        }
-                                                    }} className="text-emerald-600 hover:text-emerald-800 text-[10px] font-bold flex items-center bg-emerald-50 px-2 py-1 rounded border border-emerald-100 transition-colors">
-                                                        <CheckCircle className="w-3 h-3 mr-1"/> Marcar Entregue
-                                                    </button>
-                                                )}
-
-                                                {o.status === 'entregue' && (
-                                                    <span className="text-gray-400 text-[10px] font-bold flex items-center bg-gray-50 px-2 py-1 rounded border border-gray-100 cursor-not-allowed">
-                                                        <CheckCircle className="w-3 h-3 mr-1"/> Já Entregue
-                                                    </span>
-                                                )}
-                                                {/* BOTÃO DE EDITAR */}
+                                              {/* BOTÃO DE EDITAR */}
                                                 <button onClick={(e) => { 
                                                     e.stopPropagation(); 
                                                     setEditingAdminOrder(o);
