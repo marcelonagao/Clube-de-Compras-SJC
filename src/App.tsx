@@ -166,8 +166,8 @@ export default function App() {
   const [editingAdminOrder, setEditingAdminOrder] = useState(null);
   const [vendasStartDate, setVendasStartDate] = useState('');
   const [vendasEndDate, setVendasEndDate] = useState('');
-  const [editingAdminOrder, setEditingAdminOrder] = useState(null);
-  const [editCart, setEditCart] = useState([]);
+  
+  
 
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
