@@ -1873,43 +1873,38 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     const activeProducts = products.filter(p => !p.pausado && (p.stock || 0) > 0).sort((a, b) => a.name.localeCompare(b.name));
 
     return (
-      <div className="bg-white p-4 font-sans text-black">
-        <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
-          <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-blue-700 transition-colors">Imprimir Plaquinhas</button>
-          <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
-          <p className="text-xs text-gray-400 mt-3 font-medium">Dica: Imprima e recorte na linha pontilhada.</p>
+      <div key={p.id} style={{ pageBreakInside: 'avoid' }} className="border-[3px] border-dashed border-gray-400 rounded-3xl p-6 text-center flex flex-col justify-between h-[280px] relative bg-white">
+        
+        {/* Promoção Badge */}
+        {isPromo && <div className="absolute top-4 left-4 bg-slate-900 text-white font-black px-4 py-1.5 rounded-xl text-sm uppercase tracking-widest z-10">Promoção</div>}
+        
+        {/* Ícone Decorativo */}
+        <div className="absolute top-4 right-4"><Leaf className="w-6 h-6 text-gray-300"/></div>
+        
+        {/* Área Superior: Nome do Produto */}
+        <div className="mt-6 flex-grow flex items-center justify-center">
+            <h2 className="text-[22px] font-black text-slate-800 leading-tight uppercase px-4 line-clamp-3">
+                {p.name}
+            </h2>
         </div>
-
-        {/* MÁGICA DO CSS PARA IMPRESSÃO: Cria cartões do tamanho certo e evita quebrar no meio */}
-        <div className="grid grid-cols-2 gap-6">
-          {activeProducts.map(p => {
-            const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
-            const priceToShow = isPromo ? p.promotionalPrice : p.price;
+        
+        {/* Área Central: Preço (Isolado e Centralizado) */}
+        <div className="flex flex-col items-center justify-center mb-6">
+            {isPromo && <p className="text-sm text-gray-400 line-through font-bold mb-1">De: R$ {(p.price || 0).toFixed(2).replace('.', ',')}</p>}
             
-            return (
-              <div key={p.id} style={{ pageBreakInside: 'avoid' }} className="border-[3px] border-dashed border-gray-400 rounded-3xl p-6 text-center flex flex-col justify-center h-64 relative">
-                {isPromo && <div className="absolute top-4 left-4 bg-slate-900 text-white font-black px-4 py-1.5 rounded-xl text-sm uppercase tracking-widest">Promoção</div>}
-                <div className="absolute top-4 right-4"><Leaf className="w-6 h-6 text-gray-300"/></div>
-                
-                <h2 className="text-2xl font-black text-slate-800 leading-tight mb-4 mt-4 px-4 line-clamp-2 uppercase">{p.name}</h2>
-                
-                <div className="mt-auto">
-                    {isPromo && <p className="text-lg text-gray-500 line-through font-bold mb-0.5">De: R$ {(p.price || 0).toFixed(2).replace('.', ',')}</p>}
-                    <div className="flex items-start justify-center">
-                        <span className="text-2xl font-black text-slate-800 mt-2 mr-1">R$</span>
-                        <span className="text-7xl font-black text-slate-900 leading-none tracking-tighter">{(priceToShow || 0).toFixed(2).replace('.', ',')}</span>
-                    </div>
-                </div>
-                
-                <div className="absolute bottom-3 w-full left-0 text-center">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Clube de Compras</span>
-                </div>
-              </div>
-            )
-          })}
+            {/* O segredo da centralização: items-baseline e justify-center */}
+            <div className="flex items-baseline justify-center gap-1.5">
+                <span className="text-2xl font-black text-slate-800">R$</span>
+                <span className="text-[80px] font-black text-slate-900 leading-none tracking-tighter">{(priceToShow || 0).toFixed(2).replace('.', ',')}</span>
+            </div>
+        </div>
+        
+        {/* Rodapé Fixo */}
+        <div className="absolute bottom-4 left-0 w-full text-center">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-white px-2">Clube de Compras</span>
         </div>
       </div>
-    );
+    )
   };
 
   const renderAdminDashboard = () => {
