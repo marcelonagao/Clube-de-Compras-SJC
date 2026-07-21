@@ -3213,6 +3213,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                <option value="cliente">Sou Cliente</option>
                                <option value="representante">Sou Representante</option>
                                <option value="consolidador">Sou Gestor Geral</option>
+                               <option value="pdv">Sou Caixa (PDV)</option>
                              </select>
                            </div>
                            {['consolidador', 'representante','pdv'].includes(registerRole) && (
