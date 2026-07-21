@@ -689,6 +689,23 @@ export default function App() {
            )}
         </div>
 
+        {/* BARRA DE PESQUISA INTELIGENTE (Pedido da Dona Yoko) */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm mb-4 focus-within:border-emerald-500 transition-colors w-full">
+            <Search className="w-5 h-5 text-emerald-600 mr-2 shrink-0"/>
+            <input 
+                type="text" 
+                placeholder="Buscar por produto (Ex: Tomate, Arroz...)" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-transparent outline-none w-full text-base font-bold text-slate-700 placeholder-gray-400"
+            />
+            {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="text-gray-400 hover:text-red-500 p-1">
+                    <X className="w-5 h-5"/>
+                </button>
+            )}
+        </div>
+
         <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide mb-4">
           {activeCategories.map(cat => (
              <button key={cat} onClick={() => setShopCategory(cat)} className={`px-5 py-2 rounded-full font-bold text-sm whitespace-nowrap shadow-sm border transition-colors ${shopCategory === cat ? 'bg-emerald-700 text-white border-emerald-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
@@ -777,43 +794,49 @@ export default function App() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-5">
+       {/* GRADE DE PRODUTOS REDESENHADA (Mais compacta e com fontes maiores) */}
+       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
         {filteredProducts.map(p => {
             const isPromo = Boolean(p.promotionalPrice > 0 && p.promotionalPrice < p.price);
             const activePrice = isPromo ? p.promotionalPrice : p.price;
             const isOutOfStock = storeMode === 'estoque' && (p.stock || 0) <= 0;
             const isPaused = storeMode === 'pausado';
-            const cartItem = cart.find(i => i.id === p.id); // Lógica nova
+            const cartItem = cart.find(i => i.id === p.id);
             
             return (
-              <div key={p.id} className={`bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden ${(isOutOfStock && !cartItem) ? 'opacity-70 grayscale-[50%]' : ''}`}>
-                <div className="aspect-square bg-gray-50 flex items-center justify-center p-4 relative">
-                  {isPromo && <span className="absolute top-0 left-0 bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-br-lg z-10">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
-                  {p.image?.length > 50 ? <img src={p.image} className="h-full w-full object-cover rounded-lg" alt=""/> : <span className="text-4xl">{p.image || '📦'}</span>}
+              <div key={p.id} className={`bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden hover:shadow-md transition-shadow ${(isOutOfStock && !cartItem) ? 'opacity-70 grayscale-[50%]' : ''}`}>
+                <div className="aspect-[4/3] bg-gray-50 flex items-center justify-center p-2 relative shrink-0">
+                  {isPromo && <span className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-br-lg z-10">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
+                  {p.image?.length > 50 ? <img src={p.image} className="h-full w-full object-cover rounded-md" alt=""/> : <span className="text-3xl">{p.image || '📦'}</span>}
                 </div>
-                <div className="p-4 flex flex-col flex-grow text-center">
-                  <h3 className="text-xs text-slate-600 font-bold leading-snug mb-3 flex-grow line-clamp-2">{p.name}</h3>
-                  {isPromo ? (
-                    <div className="mb-3">
-                       <span className="text-[10px] text-gray-400 line-through mr-1 font-bold">R$ {p.price.toFixed(2)}</span>
-                       <span className="text-lg text-slate-800 font-black">R$ {activePrice.toFixed(2)}</span>
-                    </div>
-                  ) : (
-                    <p className="text-lg text-slate-800 font-black mb-3">R$ {activePrice.toFixed(2)}</p>
-                  )}
+                
+                <div className="p-2.5 flex flex-col flex-grow">
+                  {/* Nome do Produto Destacado (Maior e Preto) */}
+                  <h3 className="text-sm font-black text-slate-900 leading-tight mb-2 flex-grow line-clamp-2">{p.name}</h3>
+                  
+                  <div className="flex flex-col mb-2 shrink-0">
+                      {isPromo ? (
+                        <>
+                           <span className="text-[9px] text-gray-400 line-through font-bold leading-none">R$ {p.price.toFixed(2)}</span>
+                           <span className="text-base text-slate-800 font-black leading-none">R$ {activePrice.toFixed(2)}</span>
+                        </>
+                      ) : (
+                        <span className="text-base text-slate-800 font-black leading-none">R$ {activePrice.toFixed(2)}</span>
+                      )}
+                  </div>
                   
                   {isPaused ? (
-                      <button disabled className="w-full bg-gray-100 text-gray-400 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Pausado</button>
+                      <button disabled className="w-full bg-gray-100 text-gray-400 py-1.5 rounded-lg font-black text-[10px] cursor-not-allowed mt-auto uppercase tracking-wider">Pausado</button>
                   ) : (isOutOfStock && !cartItem) ? (
-                      <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-2.5 rounded-lg font-black text-xs cursor-not-allowed mt-auto">Esgotado</button>
+                      <button disabled className="w-full bg-red-50 text-red-600 border border-red-100 py-1.5 rounded-lg font-black text-[10px] cursor-not-allowed mt-auto uppercase tracking-wider">Esgotado</button>
                   ) : cartItem ? (
-                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden mt-auto">
-                         <button onClick={() => handleDecreaseFromCart(p.id)} className="w-10 h-10 flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg">-</button>
-                         <span className="font-black text-emerald-900 text-sm">{cartItem.qtd}</span>
-                         <button onClick={() => handleAddToCart(p)} className="w-10 h-10 flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg">+</button>
+                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg overflow-hidden mt-auto h-8">
+                         <button onClick={() => handleDecreaseFromCart(p.id)} className="w-8 h-full flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg leading-none">-</button>
+                         <span className="font-black text-emerald-900 text-xs">{cartItem.qtd}</span>
+                         <button onClick={() => handleAddToCart(p)} className="w-8 h-full flex items-center justify-center text-emerald-700 hover:bg-emerald-200 transition-colors font-black text-lg leading-none">+</button>
                       </div>
                   ) : (
-                      <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-50 text-emerald-700 border border-emerald-100 py-2.5 rounded-lg font-black text-xs hover:bg-emerald-100 transition-colors mt-auto">Adicionar</button>
+                      <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-100 text-emerald-800 border border-emerald-200 py-1.5 rounded-lg font-black text-[10px] uppercase tracking-wider hover:bg-emerald-200 transition-colors mt-auto shadow-sm">Adicionar</button>
                   )}
                 </div>
               </div>
