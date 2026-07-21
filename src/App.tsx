@@ -1156,11 +1156,11 @@ const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirma
 const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
 const pedidosRepassados = poloOrdersFiltered.filter(o => o.status === 'pago'); 
 
-// DETECTOR DE LEGADO: Só é um pedido antigo se NÃO tiver NENHUMA das marcações novas
-const isLegacy = !('separado' in o) && !('entregue' in o);
+// 👇 CORREÇÃO AQUI: Agora isLegacy é uma função que recebe o pedido 'o' corretamente! 👇
+const isLegacy = (o) => !('separado' in o) && !('entregue' in o);
 
 // O pedido só vai para a Aba 3 se for marcado como entregue HOJE, ou se for antigo e já pago
-const isOrderEntregue = (o) => o.entregue || (isLegacy && (o.status === 'pago_polo' || o.status === 'pago'));
+const isOrderEntregue = (o) => o.entregue || (isLegacy(o) && (o.status === 'pago_polo' || o.status === 'pago'));
 const isOrderSeparado = (o) => o.separado || isOrderEntregue(o);
 
 const aba1Aseparar = poloOrdersFiltered.filter(o => !isOrderSeparado(o));
