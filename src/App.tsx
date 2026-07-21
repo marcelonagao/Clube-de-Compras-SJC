@@ -1151,19 +1151,21 @@ export default function App() {
           return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
       }
   });
+// 3. NOVA ESTEIRA LOGÍSTICA BLINDADA (Aba 1, 2 e 3)
+const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
+const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
+const pedidosRepassados = poloOrdersFiltered.filter(o => o.status === 'pago'); 
 
-    // 3. NOVA ESTEIRA LOGÍSTICA (Aba 1, 2 e 3)
-    const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
-    const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
-    const pedidosRepassados = poloOrdersFiltered.filter(o => o.status === 'pago'); 
+// DETECTOR DE LEGADO: Só é um pedido antigo se NÃO tiver NENHUMA das marcações novas
+const isLegacy = !('separado' in o) && !('entregue' in o);
 
-    // MÁGICA: O sistema entende sozinho se a caixa já foi separada ou entregue!
-    const isOrderEntregue = (o) => o.entregue || (!('entregue' in o) && (o.status === 'pago_polo' || o.status === 'pago'));
-    const isOrderSeparado = (o) => o.separado || isOrderEntregue(o);
+// O pedido só vai para a Aba 3 se for marcado como entregue HOJE, ou se for antigo e já pago
+const isOrderEntregue = (o) => o.entregue || (isLegacy && (o.status === 'pago_polo' || o.status === 'pago'));
+const isOrderSeparado = (o) => o.separado || isOrderEntregue(o);
 
-    const aba1Aseparar = poloOrdersFiltered.filter(o => !isOrderSeparado(o));
-    const aba2Retirada = poloOrdersFiltered.filter(o => isOrderSeparado(o) && !isOrderEntregue(o));
-    const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
+const aba1Aseparar = poloOrdersFiltered.filter(o => !isOrderSeparado(o));
+const aba2Retirada = poloOrdersFiltered.filter(o => isOrderSeparado(o) && !isOrderEntregue(o));
+const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
     const totalAindaAReceber = pedidosConfirmados.reduce((acc, o) => acc + (o.total || 0), 0);
     const totalArrecadadoPolo = pedidosPagosPolo.reduce((acc, o) => acc + (o.total || 0), 0);
