@@ -167,7 +167,8 @@ export default function App() {
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
   const isRep = userRoleStr === 'representante';
-  const isAdminOrRep = isGestor || isRep;
+  const isPDV = userRoleStr === 'pdv'; // 👈 NOVA LINHA DO CAIXA
+  const isAdminOrRep = isGestor || isRep; // (Mantemos assim para ele focar só na loja)
 
   const activeCategories = ['Todos', ...Array.from(new Set(products.map(p => p.category))).filter(Boolean).sort()];
   const getActivePrice = (p) => (p.promotionalPrice && p.promotionalPrice > 0 && p.promotionalPrice < p.price) ? p.promotionalPrice : p.price;
@@ -241,6 +242,7 @@ export default function App() {
       } else {
         if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') throw new Error('Código Master Inválido');
         if (registerRole === 'representante' && secretCode !== 'REP2024') throw new Error('Código Rep Inválido');
+        if (registerRole === 'pdv' && secretCode !== 'CAIXA2024') throw new Error('Código de Caixa Inválido'); // 👈 NOVA LINHA
         
         const res = await createUserWithEmailAndPassword(auth, loginEmail, loginPassword);
         const profile = { name: loginName, email: loginEmail, whatsapp: loginWhatsapp, polo: selectedPolo, role: registerRole, walletBalance: 0, pendingPixRefund: 0, pixKey: '' };
@@ -286,6 +288,7 @@ export default function App() {
     try {
         if (registerRole === 'consolidador' && secretCode !== 'GESTOR2024') throw new Error('Código Master Inválido');
         if (registerRole === 'representante' && secretCode !== 'REP2024') throw new Error('Código Rep Inválido');
+        if (registerRole === 'pdv' && secretCode !== 'CAIXA2024') throw new Error('Código de Caixa Inválido'); // 👈 NOVA LINHA
 
         // Cria o perfil no Banco de Dados combinando os dados do Google + o que ele preencheu agora
         const profile = { 
@@ -376,6 +379,56 @@ export default function App() {
       setCurrentScreen('gateway_pix'); 
     } catch(err) { 
       setIsProcessingPayment(false); showToast('Erro no pedido', 'error'); 
+    }
+  };
+
+  // 👇 FUNÇÃO EXCLUSIVA DA FRENTE DE CAIXA (PDV) 👇
+  const processPDVOrder = async (finalTotal) => {
+    setIsProcessingPayment(true);
+    try {
+      const pdvOrder = { 
+        customer: `Venda Balcão (JC: ${user?.polo || polos[0]})`, 
+        email: user?.email || '', 
+        whatsapp: '00000000000', 
+        polo: user?.polo || polos[0], 
+        cpf: 'Não informado',
+        total: finalTotal, 
+        method: 'dinheiro/pix_local', 
+        
+        // Pula a esteira logística!
+        status: 'pago_polo', 
+        separado: true,
+        entregue: true,
+        
+        status_nfe: 'pendente',
+        date: new Date().toISOString(), 
+        deliveryDate: cicloMensalAtivo.dataEntrega, 
+        cicloFinanceiro: cicloMensalAtivo.mesReferencia, 
+        items: cart.map(i => ({ id: i.id, name: i.name, qtd: i.qtd, qty: i.qtd, price: getActivePrice(i) })),
+        faltas: []
+      };
+
+      // Baixa no estoque na hora
+      if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+        for (const item of cart) {
+            const prodRef = doc(db, "products", item.id);
+            const prodDoc = await getDoc(prodRef);
+            if (prodDoc.exists()) {
+                const estoqueAtual = prodDoc.data().stock || 0;
+                await updateDoc(prodRef, { stock: Math.max(0, estoqueAtual - item.qtd) });
+            }
+        }
+      }
+
+      await addDoc(collection(db, "orders"), pdvOrder);
+      
+      setCart([]); 
+      setIsProcessingPayment(false); 
+      showToast('Venda registrada no Caixa com sucesso!', 'success');
+      setCurrentScreen('shop'); // O PDV volta direto pra vitrine pra próxima venda!
+    } catch(err) { 
+      setIsProcessingPayment(false); 
+      showToast('Erro ao registrar venda', 'error'); 
     }
   };
 
@@ -918,7 +971,7 @@ export default function App() {
         </div>
 
         {/* FASE 2: Só exibe opções de PIX/Cartão e CPF se NÃO estiver na Fase Beta */}
-        {finalTotal > 0 && !CONFIG_APENAS_COLETA && (
+        {finalTotal > 0 && !CONFIG_APENAS_COLETA && !isPDV &&(
           <div className="mb-6 space-y-5">
             <div>
               <p className="font-black text-xs text-slate-800 uppercase tracking-widest mb-2">Forma de Pagamento</p>
@@ -944,19 +997,25 @@ export default function App() {
           </div>
         )}
 
-<button onClick={() => {
-            if (CONFIG_APENAS_COLETA) {
-                showConfirm(
-                    'Confirmar Pedido', 
-                    `Sua cesta deu R$ ${finalTotal.toFixed(2)}. Lembre-se: O pagamento será feito presencialmente na retirada! Deseja enviar o pedido para a Sede?`, 
-                    () => processOrder(finalTotal, paymentMethod, walletDiscount)
-                );
-            } else {
-                processOrder(finalTotal, paymentMethod, walletDiscount);
-            }
-        }} disabled={isProcessingPayment} className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-800 transition-all text-base flex items-center justify-center">
-          {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : (CONFIG_APENAS_COLETA ? 'Concluir Pedido (Pagar na Retirada)' : (finalTotal <= 0 ? 'Concluir Pedido (Usar Saldo)' : 'Gerar Pagamento Seguro'))}
-        </button>
+{isPDV ? (
+            <button onClick={() => processPDVOrder(finalTotal)} disabled={isProcessingPayment} className="w-full bg-orange-500 text-white font-black py-4 rounded-xl shadow-lg hover:bg-orange-600 transition-all text-base flex items-center justify-center">
+              {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : '⚡ Registrar Venda Balcão'}
+            </button>
+        ) : (
+            <button onClick={() => {
+                if (CONFIG_APENAS_COLETA) {
+                    showConfirm(
+                        'Confirmar Pedido', 
+                        `Sua cesta deu R$ ${finalTotal.toFixed(2)}. Lembre-se: O pagamento será feito presencialmente na retirada! Deseja enviar o pedido para a Sede?`, 
+                        () => processOrder(finalTotal, paymentMethod, walletDiscount)
+                    );
+                } else {
+                    processOrder(finalTotal, paymentMethod, walletDiscount);
+                }
+            }} disabled={isProcessingPayment} className="w-full bg-emerald-700 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-800 transition-all text-base flex items-center justify-center">
+              {isProcessingPayment ? <Loader2 className="animate-spin w-5 h-5"/> : (CONFIG_APENAS_COLETA ? 'Concluir Pedido (Pagar na Retirada)' : (finalTotal <= 0 ? 'Concluir Pedido (Usar Saldo)' : 'Gerar Pagamento Seguro'))}
+            </button>
+        )}
       </div>
     );
   }
@@ -3123,10 +3182,11 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                              <option value="cliente">Sou Cliente</option>
                              <option value="representante">Sou Representante</option>
                              <option value="consolidador">Sou Gestor Geral</option>
+                             <option value="pdv">Sou Caixa (PDV)</option>
                            </select>
                        </div>
 
-                       {['consolidador', 'representante'].includes(registerRole) && (
+                       {['consolidador', 'representante', 'pdv'].includes(registerRole) && (
                            <div><input type="password" placeholder="Código de Segurança" value={secretCode} onChange={e=>setSecretCode(e.target.value)} required className="w-full bg-red-50 border border-red-200 p-3 rounded-lg outline-none focus:border-red-500 font-black text-sm text-red-800 placeholder-red-300" /></div>
                        )}
                        
@@ -3155,7 +3215,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                <option value="consolidador">Sou Gestor Geral</option>
                              </select>
                            </div>
-                           {['consolidador', 'representante'].includes(registerRole) && (
+                           {['consolidador', 'representante','pdv'].includes(registerRole) && (
                                <div><input type="password" placeholder="Código de Segurança" value={secretCode} onChange={e=>setSecretCode(e.target.value)} required className="w-full bg-red-50 border border-red-200 p-3 rounded-lg outline-none focus:border-red-500 font-black text-sm text-red-800 placeholder-red-300" /></div>
                            )}
                          </div>
