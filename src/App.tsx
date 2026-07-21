@@ -163,6 +163,9 @@ export default function App() {
   const [vendasSearchTerm, setVendasSearchTerm] = useState('');
   const [expandedPolos, setExpandedPolos] = useState({}); 
   const [editingAdminOrder, setEditingAdminOrder] = useState(null);
+  const [vendasStartDate, setVendasStartDate] = useState('');
+  const [vendasEndDate, setVendasEndDate] = useState('');
+
 
   const userRoleStr = String(user?.role || '').trim().toLowerCase();
   const isGestor = userRoleStr === 'consolidador';
@@ -2135,279 +2138,168 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       }
    
       if (adminTab === 'vendas') {
-        // 1. FILTRO DE BUSCA: Por nome do cliente ou número do pedido
-        const filteredVendas = validOrders.filter(o => 
-            (o.customer || '').toLowerCase().includes(vendasSearchTerm.toLowerCase()) || 
-            (o.id || '').toLowerCase().includes(vendasSearchTerm.toLowerCase())
-        );
+        // 1. FILTRO DE BUSCA (Por Nome/ID) e POR DATA
+        const filteredVendas = validOrders.filter(o => {
+            // Filtro de Texto
+            const matchText = (o.customer || '').toLowerCase().includes(vendasSearchTerm.toLowerCase()) || 
+                              (o.id || '').toLowerCase().includes(vendasSearchTerm.toLowerCase());
+            
+            // Filtro de Data
+            let matchDate = true;
+            if (vendasStartDate || vendasEndDate) {
+                const oDate = new Date(o.date);
+                oDate.setHours(0,0,0,0); // Zera as horas para comparar o dia inteiro
+                
+                if (vendasStartDate) {
+                    const start = new Date(vendasStartDate + 'T00:00:00');
+                    if (oDate < start) matchDate = false;
+                }
+                if (vendasEndDate) {
+                    const end = new Date(vendasEndDate + 'T23:59:59');
+                    if (oDate > end) matchDate = false;
+                }
+            }
+            return matchText && matchDate;
+        }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Ordena: Mais Novo no Topo
 
-        // 2. AGRUPAMENTO POR MÊS
-        const ordersByMonth = filteredVendas.reduce((acc, order) => {
-          const d = new Date(order.date);
-          const months = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-          const capMonth = `${months[d.getMonth()]} ${d.getFullYear()}`;
-          const sortKey = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}`;
-          
-          if (!acc[capMonth]) acc[capMonth] = { ordersByPolo: {}, total: 0, count: 0, sortKey };
-          if(!acc[capMonth].ordersByPolo[order.polo]) acc[capMonth].ordersByPolo[order.polo] = [];
-          acc[capMonth].ordersByPolo[order.polo].push(order);
-
-          acc[capMonth].total += (order.total || 0);
-          acc[capMonth].count += 1;
-          return acc;
-        }, {});
+        const totalFiltrado = filteredVendas.reduce((sum, o) => sum + (o.total || 0), 0);
 
         return (
           <div className="space-y-6 text-left max-w-6xl mx-auto">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-                <h2 className="text-2xl font-black text-slate-800">Histórico de Vendas</h2>
+            {/* CABEÇALHO E FILTROS */}
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-800">Histórico de Vendas</h2>
+                    <p className="text-xs font-bold text-gray-500 mt-1">
+                        Mostrando <span className="text-emerald-600">{filteredVendas.length} pedidos</span> • Total: R$ {totalFiltrado.toFixed(2)}
+                    </p>
+                </div>
                 
-                {/* BARRA DE BUSCA */}
-                <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-72 focus-within:border-emerald-500 transition-colors">
-                    <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
-                    <input 
-                        type="text" 
-                        placeholder="Buscar cliente ou #PED..." 
-                        value={vendasSearchTerm}
-                        onChange={(e) => setVendasSearchTerm(e.target.value)}
-                        className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
-                    />
-                    {vendasSearchTerm && <button onClick={() => setVendasSearchTerm('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    {/* FILTRO DE DATAS */}
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-emerald-500 transition-colors">
+                        <input 
+                            type="date" 
+                            value={vendasStartDate} 
+                            onChange={e => setVendasStartDate(e.target.value)} 
+                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer" 
+                        />
+                        <span className="text-[10px] font-black text-gray-400 uppercase">ATÉ</span>
+                        <input 
+                            type="date" 
+                            value={vendasEndDate} 
+                            onChange={e => setVendasEndDate(e.target.value)} 
+                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer" 
+                        />
+                        {(vendasStartDate || vendasEndDate) && (
+                            <button onClick={() => {setVendasStartDate(''); setVendasEndDate('');}} className="text-gray-400 hover:text-red-500 ml-1 bg-gray-100 p-1 rounded-md"><X className="w-3 h-3"/></button>
+                        )}
+                    </div>
+                    
+                    {/* BARRA DE BUSCA (Texto) */}
+                    <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                        <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar cliente ou #PED..." 
+                            value={vendasSearchTerm}
+                            onChange={(e) => setVendasSearchTerm(e.target.value)}
+                            className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                        />
+                        {vendasSearchTerm && <button onClick={() => setVendasSearchTerm('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                    </div>
                 </div>
             </div>
 
-            {Object.entries(ordersByMonth).sort((a,b) => b[1].sortKey.localeCompare(a[1].sortKey)).map(([month, data]) => {
-              const isExpanded = expandedMonths[month];
-              return (
-              <div key={month} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4 transition-all">
-                 <div onClick={() => setExpandedMonths(prev => ({...prev, [month]: !prev[month]}))} className="p-4 bg-slate-50 border-b border-gray-50 flex justify-between items-center cursor-pointer hover:bg-slate-100">
-                    <div>
-                      <h3 className="font-black text-slate-800 text-lg capitalize flex items-center">
-                         {isExpanded ? <ChevronUp className="w-5 h-5 mr-2 text-emerald-600"/> : <ChevronDown className="w-5 h-5 mr-2 text-gray-400"/>}
-                         {month}
-                      </h3>
-                      <p className="text-[10px] font-bold text-gray-500 mt-1 ml-7">{data.count} pedidos liquidados</p>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[9px] font-bold text-gray-400 uppercase">Faturamento</p>
-                       <p className="text-xl font-black text-emerald-700">R$ {data.total.toFixed(2)}</p>
-                    </div>
-                 </div>
-                 
-                 {isExpanded && (
-                   <div className="p-5 space-y-6">
-                       {Object.entries(data.ordersByPolo).map(([polo, poloOrders]) => {
-                          const poloTotal = poloOrders.reduce((s,o)=>s+(o.total||0), 0);
-                          const poloKey = `${month}-${polo}`;
-                          const isPoloExpanded = expandedPolos[poloKey];
-                          
-                          // 3. ORDENAÇÃO: Do mais recente para o mais antigo
-                          const sortedOrders = poloOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-                          return (
-                              <div key={polo} className="space-y-4">
-                                  <div onClick={() => setExpandedPolos(prev => ({...prev, [poloKey]: !prev[poloKey]}))} className="flex items-center gap-2 border-b border-gray-200 pb-2 cursor-pointer hover:bg-gray-50 p-1 rounded transition-colors">
-                                      {isPoloExpanded ? <ChevronUp className="w-4 h-4 text-emerald-600"/> : <ChevronDown className="w-4 h-4 text-gray-400"/>}
-                                      <MapPin className="w-4 h-4 text-emerald-600"/>
-                                      <h4 className="font-black text-slate-800 text-sm flex-1">JC {polo}</h4>
-                                      <span className="font-bold text-emerald-800 text-xs bg-emerald-50 px-2 py-1.5 border border-emerald-100 rounded-lg shadow-sm">R$ {poloTotal.toFixed(2)}</span>
-                                  </div>
-                                  
-                                  {isPoloExpanded && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 pl-2 sm:pl-6">
-                                      {sortedOrders.map(o => (
-                                        <div key={o.id} className="p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-col justify-between gap-3 hover:border-emerald-200 transition-colors">
-                                          <div>
-                                            <p className="font-bold text-slate-800 text-sm mb-1">{o.customer}</p>
-                                            <p className="text-[10px] font-medium text-gray-500 font-mono bg-gray-50 inline-block px-1.5 py-0.5 rounded border border-gray-100">#{o.id.slice(0,5).toUpperCase()}</p>
-                                            <p className="text-[10px] font-medium text-gray-500 mt-1">{new Date(o.date).toLocaleString('pt-BR')}</p>
-                                          </div>
-                                          <div className="flex items-center justify-between w-full border-t border-gray-50 pt-3">
-                                             <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
-                                             <div className="flex items-center gap-1.5">
-                                              {/* BOTÃO DE EDITAR */}
-                                                <button onClick={(e) => { 
-                                                    e.stopPropagation(); 
-                                                    setEditingAdminOrder(o);
-                                                    // Cria uma cópia exata dos itens do pedido para podermos brincar com eles na tela!
-                                                    setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
-                                                }} className="text-blue-500 hover:text-blue-700 text-[10px] font-bold flex items-center bg-blue-50 px-2 py-1 rounded transition-colors">
-                                                    <Edit2 className="w-3 h-3 mr-1"/> Editar
-                                                </button>
-                                                
-                                                {/* BOTÃO DE EXCLUIR */}
-                                                <button onClick={(e) => { 
-                                                    e.stopPropagation();
-                                                    showConfirm(
-                                                        'Cancelar Pedido', 
-                                                        `Deseja realmente excluir o pedido de ${o.customer}?`, 
-                                                        async () => {
-                                                            try {
-                                                                const isPedidoFeira = (o.deliveryDate || '').toLowerCase().includes('pronta entrega');
-                                                                if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
-                                                                    for (const item of (o.items || [])) {
-                                                                        if (item.id !== 'oferta-1') {
-                                                                            const prodRef = doc(db, "products", item.id);
-                                                                            const prodDoc = await getDoc(prodRef);
-                                                                            if (prodDoc.exists()) {
-                                                                                const estoqueAtual = prodDoc.data().stock || 0;
-                                                                                const quantidadeDevolvida = item.qtd || item.qty || 1;
-                                                                                await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                await deleteDoc(doc(db, "orders", o.id)); 
-                                                                showToast('Pedido cancelado e resolvido!');
-                                                            } catch(err) { showToast('Erro ao cancelar', 'error'); }
-                                                        }, 'danger'
-                                                    );
-                                                }} className="text-red-400 hover:text-red-600 text-[10px] font-bold flex items-center bg-red-50 px-2 py-1 rounded transition-colors">
-                                                    <Trash2 className="w-3 h-3 mr-1"/> Excluir
-                                                </button>
-                                             </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                              </div>
-                          );
-                       })}
-                   </div>
-                 )}
-              </div>
-            )})}
-
-            {/* MODAL DE EDIÇÃO DE PEDIDO (ESQUELETO) */}
-            {/* MODAL DE EDIÇÃO DE PEDIDO (COMPLETO E INTELIGENTE) */}
-            {editingAdminOrder && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white p-6 rounded-3xl w-full max-w-lg shadow-2xl border border-gray-100 flex flex-col max-h-[90vh]">
-                        <div className="flex justify-between items-center mb-4 shrink-0 border-b border-gray-100 pb-4">
-                            <div>
-                                <h3 className="font-black text-slate-800 text-lg">Editar Pedido</h3>
-                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Membro: {editingAdminOrder.customer}</p>
-                            </div>
-                            <button onClick={() => {setEditingAdminOrder(null); setEditItemProduct('');}} className="text-gray-400 hover:text-red-500 bg-gray-100 p-2 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
-                        </div>
-                        
-                        {/* AREA DE ADICIONAR NOVO PRODUTO */}
-                        <div className="bg-slate-50 p-3 rounded-xl border border-gray-200 mb-4 shrink-0 flex gap-2">
-                            <select value={editItemProduct} onChange={e => setEditItemProduct(e.target.value)} className="flex-1 p-2.5 border border-gray-200 rounded-lg text-sm font-medium outline-none truncate bg-white">
-                                <option value="">Adicionar novo produto ao pedido...</option>
-                                {[...products].sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
-                                    <option key={p.id} value={p.id}>{p.name} - R$ {(p.price || 0).toFixed(2)}</option>
-                                ))}
-                            </select>
-                            <button onClick={() => {
-                                if(!editItemProduct) return;
-                                const p = products.find(prod => prod.id === editItemProduct);
-                                if(!p) return;
-                                const existing = editCart.find(i => i.id === p.id);
-                                if(existing) {
-                                    setEditCart(editCart.map(i => i.id === p.id ? {...i, qty: (i.qty||i.qtd||0) + 1, qtd: (i.qty||i.qtd||0) + 1} : i));
-                                } else {
-                                    setEditCart([...editCart, {id: p.id, name: p.name, price: p.price, qty: 1, qtd: 1}]);
-                                }
-                                setEditItemProduct('');
-                            }} className="bg-emerald-100 text-emerald-800 px-4 rounded-lg font-black text-xs hover:bg-emerald-200 transition">Adicionar</button>
-                        </div>
-
-                        {/* LISTA DE ITENS DO PEDIDO (EDITÁVEL) */}
-                        <div className="overflow-y-auto space-y-2 mb-4 flex-1 pr-1">
-                            {editCart.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 text-sm shadow-sm">
-                                    <div className="flex-1 truncate pr-2">
-                                        <p className="font-bold text-slate-700 truncate">{item.name}</p>
-                                        <p className="text-[10px] text-gray-400 font-bold">R$ {(item.price || 0).toFixed(2)} / un</p>
-                                    </div>
-                                    <div className="flex items-center gap-3 shrink-0">
-                                        <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shrink-0">
-                                            <button onClick={() => {
-                                                const currentQty = item.qty || item.qtd || 1;
-                                                if (currentQty <= 1) {
-                                                    setEditCart(editCart.filter(i => i.id !== item.id));
-                                                } else {
-                                                    setEditCart(editCart.map(i => i.id === item.id ? {...i, qty: currentQty - 1, qtd: currentQty - 1} : i));
-                                                }
-                                            }} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors font-black">-</button>
-                                            <span className="w-8 text-center font-black text-slate-800 text-xs">{item.qty || item.qtd || 1}</span>
-                                            <button onClick={() => {
-                                                const currentQty = item.qty || item.qtd || 1;
-                                                setEditCart(editCart.map(i => i.id === item.id ? {...i, qty: currentQty + 1, qtd: currentQty + 1} : i));
-                                            }} className="w-8 h-8 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 transition-colors font-black">+</button>
-                                        </div>
-                                        <button onClick={() => setEditCart(editCart.filter(i => i.id !== item.id))} className="text-red-400 hover:text-red-600 p-1.5 bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                    </div>
-                                </div>
-                            ))}
-                            {editCart.length === 0 && <p className="text-center text-sm font-bold text-gray-400 py-6">O pedido está vazio.</p>}
-                        </div>
-
-                        {/* RODAPÉ COM TOTAL E BOTÃO SALVAR */}
-                        <div className="border-t border-gray-100 pt-4 shrink-0">
-                            <div className="flex justify-between items-end mb-4 px-2">
-                                <span className="font-bold text-gray-400 text-xs uppercase tracking-widest">Novo Total:</span>
-                                <span className="font-black text-2xl text-emerald-700">
-                                    R$ {editCart.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.qtd || 1)), 0).toFixed(2)}
-                                </span>
-                            </div>
-                            <button onClick={async () => {
-                                try {
-                                    const newTotal = editCart.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.qtd || 1)), 0);
-                                    
-                                    // 👇 INTELIGÊNCIA DE DIFERENÇA DE ESTOQUE 👇
-                                    const isPedidoFeira = (editingAdminOrder.deliveryDate || '').toLowerCase().includes('pronta entrega');
-                                    if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
-                                        // Mapeia o que tinha antes
-                                        const oldMap = {};
-                                        (editingAdminOrder.items || []).forEach(i => oldMap[i.id] = (i.qty || i.qtd || 1));
-                                        
-                                        // Mapeia como ficou agora
-                                        const newMap = {};
-                                        editCart.forEach(i => newMap[i.id] = (i.qty || i.qtd || 1));
-                                        
-                                        const allItemIds = new Set([...Object.keys(oldMap), ...Object.keys(newMap)]);
-                                        
-                                        for (const id of allItemIds) {
-                                            if (id === 'oferta-1') continue;
-                                            const oldQ = oldMap[id] || 0;
-                                            const newQ = newMap[id] || 0;
-                                            const diff = newQ - oldQ; // Se for Positivo: pegou mais. Se for Negativo: devolveu.
-                                            
-                                            if (diff !== 0) {
-                                                const prodRef = doc(db, "products", id);
-                                                const prodDoc = await getDoc(prodRef);
-                                                if (prodDoc.exists()) {
-                                                    const currentStock = prodDoc.data().stock || 0;
-                                                    // Ajusta o estoque baseando na diferença
-                                                    await updateDoc(prodRef, { stock: Math.max(0, currentStock - diff) });
-                                                }
-                                            }
-                                        }
-                                    }
-                                    // 👆 FIM DA INTELIGÊNCIA DE ESTOQUE 👆
-
-                                    // Grava o novo pedido no banco
-                                    await updateDoc(doc(db, "orders", editingAdminOrder.id), {
-                                        items: editCart,
-                                        total: newTotal
-                                    });
-
-                                    showToast('Pedido atualizado com sucesso!');
-                                    setEditingAdminOrder(null);
-                                    setEditItemProduct('');
-                                } catch(err) {
-                                    showToast('Erro ao atualizar pedido.', 'error');
-                                }
-                            }} className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-lg hover:bg-slate-900 transition flex items-center justify-center">
-                                <CheckCircle className="w-5 h-5 mr-2"/> Gravar Novo Pedido
-                            </button>
-                        </div>
-                    </div>
+            {/* TABELA LINHA A LINHA */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* Títulos da Tabela (Some no celular, aparece no PC) */}
+                <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                    <div className="col-span-3">Data / Pedido</div>
+                    <div className="col-span-3">Cliente</div>
+                    <div className="col-span-2">Unidade (JC)</div>
+                    <div className="col-span-2 text-right">Valor Final</div>
+                    <div className="col-span-2 text-right">Ações Rápidas</div>
                 </div>
-            )}
+
+                {filteredVendas.length === 0 ? (
+                    <div className="text-center py-16">
+                        <Package className="w-12 h-12 mx-auto text-gray-200 mb-3"/>
+                        <p className="text-gray-500 font-medium text-sm">Nenhum pedido encontrado com estes filtros.</p>
+                    </div>
+                ) : (
+                    <div className="divide-y divide-gray-50">
+                        {filteredVendas.map(o => (
+                            <div key={o.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 items-center hover:bg-slate-50/50 transition-colors">
+                                
+                                {/* COLUNA 1: Data e ID */}
+                                <div className="md:col-span-3 flex flex-row md:flex-col justify-between md:justify-start items-center md:items-start">
+                                    <span className="text-xs font-bold text-slate-500">{new Date(o.date).toLocaleString('pt-BR')}</span>
+                                    <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5 rounded w-fit md:mt-1">#{o.id.slice(0,5).toUpperCase()}</span>
+                                </div>
+                                
+                                {/* COLUNA 2: Nome do Cliente */}
+                                <div className="md:col-span-3">
+                                    <p className="font-black text-slate-800 text-sm leading-tight">{o.customer}</p>
+                                </div>
+                                
+                                {/* COLUNA 3: Polo */}
+                                <div className="md:col-span-2">
+                                    <span className="inline-flex items-center text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-md">
+                                        <MapPin className="w-3 h-3 mr-1 shrink-0"/> <span className="truncate">{o.polo}</span>
+                                    </span>
+                                </div>
+                                
+                                {/* COLUNA 4: Valor */}
+                                <div className="md:col-span-2 md:text-right">
+                                    <span className="font-black text-slate-800 text-base">R$ {(o.total||0).toFixed(2)}</span>
+                                </div>
+                                
+                                {/* COLUNA 5: Botões de Ação */}
+                                <div className="md:col-span-2 flex items-center md:justify-end gap-2 mt-2 md:mt-0">
+                                    <button onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        setEditingAdminOrder(o);
+                                        setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
+                                    }} className="flex-1 md:flex-none text-blue-600 hover:text-blue-800 hover:bg-blue-100 text-[10px] font-bold flex items-center justify-center bg-blue-50 px-3 py-2 rounded-lg transition-colors border border-blue-100">
+                                        <Edit2 className="w-3 h-3 md:mr-1.5"/> <span className="md:hidden lg:inline">Editar</span>
+                                    </button>
+                                    
+                                    <button onClick={(e) => { 
+                                        e.stopPropagation();
+                                        showConfirm(
+                                            'Cancelar Pedido', 
+                                            `Deseja realmente excluir o pedido de ${o.customer}? O estoque será devolvido se for pronta entrega.`, 
+                                            async () => {
+                                                try {
+                                                    const isPedidoFeira = (o.deliveryDate || '').toLowerCase().includes('pronta entrega') || o.status === 'pago_polo';
+                                                    if (storeMode === 'estoque' || storeMode === 'pronta_entrega' || isPedidoFeira) {
+                                                        for (const item of (o.items || [])) {
+                                                            if (item.id !== 'oferta-1') {
+                                                                const prodRef = doc(db, "products", item.id);
+                                                                const prodDoc = await getDoc(prodRef);
+                                                                if (prodDoc.exists()) {
+                                                                    const estoqueAtual = prodDoc.data().stock || 0;
+                                                                    const quantidadeDevolvida = item.qtd || item.qty || 1;
+                                                                    await updateDoc(prodRef, { stock: estoqueAtual + quantidadeDevolvida });
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    await deleteDoc(doc(db, "orders", o.id)); 
+                                                    showToast('Pedido cancelado e resolvido!');
+                                                } catch(err) { showToast('Erro ao cancelar', 'error'); }
+                                            }, 'danger'
+                                        );
+                                    }} className="flex-1 md:flex-none text-red-600 hover:text-red-800 hover:bg-red-100 text-[10px] font-bold flex items-center justify-center bg-red-50 px-3 py-2 rounded-lg transition-colors border border-red-100">
+                                        <Trash2 className="w-3 h-3 md:mr-1.5"/> <span className="md:hidden lg:inline">Excluir</span>
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
           </div>
         );
       }
