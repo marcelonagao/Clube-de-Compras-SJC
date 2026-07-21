@@ -86,6 +86,7 @@ export default function App() {
   const [adminTab, setAdminTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPrintMode, setIsPrintMode] = useState(false); 
+  const [printLayout, setPrintLayout] = useState(null); // 'catalogo' | 'plaquinhas'
   const [storeMode, setStoreMode] = useState('mensal'); // Fases da loja: 'mensal', 'estoque', 'pausado'
 
   const [checkoutCpf, setCheckoutCpf] = useState(''); 
@@ -1819,6 +1820,98 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     );
   };
 
+  const renderPrintCatalog = () => {
+    // Puxa apenas os produtos ativos
+    const activeProducts = products.filter(p => !p.pausado && (p.stock || 0) > 0).sort((a, b) => a.name.localeCompare(b.name));
+    
+    return (
+      <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black">
+        <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
+          <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">Imprimir Catálogo</button>
+          <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
+        </div>
+
+        <div className="text-center mb-8 border-b-2 border-black pb-4">
+          <h1 className="text-3xl font-black uppercase tracking-tight">Catálogo de Produtos</h1>
+          <p className="mt-1 font-bold text-gray-600 uppercase tracking-widest text-sm">Clube de Compras • Johrei Center</p>
+        </div>
+
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b-2 border-black">
+              <th className="py-3 px-2 font-black uppercase text-xs">Produto</th>
+              <th className="py-3 px-2 font-black uppercase text-xs">Categoria</th>
+              <th className="py-3 px-2 font-black uppercase text-xs text-right">Preço (R$)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activeProducts.map((p, idx) => {
+              const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+              const activePrice = isPromo ? p.promotionalPrice : p.price;
+              return (
+                <tr key={p.id} className={`border-b border-gray-300 ${idx % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}>
+                  <td className="py-3 px-2 font-bold text-sm">
+                    {p.name}
+                    {isPromo && <span className="ml-2 bg-slate-800 text-white text-[9px] px-1.5 py-0.5 rounded uppercase tracking-widest">Oferta</span>}
+                  </td>
+                  <td className="py-3 px-2 text-xs font-medium text-gray-600">{p.category}</td>
+                  <td className="py-3 px-2 font-black text-base text-right">
+                    {isPromo && <span className="text-xs text-gray-400 line-through mr-2 font-medium">{(p.price || 0).toFixed(2).replace('.', ',')}</span>}
+                    {(activePrice || 0).toFixed(2).replace('.', ',')}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderPrintTags = () => {
+    // Puxa apenas os ativos e com estoque (ou todos ativos)
+    const activeProducts = products.filter(p => !p.pausado && (p.stock || 0) > 0).sort((a, b) => a.name.localeCompare(b.name));
+
+    return (
+      <div className="bg-white p-4 font-sans text-black">
+        <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
+          <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-blue-700 transition-colors">Imprimir Plaquinhas</button>
+          <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
+          <p className="text-xs text-gray-400 mt-3 font-medium">Dica: Imprima e recorte na linha pontilhada.</p>
+        </div>
+
+        {/* MÁGICA DO CSS PARA IMPRESSÃO: Cria cartões do tamanho certo e evita quebrar no meio */}
+        <div className="grid grid-cols-2 gap-6">
+          {activeProducts.map(p => {
+            const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+            const priceToShow = isPromo ? p.promotionalPrice : p.price;
+            
+            return (
+              <div key={p.id} style={{ pageBreakInside: 'avoid' }} className="border-[3px] border-dashed border-gray-400 rounded-3xl p-6 text-center flex flex-col justify-center h-64 relative">
+                {isPromo && <div className="absolute top-4 left-4 bg-slate-900 text-white font-black px-4 py-1.5 rounded-xl text-sm uppercase tracking-widest">Promoção</div>}
+                <div className="absolute top-4 right-4"><Leaf className="w-6 h-6 text-gray-300"/></div>
+                
+                <h2 className="text-2xl font-black text-slate-800 leading-tight mb-4 mt-4 px-4 line-clamp-2 uppercase">{p.name}</h2>
+                
+                <div className="mt-auto">
+                    {isPromo && <p className="text-lg text-gray-500 line-through font-bold mb-0.5">De: R$ {(p.price || 0).toFixed(2).replace('.', ',')}</p>}
+                    <div className="flex items-start justify-center">
+                        <span className="text-2xl font-black text-slate-800 mt-2 mr-1">R$</span>
+                        <span className="text-7xl font-black text-slate-900 leading-none tracking-tighter">{(priceToShow || 0).toFixed(2).replace('.', ',')}</span>
+                    </div>
+                </div>
+                
+                <div className="absolute bottom-3 w-full left-0 text-center">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Clube de Compras</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderAdminDashboard = () => {
     // 1. FILTRO GLOBAL CONSERTADO: Lendo todos os status da Fase 1 e 2
     const validOrders = orders.filter(o => ['pago', 'confirmado', 'pago_polo'].includes(o.status) && o.date);
@@ -2456,6 +2549,12 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
+                   <button onClick={() => setPrintLayout('catalogo')} className="bg-white text-slate-700 border border-gray-200 px-4 py-2.5 rounded-lg font-black hover:bg-gray-50 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
+                     <Printer className="w-4 h-4 mr-2"/> Catálogo de Mesa
+                   </button>
+                   <button onClick={() => setPrintLayout('plaquinhas')} className="bg-white text-slate-700 border border-gray-200 px-4 py-2.5 rounded-lg font-black hover:bg-gray-50 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
+                     <Printer className="w-4 h-4 mr-2"/> Gerar Plaquinhas
+                   </button>
                    <button onClick={handleZerarEstoque} className="bg-orange-50 text-orange-700 border border-orange-200 px-4 py-2.5 rounded-lg font-black hover:bg-orange-100 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
                      <Trash2 className="w-4 h-4 mr-2"/> Zerar Estoque Geral
                    </button>
@@ -3008,7 +3107,9 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       )}
       {/* 👆 FIM DO PASSO 4 👆 */}
 
-      {isPrintMode ? renderDispatchPDF() : (
+      {printLayout === 'catalogo' ? renderPrintCatalog() :
+       printLayout === 'plaquinhas' ? renderPrintTags() :
+       isPrintMode ? renderDispatchPDF() : (
         <>
           {currentScreen !== 'login' && currentScreen !== 'dashboard_admin' && (
             <header className="bg-emerald-800 h-16 flex items-center justify-between px-4 shadow-md sticky top-0 z-[60]">
