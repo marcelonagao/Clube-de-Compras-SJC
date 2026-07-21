@@ -1490,136 +1490,143 @@ export default function App() {
                 }
 
                 return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        return (
-                                <div key={o.id} className={`bg-white border rounded-2xl shadow-sm flex flex-col justify-between transition-all ${temFalta ? 'border-orange-200' : 'border-gray-100 hover:border-emerald-200'}`}>
-                                    {/* CABEÇALHO DO CARTÃO (NOME + WHATSAPP RICO) */}
-                                    <div className="p-4 border-b border-gray-50 flex justify-between items-start">
-                                        <div className="pr-2">
-                                            <p className="font-black text-slate-800 text-sm leading-tight">{o.customer}</p>
-                                            <p className="text-[10px] font-bold text-gray-400 font-mono mt-1">#PED-{o.id.slice(-5).toUpperCase()}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {currentOrders.slice().reverse().map(o => {
+                      
+                      // 👇 AQUI ESTÃO AS VARIÁVEIS QUE EVITAM O ERRO! 👇
+                      const temFalta = o.faltas && o.faltas.length > 0;
+                      const isPago = o.status === 'pago' || o.status === 'pago_polo';
+
+                      return (
+                          <div key={o.id} className={`bg-white border rounded-2xl shadow-sm flex flex-col justify-between transition-all ${temFalta ? 'border-orange-200' : 'border-gray-100 hover:border-emerald-200'}`}>
+                              {/* CABEÇALHO DO CARTÃO (NOME + WHATSAPP RICO) */}
+                              <div className="p-4 border-b border-gray-50 flex justify-between items-start">
+                                  <div className="pr-2">
+                                      <p className="font-black text-slate-800 text-sm leading-tight">{o.customer}</p>
+                                      <p className="text-[10px] font-bold text-gray-400 font-mono mt-1">#PED-{o.id.slice(-5).toUpperCase()}</p>
+                                  </div>
+                                  
+                                  <div className="flex gap-1.5 shrink-0">
+                                      <button onClick={() => {
+                                          // MENSAGEM RICA RESTAURADA!
+                                          let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\n`;
+                                          if (repTab === 'retirada' || repTab === 'separar') {
+                                              text += `A sua encomenda já chegou no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                              (o.items || []).forEach(i => {
+                                                  const q = i.qtd || i.qty || 1;
+                                                  const totalItem = (i.price || 0) * q;
+                                                  text += `• ${q}x ${i.name} (R$ ${totalItem.toFixed(2).replace('.', ',')})\n`;
+                                              });
+                                              
+                                              if (temFalta) {
+                                                  text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
+                                                  o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
+                                                  text += `O valor da sua cesta já foi ajustado com o desconto!\n`;
+                                              }
+                                              
+                                              if (!isPago) {
+                                                  text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2).replace('.', ',')}*.\nTe aguardamos!`;
+                                              } else {
+                                                  text += `\nO seu pedido já consta como *PAGO*. É só vir retirar!\nTe aguardamos!`;
+                                              }
+                                          }
+                                          window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
+                                      }} className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-100 shadow-sm" title="Avisar no WhatsApp">
+                                          <MessageCircle className="w-5 h-5"/>
+                                      </button>
+                                  </div>
+                              </div>
+
+                              {/* STATUS DUPLO (FINANCEIRO + LOGÍSTICA) */}
+                              <div className="px-4 py-3 flex gap-2">
+                                  <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${isPago ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                                      {isPago ? '🟢 PAGO' : '🔴 PENDENTE'}
+                                  </span>
+                                  <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${repTab === 'separar' ? 'bg-orange-50 text-orange-700 border border-orange-200' : repTab === 'retirada' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
+                                      {repTab === 'separar' ? '⏳ A SEPARAR' : repTab === 'retirada' ? '🛍️ P/ RETIRADA' : '✅ ENTREGUE'}
+                                  </span>
+                              </div>
+
+                              {/* LISTA DE PRODUTOS COMPACTA */}
+                              <div className="px-4 pb-4 flex-1">
+                                  <div className="flex flex-col gap-1.5 mt-1">
+                                    {(o.items || []).map((i, idx) => {
+                                      const quantidade = i.qtd || i.qty || 1; 
+                                      return (
+                                        <div key={`ativo-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-gray-100 flex items-center justify-between shadow-sm w-full bg-slate-50 text-slate-700">
+                                          <div className="flex items-center truncate">
+                                            <span className="mr-2 px-1.5 py-0.5 bg-white rounded text-slate-800 font-black shrink-0 border border-gray-200">{quantidade}x</span> 
+                                            <span className="leading-tight truncate">{i.name}</span>
+                                          </div>
                                         </div>
-                                        
-                                        <div className="flex gap-1.5 shrink-0">
-                                            <button onClick={() => {
-                                                // MENSAGEM RICA RESTAURADA!
-                                                let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\n`;
-                                                if (repTab === 'retirada' || repTab === 'separar') {
-                                                    text += `A sua encomenda já chegou no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
-                                                    (o.items || []).forEach(i => {
-                                                        const q = i.qtd || i.qty || 1;
-                                                        const totalItem = (i.price || 0) * q;
-                                                        text += `• ${q}x ${i.name} (R$ ${totalItem.toFixed(2).replace('.', ',')})\n`;
-                                                    });
-                                                    
-                                                    if (temFalta) {
-                                                        text += `\n⚠️ *Aviso de Falta:* Tivemos um corte no fornecedor e não conseguimos entregar:\n`;
-                                                        o.faltas.forEach(f => { text += `❌ ${f.qtyMissing || 1}x ${f.name}\n`; });
-                                                        text += `O valor da sua cesta já foi ajustado com o desconto!\n`;
-                                                    }
-                                                    
-                                                    if (!isPago) {
-                                                        text += `\nO total a transferir via Pix na retirada é *R$ ${(o.total||0).toFixed(2).replace('.', ',')}*.\nTe aguardamos!`;
-                                                    } else {
-                                                        text += `\nO seu pedido já consta como *PAGO*. É só vir retirar!\nTe aguardamos!`;
-                                                    }
-                                                }
-                                                window.open(`https://wa.me/55${(o.whatsapp||'').replace(/\D/g,'')}?text=${encodeURIComponent(text)}`);
-                                            }} className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-100 shadow-sm" title="Avisar no WhatsApp">
-                                                <MessageCircle className="w-5 h-5"/>
-                                            </button>
+                                      )
+                                    })}
+                                    {(o.faltas || []).map((f, idx) => (
+                                        <div key={`falta-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-red-100 flex items-center justify-between shadow-sm w-full bg-red-50 text-red-700 opacity-80">
+                                          <div className="flex items-center truncate line-through">
+                                            <span className="mr-2 px-1.5 py-0.5 bg-red-100 rounded text-red-800 font-black shrink-0 border border-red-200">{f.qtyMissing || 1}x</span> 
+                                            <span className="leading-tight truncate">{f.name}</span>
+                                          </div>
                                         </div>
-                                    </div>
+                                    ))}
+                                  </div>
+                              </div>
 
-                                    {/* STATUS DUPLO (FINANCEIRO + LOGÍSTICA) */}
-                                    <div className="px-4 py-3 flex gap-2">
-                                        <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${isPago ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                                            {isPago ? '🟢 PAGO' : '🔴 PENDENTE'}
-                                        </span>
-                                        <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-wider ${repTab === 'separar' ? 'bg-orange-50 text-orange-700 border border-orange-200' : repTab === 'retirada' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-600 border border-gray-200'}`}>
-                                            {repTab === 'separar' ? '⏳ A SEPARAR' : repTab === 'retirada' ? '🛍️ P/ RETIRADA' : '✅ ENTREGUE'}
-                                        </span>
-                                    </div>
+                              {/* BOTÕES DE AÇÃO SEPARADOS */}
+                              <div className="p-4 pt-0">
+                                  <div className="flex justify-between items-center mb-3 px-1 border-t border-gray-50 pt-3">
+                                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total:</span>
+                                      <span className="font-black text-slate-800 text-lg">R$ {(o.total||0).toFixed(2)}</span>
+                                  </div>
 
-                                    {/* LISTA DE PRODUTOS COMPACTA */}
-                                    <div className="px-4 pb-4 flex-1">
-                                        <div className="flex flex-col gap-1.5 mt-1">
-                                          {(o.items || []).map((i, idx) => {
-                                            const quantidade = i.qtd || i.qty || 1; 
-                                            return (
-                                              <div key={`ativo-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-gray-100 flex items-center justify-between shadow-sm w-full bg-slate-50 text-slate-700">
-                                                <div className="flex items-center truncate">
-                                                  <span className="mr-2 px-1.5 py-0.5 bg-white rounded text-slate-800 font-black shrink-0 border border-gray-200">{quantidade}x</span> 
-                                                  <span className="leading-tight truncate">{i.name}</span>
-                                                </div>
-                                              </div>
-                                            )
-                                          })}
-                                          {(o.faltas || []).map((f, idx) => (
-                                              <div key={`falta-${idx}`} className="text-[11px] font-bold px-2 py-1.5 rounded-lg border border-red-100 flex items-center justify-between shadow-sm w-full bg-red-50 text-red-700 opacity-80">
-                                                <div className="flex items-center truncate line-through">
-                                                  <span className="mr-2 px-1.5 py-0.5 bg-red-100 rounded text-red-800 font-black shrink-0 border border-red-200">{f.qtyMissing || 1}x</span> 
-                                                  <span className="leading-tight truncate">{f.name}</span>
-                                                </div>
-                                              </div>
-                                          ))}
-                                        </div>
-                                    </div>
+                                  {repTab === 'separar' && (
+                                      <button onClick={async () => {
+                                          try { await updateDoc(doc(db, "orders", o.id), { separado: true }); showToast('Caixa movida para Retirada!'); } catch(e){}
+                                      }} className="w-full py-3.5 bg-orange-100 text-orange-800 font-black text-[11px] uppercase tracking-wider rounded-xl hover:bg-orange-200 transition-colors shadow-sm flex items-center justify-center">
+                                          📦 MARCAR COMO SEPARADO
+                                      </button>
+                                  )}
 
-                                    {/* BOTÕES DE AÇÃO SEPARADOS */}
-                                    <div className="p-4 pt-0">
-                                        <div className="flex justify-between items-center mb-3 px-1 border-t border-gray-50 pt-3">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total:</span>
-                                            <span className="font-black text-slate-800 text-lg">R$ {(o.total||0).toFixed(2)}</span>
-                                        </div>
+                                  {repTab === 'retirada' && (
+                                      <div className="flex flex-col gap-2">
+                                          {!isPago && (
+                                              <button onClick={async () => {
+                                                  showConfirm('Confirmar Pagamento', `O cliente pagou R$ ${(o.total||0).toFixed(2)} agora no caixa?`, async () => {
+                                                      try { await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' }); showToast('Pagamento Registrado no Caixa!'); } catch(e){}
+                                                  });
+                                              }} className="w-full py-3 bg-white text-emerald-700 border-2 border-emerald-500 font-black text-[11px] uppercase tracking-wider rounded-xl hover:bg-emerald-50 transition-colors shadow-sm flex items-center justify-center">
+                                                  💰 1. REGISTRAR PIX (R$ ${(o.total||0).toFixed(2)})
+                                              </button>
+                                          )}
+                                          
+                                          <button onClick={async () => {
+                                              if (!isPago) {
+                                                  showToast('Atenção: Registre o pagamento antes de entregar a sacola!', 'error');
+                                                  return;
+                                              }
+                                              showConfirm('Confirmar Entrega', 'O cliente já está levando a sacola?', async () => {
+                                                  try { await updateDoc(doc(db, "orders", o.id), { entregue: true }); showToast('Entrega concluída!'); } catch(e){}
+                                              });
+                                          }} className={`w-full py-3.5 font-black text-[11px] uppercase tracking-wider rounded-xl transition-colors shadow-sm flex items-center justify-center ${!isPago ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
+                                              🛍️ 2. ENTREGAR SACOLA
+                                          </button>
+                                      </div>
+                                  )}
 
-                                        {repTab === 'separar' && (
-                                            <button onClick={async () => {
-                                                try { await updateDoc(doc(db, "orders", o.id), { separado: true }); showToast('Caixa movida para Retirada!'); } catch(e){}
-                                            }} className="w-full py-3.5 bg-orange-100 text-orange-800 font-black text-[11px] uppercase tracking-wider rounded-xl hover:bg-orange-200 transition-colors shadow-sm flex items-center justify-center">
-                                                📦 MARCAR COMO SEPARADO
-                                            </button>
-                                        )}
-
-                                        {repTab === 'retirada' && (
-                                            <div className="flex flex-col gap-2">
-                                                {!isPago && (
-                                                    <button onClick={async () => {
-                                                        showConfirm('Confirmar Pagamento', `O cliente pagou R$ ${(o.total||0).toFixed(2)} agora no caixa?`, async () => {
-                                                            try { await updateDoc(doc(db, "orders", o.id), { status: 'pago_polo' }); showToast('Pagamento Registrado no Caixa!'); } catch(e){}
-                                                        });
-                                                    }} className="w-full py-3 bg-white text-emerald-700 border-2 border-emerald-500 font-black text-[11px] uppercase tracking-wider rounded-xl hover:bg-emerald-50 transition-colors shadow-sm flex items-center justify-center">
-                                                        💰 1. REGISTRAR PIX (R$ ${(o.total||0).toFixed(2)})
-                                                    </button>
-                                                )}
-                                                
-                                                <button onClick={async () => {
-                                                    if (!isPago) {
-                                                        showToast('Atenção: Registre o pagamento antes de entregar a sacola!', 'error');
-                                                        return;
-                                                    }
-                                                    showConfirm('Confirmar Entrega', 'O cliente já está levando a sacola?', async () => {
-                                                        try { await updateDoc(doc(db, "orders", o.id), { entregue: true }); showToast('Entrega concluída!'); } catch(e){}
-                                                    });
-                                                }} className={`w-full py-3.5 font-black text-[11px] uppercase tracking-wider rounded-xl transition-colors shadow-sm flex items-center justify-center ${!isPago ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                                                    🛍️ 2. ENTREGAR SACOLA
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {repTab === 'historico' && (
-                                            <button onClick={async () => {
-                                                showConfirm('Desfazer Entrega', 'Devolver esta sacola para a aba de "Prontos para Retirada"?', async () => {
-                                                    try { await updateDoc(doc(db, "orders", o.id), { entregue: false }); showToast('Entrega desfeita!'); } catch(e){}
-                                                });
-                                            }} className="w-full py-2.5 bg-gray-50 text-gray-500 font-bold text-[10px] rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center">
-                                                ↩️ DESFAZER ENTREGA
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )
-                    </div>
+                                  {repTab === 'historico' && (
+                                      <button onClick={async () => {
+                                          showConfirm('Desfazer Entrega', 'Devolver esta sacola para a aba de "Prontos para Retirada"?', async () => {
+                                              try { await updateDoc(doc(db, "orders", o.id), { entregue: false }); showToast('Entrega desfeita!'); } catch(e){}
+                                          });
+                                      }} className="w-full py-2.5 bg-gray-50 text-gray-500 font-bold text-[10px] rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 flex items-center justify-center">
+                                          ↩️ DESFAZER ENTREGA
+                                      </button>
+                                  )}
+                              </div>
+                          </div>
+                      )
+                  })}
+              </div>
                 );
             })()}
         </div>
