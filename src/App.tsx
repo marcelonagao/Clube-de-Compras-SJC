@@ -1184,10 +1184,18 @@ export default function App() {
     // Corrige o bug da visão do Gestor
     const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
     
-    // 1. LÓGICA DE ETIQUETAS E FILTRO (Idêntica à do Dashboard Master)
-    const lotesLogisticos = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+    // 1. LÓGICA DE ETIQUETAS E FILTRO (Limpa a sujeira do passado)
     const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     
+    // Só mostra lotes logísticos picados se forem do mês atual
+    const lotesLogisticos = [...new Set(orders.filter(o => {
+        if (!o.date) return false;
+        const d = new Date(o.date);
+        const ciclo = o.cicloFinanceiro || `${meses[d.getMonth()]}/${d.getFullYear()}`;
+        return ciclo === mesReferenciaGlobal;
+    }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+    
+    // O passado vira tudo Consolidado
     const pastasFinanceiras = [...new Set(orders.map(o => {
         if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
         
@@ -1198,7 +1206,8 @@ export default function App() {
 
     const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
     const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
-// 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
+  
+  //2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
 const poloOrdersFiltered = orders.filter(o => {
   if (o.polo !== viewingPolo || !o.date) return false;
   
@@ -1971,13 +1980,17 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
-        const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
-
         // Os meses para traduzir a data antiga
         const mesesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS 
+        // 1. MAPEIA OS LOTES LOGÍSTICOS (Apenas do mês vigente para não poluir com o passado!)
+        const lotesLogisticos = [...new Set(validOrders.filter(o => {
+            const d = o.date ? new Date(o.date) : new Date();
+            const ciclo = o.cicloFinanceiro || `${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
+            return ciclo === mesReferenciaGlobal;
+        }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (O passado vira tudo "Consolidado")
         const pastasFinanceiras = [...new Set(validOrders.map(o => {
             if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
             
@@ -2503,11 +2516,17 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             </div>
           </div>
         );
-      }
-
-     if (adminTab === 'compras') {
-      // 1. O SISTEMA LÊ AS DATAS AQUI:
-      const datasExistentes = [...new Set(orders.map(o => o.deliveryDate || 'Ciclo Mensal'))];
+      }if (adminTab === 'compras') {
+        // 1. O SISTEMA LÊ AS DATAS AQUI (Mas agora esconde o lixo do passado!):
+        const datasExistentes = [...new Set(
+            orders.filter(o => {
+                if(!o.date) return false;
+                const d = new Date(o.date);
+                const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+                const ciclo = o.cicloFinanceiro || `${meses[d.getMonth()]}/${d.getFullYear()}`;
+                return ciclo === mesReferenciaGlobal;
+            }).map(o => o.deliveryDate || 'Ciclo Mensal')
+        )].sort();
        return (
          <div className="space-y-6 text-left max-w-6xl mx-auto">
            <h2 className="text-2xl font-black text-emerald-900 mb-4">Inteligência de Compras</h2>
