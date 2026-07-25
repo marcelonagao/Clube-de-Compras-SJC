@@ -1185,46 +1185,35 @@ export default function App() {
     const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
     
     // 1. LÓGICA DE ETIQUETAS E FILTRO (Limpa a sujeira do passado)
-    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
     
     // Só mostra lotes logísticos picados se forem do mês atual
     const lotesLogisticos = [...new Set(orders.filter(o => {
-        if (!o.date) return false;
-        const d = new Date(o.date);
-        const ciclo = o.cicloFinanceiro || `${meses[d.getMonth()]}/${d.getFullYear()}`;
-        return ciclo === mesReferenciaGlobal;
-    }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
-    
-    // O passado vira tudo Consolidado
-    const pastasFinanceiras = [...new Set(orders.map(o => {
-        if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
-        
-        // Proteção para pedidos antigos
-        const date = o.date ? new Date(o.date) : new Date();
-        return `Consolidado: ${meses[date.getMonth()]}/${date.getFullYear()}`;
-    }))].sort();
+      if (!o.date) return false;
+      const ciclo = o.cicloFinanceiro || 'Julho/2026';
+      return ciclo === mesReferenciaGlobal;
+  }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+  
+  // O passado vira tudo Consolidado em Julho/2026
+  const pastasFinanceiras = [...new Set(orders.map(o => {
+      if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
+      return `Consolidado: Julho/2026`; // <- Legado consolidado!
+  }))].sort();
 
-    const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
-    const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
-  
-  //2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
-const poloOrdersFiltered = orders.filter(o => {
-  if (o.polo !== viewingPolo || !o.date) return false;
-  
-  if (filtroAtivo.startsWith('Consolidado:')) {
-      const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-      if (o.cicloFinanceiro) {
-          return o.cicloFinanceiro === pastaFiltro;
-      } else {
-          // CORREÇÃO: Lê a data real do pedido antigo para o representante também!
-          const d = o.date ? new Date(o.date) : new Date();
-          const pastaLegada = `${meses[d.getMonth()]}/${d.getFullYear()}`;
-          return pastaLegada === pastaFiltro;
-      }
-  } else {
-      return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
-  }
-});
+  const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
+  const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+
+  // 2. FILTRA AS ENCOMENDAS APENAS DO POLO E DO CICLO SELECIONADO
+  const poloOrdersFiltered = orders.filter(o => {
+    if (o.polo !== viewingPolo || !o.date) return false;
+    
+    if (filtroAtivo.startsWith('Consolidado:')) {
+        const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+        if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
+        return 'Julho/2026' === pastaFiltro;
+    } else {
+        return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+    }
+  });
 
 // 3. NOVA ESTEIRA LOGÍSTICA BLINDADA (Aba 1, 2 e 3)
 const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
@@ -1980,23 +1969,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // Os meses para traduzir a data antiga
-        const mesesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-
         // 1. MAPEIA OS LOTES LOGÍSTICOS (Apenas do mês vigente para não poluir com o passado!)
         const lotesLogisticos = [...new Set(validOrders.filter(o => {
-            const d = o.date ? new Date(o.date) : new Date();
-            const ciclo = o.cicloFinanceiro || `${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
+            const ciclo = o.cicloFinanceiro || 'Julho/2026';
             return ciclo === mesReferenciaGlobal;
         }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
 
-        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (O passado vira tudo "Consolidado")
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS (O passado vira tudo "Julho/2026")
         const pastasFinanceiras = [...new Set(validOrders.map(o => {
             if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
-            
-            // Se o pedido é antigo e não tem a tag do ciclo, rotula ele pelo mês/ano que a venda ocorreu!
-            const d = o.date ? new Date(o.date) : new Date();
-            return `Consolidado: ${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
+            return `Consolidado: Julho/2026`; // <- A mágica que junta tudo do passado!
         }))].sort();
 
         // Une tudo no menu de seleção do topo
@@ -2013,10 +1995,8 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                 if (o.cicloFinanceiro) {
                     return o.cicloFinanceiro === pastaFiltro;
                 } else {
-                    // Busca a data real do pedido antigo para não sujar o mês de Agosto
-                    const d = o.date ? new Date(o.date) : new Date();
-                    const pastaLegada = `${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
-                    return pastaLegada === pastaFiltro;
+                    // Qualquer pedido sem etiqueta vai para a pasta de Julho/2026
+                    return 'Julho/2026' === pastaFiltro;
                 }
             } else {
                 return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
@@ -2516,14 +2496,13 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             </div>
           </div>
         );
-      }if (adminTab === 'compras') {
-        // 1. O SISTEMA LÊ AS DATAS AQUI (Mas agora esconde o lixo do passado!):
+      }
+      if (adminTab === 'compras') {
+        // 1. O SISTEMA LÊ AS DATAS AQUI (E consolida o passado no filtro):
         const datasExistentes = [...new Set(
             orders.filter(o => {
                 if(!o.date) return false;
-                const d = new Date(o.date);
-                const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-                const ciclo = o.cicloFinanceiro || `${meses[d.getMonth()]}/${d.getFullYear()}`;
+                const ciclo = o.cicloFinanceiro || 'Julho/2026';
                 return ciclo === mesReferenciaGlobal;
             }).map(o => o.deliveryDate || 'Ciclo Mensal')
         )].sort();
