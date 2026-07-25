@@ -1199,22 +1199,25 @@ export default function App() {
     const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
     const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
-    // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
-    const poloOrdersFiltered = orders.filter(o => {
-      if (o.polo !== viewingPolo || !o.date) return false;
-      
-      if (filtroAtivo.startsWith('Consolidado:')) {
-          const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-          if (o.cicloFinanceiro) {
-              return o.cicloFinanceiro === pastaFiltro;
-          } else {
-              // A MÁGICA: Iguala à regra do Dashboard da Gestão (força para o mês atual se não tiver etiqueta)
-              return mesReferenciaGlobal === pastaFiltro;
-          }
+    
+// 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
+const poloOrdersFiltered = orders.filter(o => {
+  if (o.polo !== viewingPolo || !o.date) return false;
+  
+  if (filtroAtivo.startsWith('Consolidado:')) {
+      const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+      if (o.cicloFinanceiro) {
+          return o.cicloFinanceiro === pastaFiltro;
       } else {
-          return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+          // CORREÇÃO: Lê a data real do pedido antigo para o representante também!
+          const d = o.date ? new Date(o.date) : new Date();
+          const pastaLegada = `${meses[d.getMonth()]}/${d.getFullYear()}`;
+          return pastaLegada === pastaFiltro;
       }
-  });
+  } else {
+      return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+  }
+});
 // 3. NOVA ESTEIRA LOGÍSTICA BLINDADA (Aba 1, 2 e 3)
 const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
 const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
@@ -1988,6 +1991,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         // 🌟 CORREÇÃO DO "ESTADO FANTASMA" DO REACT 🌟
         const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
+        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
+        const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+
+        // Os meses para traduzir a data antiga
+        const mesesLabel = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS 
+        const pastasFinanceiras = [...new Set(validOrders.map(o => {
+            if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
+            
+            // Se o pedido é antigo e não tem a tag do ciclo, rotula ele pelo mês/ano que a venda ocorreu!
+            const d = o.date ? new Date(o.date) : new Date();
+            return `Consolidado: ${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
+        }))].sort();
+
+        // Une tudo no menu de seleção do topo
+        const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
+
+        // 🌟 CORREÇÃO DO "ESTADO FANTASMA" DO REACT 🌟
+        const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+
         // 3. FILTRO INTELIGENTE E BLINDADO
         const currentCycleOrders = validOrders.filter(o => {
             if (filtroAtivo.startsWith('Consolidado:')) {
@@ -1996,11 +2020,12 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                 if (o.cicloFinanceiro) {
                     return o.cicloFinanceiro === pastaFiltro;
                 } else {
-                    // Força os pedidos antigos a aparecerem no Consolidado atual
-                    return mesReferenciaGlobal === pastaFiltro;
+                    // Busca a data real do pedido antigo para não sujar o mês de Agosto
+                    const d = o.date ? new Date(o.date) : new Date();
+                    const pastaLegada = `${mesesLabel[d.getMonth()]}/${d.getFullYear()}`;
+                    return pastaLegada === pastaFiltro;
                 }
             } else {
-                // Filtro por lote logístico específico (Visão da Logística)
                 return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
             }
         });
