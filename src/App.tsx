@@ -1198,8 +1198,6 @@ export default function App() {
 
     const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
     const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
-
-    
 // 2. FILTRA OS PEDIDOS APENAS DO POLO E DO CICLO SELECIONADO
 const poloOrdersFiltered = orders.filter(o => {
   if (o.polo !== viewingPolo || !o.date) return false;
@@ -1218,6 +1216,7 @@ const poloOrdersFiltered = orders.filter(o => {
       return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
   }
 });
+
 // 3. NOVA ESTEIRA LOGÍSTICA BLINDADA (Aba 1, 2 e 3)
 const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
 const pedidosPagosPolo = poloOrdersFiltered.filter(o => o.status === 'pago_polo');
@@ -1972,25 +1971,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
     const renderContent = () => {
       if (adminTab === 'dashboard') {
-        // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
-        const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
-
-        // 2. MAPEIA OS CONSOLIDADOS FINANCEIROS 
-        const pastasFinanceiras = [...new Set(validOrders.map(o => {
-            // Se o pedido for novo e já tiver a etiqueta, usa ela
-            if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
-            
-            // A MÁGICA AQUI: Se é um pedido antigo (sem etiqueta), ignora o calendário 
-            // e atira ele direto para a pasta financeira global atual para não perder as vendas antecipadas.
-            return `Consolidado: ${mesReferenciaGlobal}`;
-        }))].sort();
-
-        // Une tudo no menu de seleção do topo
-        const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
-
-        // 🌟 CORREÇÃO DO "ESTADO FANTASMA" DO REACT 🌟
-        const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
-
         // 1. MAPEIA OS LOTES LOGÍSTICOS EXISTENTES
         const lotesLogisticos = [...new Set(validOrders.map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
 
