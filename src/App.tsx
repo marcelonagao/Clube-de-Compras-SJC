@@ -1950,24 +1950,65 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
   };
   const handleSaveAdminOrder = async () => {
     try {
-      // Calcula o novo total baseado no carrinho editado
+      // 1. Calcula o novo total baseado no carrinho editado
       const newTotal = editCart.reduce((acc, item) => {
           const quantidade = item.qtd || item.qty || 1;
           return acc + ((item.price || 0) * quantidade);
       }, 0);
 
-      // Salva no banco de dados
+      // 2. MÁGICA DO ESTOQUE: Compara o antes e o depois
+      if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+          // Cria uma "memória" das quantidades antigas do pedido
+          const oldQtyMap = {};
+          (editingAdminOrder.items || []).forEach(i => {
+              oldQtyMap[i.id] = i.qtd || i.qty || 1;
+          });
+
+          // Analisa os novos itens que estão sendo salvos
+          for (const newItem of editCart) {
+              const newQty = newItem.qtd || newItem.qty || 1;
+              const oldQty = oldQtyMap[newItem.id] || 0;
+              const diferenca = newQty - oldQty; // Se for positivo, o cliente adicionou. Se for negativo, removeu.
+
+              if (diferenca !== 0 && newItem.id !== 'oferta-1') {
+                  const prodRef = doc(db, "products", newItem.id);
+                  const prodDoc = await getDoc(prodRef);
+                  if (prodDoc.exists()) {
+                      const estoqueAtual = prodDoc.data().stock || 0;
+                      // Subtraímos a diferença (se ele adicionou 2, subtrai 2 do estoque. Se tirou 1, soma 1).
+                      await updateDoc(prodRef, { stock: estoqueAtual - diferenca });
+                  }
+              }
+              // Apaga do mapa para sabermos o que foi completamente deletado do carrinho
+              delete oldQtyMap[newItem.id];
+          }
+
+          // Se sobrou algo no oldQtyMap, é porque o item inteiro foi deletado (clicou no Lixo). Devolvemos o total pro estoque.
+          for (const [deletedId, deletedQty] of Object.entries(oldQtyMap)) {
+              if (deletedId !== 'oferta-1') {
+                  const prodRef = doc(db, "products", deletedId);
+                  const prodDoc = await getDoc(prodRef);
+                  if (prodDoc.exists()) {
+                      const estoqueAtual = prodDoc.data().stock || 0;
+                      await updateDoc(prodRef, { stock: estoqueAtual + deletedQty });
+                  }
+              }
+          }
+      }
+
+      // 3. Salva o pedido no banco de dados com os novos itens e o novo total
       await updateDoc(doc(db, "orders", editingAdminOrder.id), {
         items: editCart,
         total: newTotal
       });
       
-      showToast('Pedido atualizado com sucesso!', 'success');
+      showToast('Pedido atualizado com sucesso e estoque recalculado!', 'success');
       setEditingAdminOrder(null); // Fecha o modal
     } catch (err) {
-      showToast('Erro ao atualizar pedido.', 'error');
+      showToast('Erro ao atualizar pedido e estoque.', 'error');
     }
   };
+  
   const renderAdminDashboard = () => {
     // 1. FILTRO GLOBAL CONSERTADO: Lendo todos os status da Fase 1 e 2
     const validOrders = orders.filter(o => ['pago', 'confirmado', 'pago_polo'].includes(o.status) && o.date);
