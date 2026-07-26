@@ -134,6 +134,7 @@ export default function App() {
   const [sysConfig, setSysConfig] = useState({
     mesReferencia: "Julho/2026",
     loteMensal: "Ciclo Mensal - Julho",
+    dataCorte: "31/07 às 14:00hs", // 👈 ADICIONE ESTA LINHA
     ofertaAtiva: false,
     ofertaTitulo: "🚨 OFERTA RELÂMPAGO",
     ofertaProduto: "Bandeja de Ovos Jumbo (30 un)",
@@ -1849,8 +1850,23 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
   };
 
   const renderPrintCartaz = () => {
-    // Puxa os produtos ativos e ordena por nome
+    // 1. Puxa os produtos ativos e ordena por nome
     const activeProducts = products.filter(p => !p.pausado).sort((a, b) => a.name.localeCompare(b.name));
+    
+    // 2. MÁGICA: Agrupa os produtos por categoria
+    const productsByCategory = activeProducts.reduce((acc, p) => {
+        const cat = p.category || 'Geral';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
+        return acc;
+    }, {});
+    
+    // Ordena o nome das categorias em ordem alfabética
+    const sortedCategories = Object.keys(productsByCategory).sort();
+
+    // 3. Gerador automático de QR Code apontando para o app
+    const appUrl = "https://clubedecomprassjc.vercel.app/";
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(appUrl)}`;
 
     return (
       <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black min-h-screen flex flex-col">
@@ -1860,33 +1876,56 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         </div>
 
         {/* VISUAL DO CARTAZ DE PAREDE */}
-        <div className="border-[6px] border-emerald-800 p-8 rounded-3xl relative overflow-hidden flex-1 flex flex-col">
-            <div className="text-center mb-8 border-b-[6px] border-emerald-800 pb-8 shrink-0">
-                <h1 className="text-6xl font-black uppercase tracking-tight text-emerald-900 mb-2">Clube de Compras</h1>
-                <h2 className="text-4xl font-black text-orange-600 uppercase tracking-widest">Ciclo Aberto!</h2>
-                <p className="mt-4 text-2xl font-black text-white bg-slate-800 inline-block px-6 py-2 rounded-xl shadow-md">Pedidos até 31/07 às 14:00hs</p>
+        <div className="border-[6px] border-emerald-800 p-8 rounded-3xl relative overflow-hidden flex-1 flex flex-col justify-between">
+            
+            {/* CABEÇALHO */}
+            <div className="text-center mb-6 border-b-[6px] border-emerald-800 pb-6 shrink-0">
+                <h1 className="text-5xl font-black uppercase tracking-tight text-emerald-900 mb-1">Clube de Compras</h1>
+                <h2 className="text-3xl font-black text-orange-600 uppercase tracking-widest">Ciclo {sysConfig.mesReferencia || 'Aberto'}!</h2>
+                <p className="mt-3 text-xl font-black text-white bg-slate-800 inline-block px-6 py-2 rounded-xl shadow-md">
+                   Pedidos até {sysConfig.dataCorte || '31/07 às 14:00hs'}
+                </p>
             </div>
 
-            {/* LISTA DE PRODUTOS EM 2 COLUNAS */}
-            <div className="columns-2 gap-10 flex-1">
-                {activeProducts.map(p => {
-                    const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
-                    const price = isPromo ? p.promotionalPrice : p.price;
-                    return (
-                        <div key={p.id} className="mb-4 break-inside-avoid flex justify-between items-end border-b-2 border-dotted border-gray-400 pb-1">
-                            <span className="font-black text-xl text-slate-800 leading-tight pr-3 uppercase">{p.name}</span>
-                            <span className="font-black text-3xl text-emerald-800 shrink-0">R$ {price.toFixed(2).replace('.', ',')}</span>
+            {/* LISTA DE PRODUTOS AGRUPADOS EM 2 COLUNAS */}
+            <div className="columns-2 gap-10 flex-1 my-2">
+                {sortedCategories.map(category => (
+                    <div key={category} className="mb-6 break-inside-avoid">
+                        
+                        {/* Faixa da Categoria */}
+                        <div className="bg-emerald-50 border-l-8 border-emerald-700 pl-3 py-1.5 mb-3 rounded-r-lg">
+                            <h3 className="text-xl font-black text-emerald-900 uppercase tracking-widest">{category}</h3>
                         </div>
-                    )
-                })}
+
+                        {/* Produtos dentro da Categoria */}
+                        <div className="flex flex-col gap-2.5">
+                            {productsByCategory[category].map(p => {
+                                const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                                const price = isPromo ? p.promotionalPrice : p.price;
+                                return (
+                                    <div key={p.id} className="flex justify-between items-end border-b-2 border-dotted border-gray-300 pb-1">
+                                        <span className="font-bold text-sm text-slate-800 leading-tight pr-2 uppercase">{p.name}</span>
+                                        <span className="font-black text-xl text-emerald-800 shrink-0">R$ {price.toFixed(2).replace('.', ',')}</span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                    </div>
+                ))}
             </div>
 
-            {/* RODAPÉ DO CARTAZ */}
-            <div className="mt-8 bg-emerald-800 text-white text-center p-6 rounded-2xl shrink-0 shadow-lg border-4 border-emerald-900">
-                <p className="text-2xl font-black uppercase mb-1 text-orange-300">🌟 Novidades deste Ciclo 🌟</p>
-                <p className="text-xl font-bold">Salsicha, Linguiça com Ervas, Café, Pipoca e Fubá!</p>
-                <div className="w-16 h-1 bg-emerald-600 mx-auto my-3"></div>
-                <p className="text-lg font-bold">Acesse o aplicativo ou fale com a equipe do Johrei Center.</p>
+            {/* RODAPÉ DO CARTAZ COM QR CODE E LINK */}
+            <div className="mt-6 bg-emerald-800 text-white p-5 rounded-2xl shrink-0 shadow-lg border-4 border-emerald-900 flex items-center justify-between gap-4 break-inside-avoid">
+                <div className="flex-1 text-left">
+                    <p className="text-xl font-black uppercase mb-1 text-orange-300">📱 Faça seu pedido online:</p>
+                    <p className="text-sm font-bold text-white/90">Aponte a câmara do telemóvel/celular para o QR Code ao lado ou acesse:</p>
+                    <p className="text-lg font-black text-yellow-300 font-mono mt-1 underline">clubedecomprassjc.vercel.app</p>
+                </div>
+                <div className="bg-white p-2 rounded-xl shadow-md shrink-0 flex flex-col items-center">
+                    <img src={qrCodeUrl} alt="QR Code do App" className="w-24 h-24" />
+                    <span className="text-[8px] font-black text-slate-800 uppercase tracking-widest mt-1">Escaneie Aqui</span>
+                </div>
             </div>
         </div>
       </div>
@@ -3209,6 +3248,11 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                            <div>
                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Lote Logístico (Carnes)</label>
                                <input type="text" value={sysConfig.loteMensal} onChange={e => setSysConfig({...sysConfig, loteMensal: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: Ciclo|Lote - Agosto"/>
+                           </div>
+                           {/* 👇 NOVO CAMPO DA DATA DE CORTE 👇 */}
+                           <div>
+                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Data / Hora Limite</label>
+                               <input type="text" value={sysConfig.dataCorte || ''} onChange={e => setSysConfig({...sysConfig, dataCorte: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-blue-500 font-black text-blue-900 text-sm" placeholder="Ex: 31/07 às 14:00hs"/>
                            </div>
                        </div>
                    </div>
