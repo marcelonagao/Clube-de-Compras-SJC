@@ -1861,7 +1861,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         return acc;
     }, {});
     
-    // Ordena o nome das categorias em ordem alfabética
     const sortedCategories = Object.keys(productsByCategory).sort();
 
     // 3. Gerador automático de QR Code apontando para o app
@@ -1869,43 +1868,45 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(appUrl)}`;
 
     return (
-      <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black min-h-screen flex flex-col">
+      // A MÁGICA DO A4 AQUI: Forçamos dimensões físicas e ocultamos o excesso na impressão
+      <div className="bg-white p-4 sm:p-8 max-w-4xl mx-auto font-sans text-black flex flex-col print:p-0 print:w-[210mm] print:h-[296mm] print:overflow-hidden box-border">
         <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6 shrink-0">
           <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">🖨️ Imprimir Cartaz de Parede</button>
           <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
+          <p className="text-xs text-gray-500 mt-3 font-bold">Dica de Impressão: Se ainda cortar, vá nas definições da impressora e altere a Escala de "Padrão" para "Ajustar à área de impressão".</p>
         </div>
 
-        {/* VISUAL DO CARTAZ DE PAREDE */}
-        <div className="border-[6px] border-emerald-800 p-8 rounded-3xl relative overflow-hidden flex-1 flex flex-col justify-between">
+        {/* VISUAL DO CARTAZ DE PAREDE COM ESPAÇAMENTOS COMPACTOS PARA IMPRESSÃO */}
+        <div className="border-[6px] border-emerald-800 p-6 sm:p-8 rounded-3xl relative flex-1 flex flex-col justify-between print:border-4 print:p-5 print:rounded-2xl print:m-1">
             
             {/* CABEÇALHO */}
-            <div className="text-center mb-6 border-b-[6px] border-emerald-800 pb-6 shrink-0">
-                <h1 className="text-5xl font-black uppercase tracking-tight text-emerald-900 mb-1">Clube de Compras</h1>
-                <h2 className="text-3xl font-black text-orange-600 uppercase tracking-widest">Ciclo {sysConfig.mesReferencia || 'Aberto'}!</h2>
-                <p className="mt-3 text-xl font-black text-white bg-slate-800 inline-block px-6 py-2 rounded-xl shadow-md">
+            <div className="text-center mb-4 sm:mb-6 border-b-[6px] border-emerald-800 pb-4 shrink-0 print:mb-3 print:pb-3 print:border-b-4">
+                <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tight text-emerald-900 mb-1 print:text-4xl">Clube de Compras</h1>
+                <h2 className="text-2xl sm:text-3xl font-black text-orange-600 uppercase tracking-widest print:text-2xl">Ciclo {sysConfig.mesReferencia || 'Aberto'}!</h2>
+                <p className="mt-2 text-lg sm:text-xl font-black text-white bg-slate-800 inline-block px-5 py-1.5 rounded-xl shadow-md print:mt-1 print:text-base">
                    Pedidos até {sysConfig.dataCorte || '31/07 às 14:00hs'}
                 </p>
             </div>
 
-            {/* LISTA DE PRODUTOS AGRUPADOS EM 2 COLUNAS */}
-            <div className="columns-2 gap-10 flex-1 my-2">
+            {/* LISTA DE PRODUTOS COMPACTADA NA IMPRESSÃO */}
+            <div className="columns-2 gap-8 sm:gap-10 flex-1 my-1 print:gap-6 print:my-0">
                 {sortedCategories.map(category => (
-                    <div key={category} className="mb-6 break-inside-avoid">
+                    <div key={category} className="mb-4 sm:mb-6 break-inside-avoid print:mb-3">
                         
                         {/* Faixa da Categoria */}
-                        <div className="bg-emerald-50 border-l-8 border-emerald-700 pl-3 py-1.5 mb-3 rounded-r-lg">
-                            <h3 className="text-xl font-black text-emerald-900 uppercase tracking-widest">{category}</h3>
+                        <div className="bg-emerald-50 border-l-4 sm:border-l-8 border-emerald-700 pl-2 sm:pl-3 py-1 sm:py-1.5 mb-2 sm:mb-3 rounded-r-lg print:border-l-4 print:mb-1.5 print:py-1">
+                            <h3 className="text-lg sm:text-xl font-black text-emerald-900 uppercase tracking-widest print:text-base">{category}</h3>
                         </div>
 
                         {/* Produtos dentro da Categoria */}
-                        <div className="flex flex-col gap-2.5">
+                        <div className="flex flex-col gap-1.5 sm:gap-2.5 print:gap-1">
                             {productsByCategory[category].map(p => {
                                 const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
                                 const price = isPromo ? p.promotionalPrice : p.price;
                                 return (
-                                    <div key={p.id} className="flex justify-between items-end border-b-2 border-dotted border-gray-300 pb-1">
-                                        <span className="font-bold text-sm text-slate-800 leading-tight pr-2 uppercase">{p.name}</span>
-                                        <span className="font-black text-xl text-emerald-800 shrink-0">R$ {price.toFixed(2).replace('.', ',')}</span>
+                                    <div key={p.id} className="flex justify-between items-end border-b-2 border-dotted border-gray-300 pb-0.5 print:pb-0 print:border-b">
+                                        <span className="font-bold text-xs sm:text-sm text-slate-800 leading-tight pr-2 uppercase print:text-[11px] print:leading-none">{p.name}</span>
+                                        <span className="font-black text-lg sm:text-xl text-emerald-800 shrink-0 print:text-[14px] print:leading-none">R$ {price.toFixed(2).replace('.', ',')}</span>
                                     </div>
                                 )
                             })}
@@ -1916,15 +1917,15 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             </div>
 
             {/* RODAPÉ DO CARTAZ COM QR CODE E LINK */}
-            <div className="mt-6 bg-emerald-800 text-white p-5 rounded-2xl shrink-0 shadow-lg border-4 border-emerald-900 flex items-center justify-between gap-4 break-inside-avoid">
+            <div className="mt-4 sm:mt-6 bg-emerald-800 text-white p-4 sm:p-5 rounded-2xl shrink-0 shadow-lg border-2 sm:border-4 border-emerald-900 flex items-center justify-between gap-3 break-inside-avoid print:mt-2 print:p-3 print:border-2 print:rounded-xl">
                 <div className="flex-1 text-left">
-                    <p className="text-xl font-black uppercase mb-1 text-orange-300">📱 Faça seu pedido online:</p>
-                    <p className="text-sm font-bold text-white/90">Aponte a câmara do telemóvel/celular para o QR Code ao lado ou acesse:</p>
-                    <p className="text-lg font-black text-yellow-300 font-mono mt-1 underline">clubedecomprassjc.vercel.app</p>
+                    <p className="text-lg sm:text-xl font-black uppercase mb-0.5 text-orange-300 print:text-base print:mb-0">📱 Faça seu pedido online:</p>
+                    <p className="text-xs sm:text-sm font-bold text-white/90 print:text-[10px]">Aponte a câmara do celular para o QR Code ao lado ou acesse:</p>
+                    <p className="text-base sm:text-lg font-black text-yellow-300 font-mono mt-0.5 underline print:text-sm">clubedecomprassjc.vercel.app</p>
                 </div>
-                <div className="bg-white p-2 rounded-xl shadow-md shrink-0 flex flex-col items-center">
-                    <img src={qrCodeUrl} alt="QR Code do App" className="w-24 h-24" />
-                    <span className="text-[8px] font-black text-slate-800 uppercase tracking-widest mt-1">Escaneie Aqui</span>
+                <div className="bg-white p-1.5 sm:p-2 rounded-xl shadow-md shrink-0 flex flex-col items-center print:rounded-lg">
+                    <img src={qrCodeUrl} alt="QR Code do App" className="w-16 h-16 sm:w-24 sm:h-24 print:w-16 print:h-16" />
+                    <span className="text-[7px] sm:text-[8px] font-black text-slate-800 uppercase tracking-widest mt-1">Escaneie Aqui</span>
                 </div>
             </div>
         </div>
