@@ -162,6 +162,10 @@ export default function App() {
   const [repManualItems, setRepManualItems] = useState([]);
   const [mesaDateFilter, setMesaDateFilter] = useState('Todos');
   const [vendasSearchTerm, setVendasSearchTerm] = useState('');
+
+  const [itensVendidosSearch, setItensVendidosSearch] = useState('');
+  const [expandedProductReport, setExpandedProductReport] = useState({});
+
   const [expandedPolos, setExpandedPolos] = useState({}); 
   const [editingAdminOrder, setEditingAdminOrder] = useState(null);
   const [vendasStartDate, setVendasStartDate] = useState('');
@@ -2008,7 +2012,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       showToast('Erro ao atualizar pedido e estoque.', 'error');
     }
   };
-  
+
   const renderAdminDashboard = () => {
     // 1. FILTRO GLOBAL CONSERTADO: Lendo todos os status da Fase 1 e 2
     const validOrders = orders.filter(o => ['pago', 'confirmado', 'pago_polo'].includes(o.status) && o.date);
@@ -2561,6 +2565,181 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           </div>
         );
       }
+
+      if (adminTab === 'itens_vendidos') {
+        // 1. Filtro de Ciclo (Reaproveita o consolidado blindado do dashboard)
+        const lotesLogisticos = [...new Set(validOrders.filter(o => {
+            const ciclo = o.cicloFinanceiro || 'Julho/2026';
+            return ciclo === mesReferenciaGlobal;
+        }).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort();
+
+        const pastasFinanceiras = [...new Set(validOrders.map(o => {
+            if (o.cicloFinanceiro) return `Consolidado: ${o.cicloFinanceiro}`;
+            return `Consolidado: Julho/2026`; 
+        }))].sort();
+
+        const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
+        const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
+
+        const currentCycleOrders = validOrders.filter(o => {
+            if (filtroAtivo.startsWith('Consolidado:')) {
+                const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+                if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
+                return 'Julho/2026' === pastaFiltro;
+            } else {
+                return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
+            }
+        });
+
+        // 2. O CÉREBRO: Agrupa todos os pedidos, quebrando-os por Produto
+        const produtosAgrupados = {};
+        currentCycleOrders.forEach(order => {
+            (order.items || []).forEach(item => {
+                const prodId = item.id;
+                if (!produtosAgrupados[prodId]) {
+                    produtosAgrupados[prodId] = {
+                        id: prodId,
+                        name: item.name,
+                        totalQty: 0,
+                        buyers: []
+                    };
+                }
+                const qty = item.qtd || item.qty || 1;
+                produtosAgrupados[prodId].totalQty += qty;
+                
+                // Status da entrega e financeiro
+                const isPago = order.status === 'pago' || order.status === 'pago_polo';
+                const isEntregue = order.entregue;
+
+                produtosAgrupados[prodId].buyers.push({
+                    orderId: order.id,
+                    customer: order.customer,
+                    polo: order.polo,
+                    qty: qty,
+                    isPago: isPago,
+                    isEntregue: isEntregue,
+                    date: order.date
+                });
+            });
+        });
+
+        const listaProdutos = Object.values(produtosAgrupados)
+            .filter(p => p.name.toLowerCase().includes((itensVendidosSearch || '').toLowerCase()))
+            .sort((a, b) => b.totalQty - a.totalQty); // Os que venderam mais ficam no topo
+
+        return (
+            <div className="space-y-6 text-left max-w-6xl mx-auto">
+                {/* CABEÇALHO */}
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800">Saídas por Produto</h2>
+                        <p className="text-xs font-bold text-gray-500 mt-1">Veja exatamente quem comprou cada item e controle as retiradas.</p>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        {/* Filtro de Ciclo/Lote */}
+                        <div className="bg-white p-2 border border-emerald-200 rounded-xl shadow-sm flex items-center gap-2">
+                             <span className="font-bold text-slate-500 text-xs pl-2">Analisar:</span>
+                             <select value={filtroAtivo} onChange={e => setDashCycleFilter(e.target.value)} className="p-2 border-none outline-none font-black text-emerald-800 bg-emerald-50 rounded-lg text-sm cursor-pointer">
+                                 {ciclosExistentes.map(data => (
+                                     <option key={data} value={data}>{data}</option>
+                                 ))}
+                             </select>
+                        </div>
+                        {/* Busca de Produto Rápida */}
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                            <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar Hamburguer, Ovo..." 
+                                value={itensVendidosSearch}
+                                onChange={(e) => setItensVendidosSearch(e.target.value)}
+                                className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                            />
+                            {itensVendidosSearch && <button onClick={() => setItensVendidosSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* LISTAGEM DE PRODUTOS */}
+                <div className="space-y-3">
+                    {listaProdutos.length === 0 ? (
+                        <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
+                            <Package className="w-12 h-12 mx-auto text-gray-200 mb-3"/>
+                            <p className="text-gray-500 font-medium text-sm">Nenhum produto encontrado neste lote.</p>
+                        </div>
+                    ) : (
+                        listaProdutos.map(prod => {
+                            const isExpanded = expandedProductReport[prod.id];
+                            
+                            // Calcula quantos itens dessa mercadoria já foram entregues
+                            const entregues = prod.buyers.filter(b => b.isEntregue).reduce((sum, b) => sum + b.qty, 0);
+                            const pendentes = prod.totalQty - entregues;
+
+                            return (
+                                <div key={prod.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all">
+                                    <div 
+                                        onClick={() => setExpandedProductReport(prev => ({...prev, [prod.id]: !prev[prod.id]}))}
+                                        className="p-4 bg-white hover:bg-slate-50 flex items-center justify-between cursor-pointer transition-colors"
+                                    >
+                                        <div className="flex items-center gap-4 flex-1">
+                                            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-black text-lg shrink-0 border border-emerald-100 shadow-sm">
+                                                {prod.totalQty}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-black text-slate-800 text-base leading-tight">{prod.name}</h3>
+                                                <div className="flex items-center gap-3 mt-1.5">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${pendentes === 0 ? 'bg-gray-100 text-gray-400' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
+                                                        {pendentes} a retirar
+                                                    </span>
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded ${entregues > 0 ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'bg-gray-100 text-gray-400'}`}>
+                                                        {entregues} já entregues
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="shrink-0 ml-4">
+                                            {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400"/> : <ChevronDown className="w-5 h-5 text-gray-400"/>}
+                                        </div>
+                                    </div>
+
+                                    {/* LISTA DE CLIENTES QUE COMPRARAM ESTE PRODUTO */}
+                                    {isExpanded && (
+                                        <div className="bg-slate-50 border-t border-gray-100 p-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                {prod.buyers.sort((a,b) => new Date(b.date) - new Date(a.date)).map((buyer, idx) => (
+                                                    <div key={idx} className={`p-3 rounded-xl border shadow-sm flex flex-col gap-2 ${buyer.isEntregue ? 'bg-white border-gray-200 opacity-60' : 'bg-white border-emerald-200'}`}>
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <p className="font-bold text-slate-800 text-sm leading-tight line-clamp-1" title={buyer.customer}>{buyer.customer}</p>
+                                                                <p className="text-[10px] text-gray-500 font-black mt-0.5 uppercase tracking-widest"><MapPin className="w-3 h-3 inline mr-1 -mt-0.5"/>{buyer.polo}</p>
+                                                            </div>
+                                                            <div className="font-black text-emerald-800 bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg text-xs shrink-0">
+                                                                {buyer.qty}x
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${buyer.isPago ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-500 border border-red-100'}`}>
+                                                                {buyer.isPago ? '💲 Pago' : '⏳ Não Pago'}
+                                                            </span>
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${buyer.isEntregue ? 'bg-gray-100 text-gray-500 border border-gray-200' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>
+                                                                {buyer.isEntregue ? '✅ Entregue' : '🛍️ No Balcão'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })
+                    )}
+                </div>
+            </div>
+        );
+      }
+
       if (adminTab === 'compras') {
         // 1. O SISTEMA LÊ AS DATAS AQUI (E consolida o passado no filtro):
         const datasExistentes = [...new Set(
@@ -2660,6 +2839,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
          </div>
        );
      }
+
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
           let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA;CUSTO_COMPRA;QTD_CAIXA\n";
@@ -3076,6 +3256,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           <div className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
             <button onClick={() => {setAdminTab('dashboard'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='dashboard'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Dashboard</button>
             <button onClick={() => {setAdminTab('vendas'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='vendas'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Vendas (Histórico)</button>
+            <button onClick={() => {setAdminTab('itens_vendidos'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='itens_vendidos'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Saídas por Produto</button>
             <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
             <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
             <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
