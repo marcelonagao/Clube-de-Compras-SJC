@@ -1848,6 +1848,51 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     );
   };
 
+  const renderPrintCartaz = () => {
+    // Puxa os produtos ativos e ordena por nome
+    const activeProducts = products.filter(p => !p.pausado).sort((a, b) => a.name.localeCompare(b.name));
+
+    return (
+      <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black min-h-screen flex flex-col">
+        <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6 shrink-0">
+          <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">🖨️ Imprimir Cartaz de Parede</button>
+          <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
+        </div>
+
+        {/* VISUAL DO CARTAZ DE PAREDE */}
+        <div className="border-[6px] border-emerald-800 p-8 rounded-3xl relative overflow-hidden flex-1 flex flex-col">
+            <div className="text-center mb-8 border-b-[6px] border-emerald-800 pb-8 shrink-0">
+                <h1 className="text-6xl font-black uppercase tracking-tight text-emerald-900 mb-2">Clube de Compras</h1>
+                <h2 className="text-4xl font-black text-orange-600 uppercase tracking-widest">Ciclo Aberto!</h2>
+                <p className="mt-4 text-2xl font-black text-white bg-slate-800 inline-block px-6 py-2 rounded-xl shadow-md">Pedidos até 31/07 às 14:00hs</p>
+            </div>
+
+            {/* LISTA DE PRODUTOS EM 2 COLUNAS */}
+            <div className="columns-2 gap-10 flex-1">
+                {activeProducts.map(p => {
+                    const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                    const price = isPromo ? p.promotionalPrice : p.price;
+                    return (
+                        <div key={p.id} className="mb-4 break-inside-avoid flex justify-between items-end border-b-2 border-dotted border-gray-400 pb-1">
+                            <span className="font-black text-xl text-slate-800 leading-tight pr-3 uppercase">{p.name}</span>
+                            <span className="font-black text-3xl text-emerald-800 shrink-0">R$ {price.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* RODAPÉ DO CARTAZ */}
+            <div className="mt-8 bg-emerald-800 text-white text-center p-6 rounded-2xl shrink-0 shadow-lg border-4 border-emerald-900">
+                <p className="text-2xl font-black uppercase mb-1 text-orange-300">🌟 Novidades deste Ciclo 🌟</p>
+                <p className="text-xl font-bold">Salsicha, Linguiça com Ervas, Café, Pipoca e Fubá!</p>
+                <div className="w-16 h-1 bg-emerald-600 mx-auto my-3"></div>
+                <p className="text-lg font-bold">Acesse o aplicativo ou fale com a equipe do Johrei Center.</p>
+            </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderPrintCatalog = () => {
     // Puxa apenas os produtos ativos
     const activeProducts = products.filter(p => !p.pausado && (p.stock || 0) > 0).sort((a, b) => a.name.localeCompare(b.name));
@@ -2902,6 +2947,11 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                    <button onClick={() => setPrintLayout('catalogo')} className="bg-white text-slate-700 border border-gray-200 px-4 py-2.5 rounded-lg font-black hover:bg-gray-50 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
                      <Printer className="w-4 h-4 mr-2"/> Catálogo de Mesa
                    </button>
+                    {/* 👇 NOVO BOTÃO DO CARTAZ 👇 */}
+                   <button onClick={() => setPrintLayout('cartaz')} className="bg-white text-slate-700 border border-gray-200 px-4 py-2.5 rounded-lg font-black hover:bg-gray-50 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
+                     <Printer className="w-4 h-4 mr-2"/> Cartaz de Parede (A4)
+                   </button>
+                   {/* 👆 FIM DO NOVO BOTÃO 👆 */}
                    <button onClick={() => setPrintLayout('plaquinhas')} className="bg-white text-slate-700 border border-gray-200 px-4 py-2.5 rounded-lg font-black hover:bg-gray-50 shadow-sm inline-flex items-center text-xs transition-colors w-full sm:w-auto justify-center">
                      <Printer className="w-4 h-4 mr-2"/> Gerar Plaquinhas
                    </button>
@@ -3460,6 +3510,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
       {printLayout === 'catalogo' ? renderPrintCatalog() :
        printLayout === 'plaquinhas' ? renderPrintTags() :
+       printLayout === 'cartaz' ? renderPrintCartaz() : // 👈 NOVA LINHA AQUI
        isPrintMode ? renderDispatchPDF() : (
         <>
           {currentScreen !== 'login' && currentScreen !== 'dashboard_admin' && (
