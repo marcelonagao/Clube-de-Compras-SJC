@@ -88,6 +88,8 @@ export default function App() {
   const [isPrintMode, setIsPrintMode] = useState(false); 
   const [printLayout, setPrintLayout] = useState(null); // 'catalogo' | 'plaquinhas'
   const [storeMode, setStoreMode] = useState('mensal'); // Fases da loja: 'mensal', 'estoque', 'pausado'
+  // Memória da Logística de Transferências
+  const [caixasDirecionadas, setCaixasDirecionadas] = useState({});
 
   const [checkoutCpf, setCheckoutCpf] = useState(''); 
   const [paymentMethod, setPaymentMethod] = useState('pix');
@@ -574,13 +576,13 @@ export default function App() {
                new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000) &&
                (mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter);
     });
-    
+
     const plan = [];
     products.forEach(p => {
         const minBox = p.minBox || 1;
         const localStockSede = p.stock || 0;
         
-        // 1. Calcula a Demanda por Polo
+        // 1. Calcula a Demanda Individual por Polo
         const demandByPolo = {};
         polos.forEach(polo => demandByPolo[polo] = 0);
         validOrders.forEach(o => {
@@ -592,30 +594,59 @@ export default function App() {
         let totalSatellites = 0;
         const crossDockingDetails = [];
 
-        // 2. Inteligência de Cross-docking (Vila Adyana e Taubaté)
-        polosEntregaDireta.forEach(poloDireto => {
-            const soldInPolo = demandByPolo[poloDireto];
-            if (soldInPolo > 0) {
-                const caixasInteiras = Math.floor(soldInPolo / minBox);
-                const fracionado = soldInPolo % minBox;
-                if (caixasInteiras > 0) crossDockingDetails.push({ polo: poloDireto, boxes: caixasInteiras });
-                totalSedeFracionado += fracionado; 
-            }
-        });
+// 2. MÁGICA DE AGRUPAMENTO LOGÍSTICO (Com Arredondamento Inteligente)
+const rotasDiretas = [
+  { nomeDisplay: 'Taubaté + Pinda', polosFisicos: ['Taubaté', 'Pindamonhangaba'], nomePlanilha: 'TAUBATÉ' },
+  { nomeDisplay: 'Vila Adyana', polosFisicos: ['Vila Adyana'], nomePlanilha: 'VILA ADYANA' }
+];
 
-        // 3. Demanda dos polos "Satélites" (que dependem da Sede montar a sacola)
-        polos.filter(polo => !polosEntregaDireta.includes(polo)).forEach(poloSat => {
-            totalSatellites += demandByPolo[poloSat];
+const polosJaProcessados = [];
+
+rotasDiretas.forEach(rota => {
+  // Soma a demanda de todos os polos físicos que compõem essa rota
+  const demandaAgrupada = rota.polosFisicos.reduce((sum, polo) => sum + demandByPolo[polo], 0);
+  
+  if (demandaAgrupada > 0) {
+      // 👇 A MÁGICA DO ARREDONDAMENTO 👇
+      // Se a caixa é 12 e pediram 10, (10/12 = 0.83). O Math.round transforma em 1 Caixa inteira!
+      // Se pediram só 3, (3/12 = 0.25). O Math.round transforma em 0 Caixas (e os 3 vão na sacola da Sede).
+      const caixasInteiras = Math.round(demandaAgrupada / minBox);
+      
+      // O fracionado pode ficar negativo! 
+      // Ex: Pediram 10, mandei 1 caixa (12). Fracionado = 10 - 12 = -2. 
+      // Isso significa que Taubaté vai "devolver" 2 para a Sede, diminuindo a necessidade da Sede comprar mais!
+      const fracionado = demandaAgrupada - (caixasInteiras * minBox); 
+      
+      if (caixasInteiras > 0) {
+          crossDockingDetails.push({ 
+              polo: rota.nomeDisplay, 
+              planilha: rota.nomePlanilha, 
+              boxes: caixasInteiras 
+          });
+      }
+      
+      // Soma (ou subtrai) da Sede a sobra ou a falta do envio direto
+      totalSedeFracionado += fracionado; 
+  }
+  
+  polosJaProcessados.push(...rota.polosFisicos);
+});
+
+        // 3. Demanda dos polos "Satélites" (Sede, Caçapava, Litoral, etc)
+        polos.forEach(polo => {
+            if (!polosJaProcessados.includes(polo)) {
+                totalSatellites += demandByPolo[polo];
+            }
         });
 
         const totalSedeNeed = totalSatellites + totalSedeFracionado;
         const totalDemandGeral = totalSedeNeed + crossDockingDetails.reduce((acc, c) => acc + c.boxes * minBox, 0);
-        
+
         // 4. Se tiver demanda ou se for pra repor estoque local, entra na Mesa de Compras!
         if (totalDemandGeral > 0 || localStockSede > 0) {
             let needToBuySede = Math.max(0, totalSedeNeed - localStockSede);
             let suggestedBoxesSede = needToBuySede > 0 ? Math.ceil(needToBuySede / minBox) : 0;
-            
+
             plan.push({
                 id: p.id, sku: p.sku || '-', name: p.name, minBox, stock: localStockSede,
                 demandSede: totalSedeNeed, demandCross: crossDockingDetails, boxesToBuy: suggestedBoxesSede
@@ -629,16 +660,16 @@ export default function App() {
   const confirmAndExportPurchasePlan = async () => {
     if (!purchasePlan) return;
     const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "ESTOQUE FINAL PREVISTO"]];
-    
+
     for (const item of purchasePlan) {
-        // As caixas inteiras vão direto para Vila Adyana / Taubaté
+        // As caixas inteiras vão direto para as Rotas agrupadas (Pinda cai em Taubaté)
         item.demandCross.forEach(cd => {
-            rows.push([cd.polo.toUpperCase(), item.sku, item.name, cd.boxes, '-', '-']);
+            rows.push([cd.planilha, item.sku, item.name, cd.boxes, '-', '-']);
         });
 
         // Calcula a Nova Sobra após as edições manuais
         const newStock = (item.stock + (item.boxesToBuy * item.minBox)) - item.demandSede;
-        
+
         // Manda comprar as caixas para a HUB
         if (item.boxesToBuy > 0 || item.demandSede > 0) {
             rows.push(["SEDE SJC (HUB)", item.sku, item.name, item.boxesToBuy, item.demandSede, newStock]);
@@ -646,7 +677,8 @@ export default function App() {
         
         // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
         if (item.stock !== newStock) {
-           try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 }); } catch (e) {}
+           try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 });
+           } catch (e) {}
         }
     }
     
@@ -2935,6 +2967,160 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
        );
      }
 
+     if (adminTab === 'logistica') {
+      // 1. Filtra os pedidos válidos do ciclo atual
+      const currentCycleOrders = validOrders.filter(o => {
+          const ciclo = o.cicloFinanceiro || 'Julho/2026';
+          return ciclo === sysConfig.mesReferencia;
+      });
+
+      // 2. Agrupa a demanda real (itens) por Polo
+      const demandaPorProduto = {};
+      
+      currentCycleOrders.forEach(order => {
+          (order.items || []).forEach(item => {
+              if (!demandaPorProduto[item.id]) {
+                  demandaPorProduto[item.id] = {
+                      id: item.id,
+                      name: item.name,
+                      // Unificando Taubaté e Pinda como um polo só para a logística
+                      reqTaubate: 0, 
+                      reqAdyana: 0,
+                  };
+              }
+              const qty = item.qtd || item.qty || 1;
+              
+              if (order.polo === 'Taubaté' || order.polo === 'Pindamonhangaba') {
+                  demandaPorProduto[item.id].reqTaubate += qty;
+              } else if (order.polo === 'Vila Adyana') {
+                  demandaPorProduto[item.id].reqAdyana += qty;
+              }
+          });
+      });
+
+      // 3. Monta a lista cruzando com o tamanho da caixa do produto
+      const listaLogistica = Object.values(demandaPorProduto).map(demanda => {
+          const prodCatalogo = products.find(p => p.id === demanda.id);
+          // Se o produto não tiver "itensPorCaixa" cadastrado, assume 1 para não quebrar a conta
+          const tamanhoCaixa = prodCatalogo?.itensPorCaixa || 1; 
+          
+          // Pega o que o gestor digitou que enviou de caixas físicas
+          const caixasEnviadas = caixasDirecionadas[demanda.id] || { taubate: 0, adyana: 0 };
+          
+          // Calcula o recebimento físico (Caixas enviadas * Tamanho da Caixa)
+          const recebidoFisicoTaubate = caixasEnviadas.taubate * tamanhoCaixa;
+          const recebidoFisicoAdyana = caixasEnviadas.adyana * tamanhoCaixa;
+
+          // SALDO: Se for positivo (>0), sobrou e tem que devolver pra Sede. Se negativo (<0), faltou e tem que retirar na Sede.
+          const saldoTaubate = recebidoFisicoTaubate - demanda.reqTaubate;
+          const saldoAdyana = recebidoFisicoAdyana - demanda.reqAdyana;
+
+          return {
+              ...demanda,
+              tamanhoCaixa,
+              caixasEnviadas,
+              saldoTaubate,
+              saldoAdyana
+          };
+      }).filter(item => item.reqTaubate > 0 || item.reqAdyana > 0); // Mostra só o que Taubaté ou V. Adyana pediram
+
+      const handleAtualizarCaixa = (prodId, polo, valor) => {
+          const num = parseInt(valor) || 0;
+          setCaixasDirecionadas(prev => ({
+              ...prev,
+              [prodId]: {
+                  ...(prev[prodId] || { taubate: 0, adyana: 0 }),
+                  [polo]: num
+              }
+          }));
+      };
+
+      return (
+          <div className="space-y-6 text-left max-w-6xl mx-auto">
+              <div className="mb-6">
+                  <h2 className="text-2xl font-black text-slate-800">Mapa de Transferências (Cross-Docking)</h2>
+                  <p className="text-sm font-medium text-gray-500 mt-1">Informe quantas caixas fechadas foram direto para o polo. O sistema calculará o que deve ser devolvido ou retirado na Sede (SJC).</p>
+              </div>
+
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-left">
+                          <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200">
+                              <tr>
+                                  <th className="px-4 py-4">Produto</th>
+                                  <th className="px-4 py-4 text-center border-l border-gray-200 bg-blue-50/50">Taubaté + Pinda</th>
+                                  <th className="px-4 py-4 text-center border-l border-gray-200 bg-orange-50/50">Vila Adyana</th>
+                              </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                              {listaLogistica.length === 0 ? (
+                                  <tr><td colSpan="3" className="text-center py-8 text-gray-400 font-medium">Nenhum pedido para estes polos neste ciclo.</td></tr>
+                              ) : (
+                                  listaLogistica.map((item, idx) => (
+                                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                          <td className="px-4 py-3">
+                                              <p className="font-bold text-slate-800">{item.name}</p>
+                                              <p className="text-[10px] text-gray-500 font-black uppercase mt-0.5">Caixa com: {item.tamanhoCaixa} un</p>
+                                          </td>
+                                          
+                                          {/* COLUNA TAUBATÉ */}
+                                          <td className="px-4 py-3 border-l border-gray-100 bg-blue-50/10">
+                                              <div className="flex flex-col items-center gap-2">
+                                                  <div className="text-xs font-medium text-gray-600">
+                                                      Pedidos: <span className="font-black text-slate-800">{item.reqTaubate} un</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-2">
+                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas Enviadas:</span>
+                                                      <input 
+                                                          type="number" 
+                                                          min="0"
+                                                          value={item.caixasEnviadas.taubate || ''} 
+                                                          onChange={e => handleAtualizarCaixa(item.id, 'taubate', e.target.value)}
+                                                          className="w-16 p-1 text-center border border-gray-300 rounded font-bold outline-none focus:border-blue-500"
+                                                      />
+                                                  </div>
+                                                  {item.caixasEnviadas.taubate > 0 && (
+                                                      <div className={`mt-1 px-3 py-1 rounded text-[11px] font-black uppercase tracking-wider ${item.saldoTaubate > 0 ? 'bg-orange-100 text-orange-700 border border-orange-200' : item.saldoTaubate < 0 ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                                                          {item.saldoTaubate > 0 ? `📦 Devolve ${item.saldoTaubate} para Sede` : item.saldoTaubate < 0 ? `🛒 Retira ${Math.abs(item.saldoTaubate)} na Sede` : '✅ Bateu exato'}
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </td>
+
+                                          {/* COLUNA VILA ADYANA */}
+                                          <td className="px-4 py-3 border-l border-gray-100 bg-orange-50/10">
+                                              <div className="flex flex-col items-center gap-2">
+                                                  <div className="text-xs font-medium text-gray-600">
+                                                      Pedidos: <span className="font-black text-slate-800">{item.reqAdyana} un</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-2">
+                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas Enviadas:</span>
+                                                      <input 
+                                                          type="number" 
+                                                          min="0"
+                                                          value={item.caixasEnviadas.adyana || ''} 
+                                                          onChange={e => handleAtualizarCaixa(item.id, 'adyana', e.target.value)}
+                                                          className="w-16 p-1 text-center border border-gray-300 rounded font-bold outline-none focus:border-orange-500"
+                                                      />
+                                                  </div>
+                                                  {item.caixasEnviadas.adyana > 0 && (
+                                                      <div className={`mt-1 px-3 py-1 rounded text-[11px] font-black uppercase tracking-wider ${item.saldoAdyana > 0 ? 'bg-orange-100 text-orange-700 border border-orange-200' : item.saldoAdyana < 0 ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                                                          {item.saldoAdyana > 0 ? `📦 Devolve ${item.saldoAdyana} para Sede` : item.saldoAdyana < 0 ? `🛒 Retira ${Math.abs(item.saldoAdyana)} na Sede` : '✅ Bateu exato'}
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          </td>
+                                      </tr>
+                                  ))
+                              )}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      );
+    }
+
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
           let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA;CUSTO_COMPRA;QTD_CAIXA\n";
@@ -3437,6 +3623,9 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             <button onClick={() => {setAdminTab('vendas'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='vendas'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Vendas (Histórico)</button>
             <button onClick={() => {setAdminTab('itens_vendidos'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='itens_vendidos'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Saídas por Produto</button>
             <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
+            <button onClick={() => {setAdminTab('logistica'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='logistica'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
+                <Truck className="w-4 h-4"/> Logística de Transferência
+            </button>
             <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
             <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
             <button onClick={() => {setAdminTab('config'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='config'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>⚙️ Configurações Globais</button>
