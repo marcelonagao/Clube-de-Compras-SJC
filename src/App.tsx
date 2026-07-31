@@ -607,28 +607,29 @@ export default function App() {
             }
         });
 
-        // 3. 🚨 MÁGICA DE PRIORIDADE: Consumir Estoque Local Antes de Comprar!
+        // 3. MÁGICA DE PRIORIDADE: Consumir Estoque Local Antes de Comprar!
         const totalDemandGeral = demandaRotas.reduce((sum, r) => sum + r.demandaAgrupada, 0) + totalSatellites;
         
         let boxesToBuyTotal = 0;
-        const totalFaltante = totalDemandGeral - localStockSede; // Descobre se o estoque aguenta a pancada toda
+        const totalFaltante = totalDemandGeral - localStockSede; 
         
         if (totalFaltante > 0) {
-            boxesToBuyTotal = Math.ceil(totalFaltante / minBox); // Só compra o que realmente faltar globalmente
+            boxesToBuyTotal = Math.ceil(totalFaltante / minBox); 
         }
 
         let caixasDisponiveisParaDistribuir = boxesToBuyTotal;
         let totalSedeNeed = 0;
         const crossDockingDetails = [];
 
-        // 4. Distribuição das caixas compradas (Manda quem tem maior demanda primeiro)
+        // 4. Distribuição das caixas (AGORA COM CORTE EXATO)
         demandaRotas.sort((a, b) => b.demandaAgrupada - a.demandaAgrupada).forEach(rota => {
             if (rota.demandaAgrupada > 0) {
-                // Calcula quantas caixas a rota merece (O Arredondamento que deixa eles devolverem as sobrinhas)
-                const caixasIdeais = Math.round(rota.demandaAgrupada / minBox);
+                // 👇 A NOVA REGRA AQUI 👇
+                // Math.floor pega apenas a quantidade inteira de caixas que cabem no pedido.
+                // Ex: Pediram 25, caixa é 10. (25/10) = 2.5. O Math.floor transforma em 2 caixas exatas.
+                const caixasIdeais = Math.floor(rota.demandaAgrupada / minBox);
                 
-                // O SEGREDO ESTÁ AQUI: Só envia a caixa se tivermos precisado COMPRAR. 
-                // Se o estoque da Sede cobriu a demanda, `caixasDisponiveisParaDistribuir` será 0, forçando a Sede a enviar solto.
+                // Só envia se a Sede precisou comprar caixas
                 const caixasEnviadas = Math.min(caixasIdeais, caixasDisponiveisParaDistribuir);
 
                 if (caixasEnviadas > 0) {
@@ -637,11 +638,11 @@ export default function App() {
                         planilha: rota.nomePlanilha, 
                         boxes: caixasEnviadas 
                     });
-                    caixasDisponiveisParaDistribuir -= caixasEnviadas; // Desconta do montante comprado
+                    caixasDisponiveisParaDistribuir -= caixasEnviadas; 
                 }
                 
-                // Tudo que não foi na caixa direta para a Rota (por falta de caixa comprada, ou por devolução)
-                // vai para a conta da Sede separar na mão!
+                // Os itens que "faltaram" para completar o pedido do polo caem automaticamente 
+                // para a Sede separar na sacola, junto com a demanda dos outros polos!
                 const cobertoPorCaixas = caixasEnviadas * minBox;
                 totalSedeNeed += (rota.demandaAgrupada - cobertoPorCaixas);
             }
