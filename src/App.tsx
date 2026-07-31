@@ -568,10 +568,7 @@ export default function App() {
 
   const generatePurchasePlan = () => {
     const validOrders = orders.filter(o => {
-        // A MÁGICA DA SEGURANÇA: Se o pedido é antigo e não tem a etiqueta, 
-        // o sistema carimba ele provisoriamente como 'Ciclo Mensal' na hora de ler!
         const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
-        
         return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
                new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000) &&
                (mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter);
@@ -590,66 +587,75 @@ export default function App() {
             if (item) demandByPolo[o.polo] += (item.qtd || item.qty || 0);
         });
 
-        let totalSedeFracionado = 0;
+        // 2. Agrupamento de Rotas Diretas
+        const rotasDiretas = [
+            { nomeDisplay: 'Taubaté + Pinda', polosFisicos: ['Taubaté', 'Pindamonhangaba'], nomePlanilha: 'TAUBATÉ' },
+            { nomeDisplay: 'Vila Adyana', polosFisicos: ['Vila Adyana'], nomePlanilha: 'VILA ADYANA' }
+        ];
+
+        const demandaRotas = rotasDiretas.map(rota => ({
+            ...rota,
+            demandaAgrupada: rota.polosFisicos.reduce((sum, polo) => sum + demandByPolo[polo], 0)
+        }));
+
+        const polosRotasFisicos = rotasDiretas.flatMap(r => r.polosFisicos);
+        
         let totalSatellites = 0;
-        const crossDockingDetails = [];
-
-// 2. MÁGICA DE AGRUPAMENTO LOGÍSTICO (Com Arredondamento Inteligente)
-const rotasDiretas = [
-  { nomeDisplay: 'Taubaté + Pinda', polosFisicos: ['Taubaté', 'Pindamonhangaba'], nomePlanilha: 'TAUBATÉ' },
-  { nomeDisplay: 'Vila Adyana', polosFisicos: ['Vila Adyana'], nomePlanilha: 'VILA ADYANA' }
-];
-
-const polosJaProcessados = [];
-
-rotasDiretas.forEach(rota => {
-  // Soma a demanda de todos os polos físicos que compõem essa rota
-  const demandaAgrupada = rota.polosFisicos.reduce((sum, polo) => sum + demandByPolo[polo], 0);
-  
-  if (demandaAgrupada > 0) {
-      // 👇 A MÁGICA DO ARREDONDAMENTO 👇
-      // Se a caixa é 12 e pediram 10, (10/12 = 0.83). O Math.round transforma em 1 Caixa inteira!
-      // Se pediram só 3, (3/12 = 0.25). O Math.round transforma em 0 Caixas (e os 3 vão na sacola da Sede).
-      const caixasInteiras = Math.round(demandaAgrupada / minBox);
-      
-      // O fracionado pode ficar negativo! 
-      // Ex: Pediram 10, mandei 1 caixa (12). Fracionado = 10 - 12 = -2. 
-      // Isso significa que Taubaté vai "devolver" 2 para a Sede, diminuindo a necessidade da Sede comprar mais!
-      const fracionado = demandaAgrupada - (caixasInteiras * minBox); 
-      
-      if (caixasInteiras > 0) {
-          crossDockingDetails.push({ 
-              polo: rota.nomeDisplay, 
-              planilha: rota.nomePlanilha, 
-              boxes: caixasInteiras 
-          });
-      }
-      
-      // Soma (ou subtrai) da Sede a sobra ou a falta do envio direto
-      totalSedeFracionado += fracionado; 
-  }
-  
-  polosJaProcessados.push(...rota.polosFisicos);
-});
-
-        // 3. Demanda dos polos "Satélites" (Sede, Caçapava, Litoral, etc)
         polos.forEach(polo => {
-            if (!polosJaProcessados.includes(polo)) {
+            if (!polosRotasFisicos.includes(polo)) {
                 totalSatellites += demandByPolo[polo];
             }
         });
 
-        const totalSedeNeed = totalSatellites + totalSedeFracionado;
-        const totalDemandGeral = totalSedeNeed + crossDockingDetails.reduce((acc, c) => acc + c.boxes * minBox, 0);
+        // 3. 🚨 MÁGICA DE PRIORIDADE: Consumir Estoque Local Antes de Comprar!
+        const totalDemandGeral = demandaRotas.reduce((sum, r) => sum + r.demandaAgrupada, 0) + totalSatellites;
+        
+        let boxesToBuyTotal = 0;
+        const totalFaltante = totalDemandGeral - localStockSede; // Descobre se o estoque aguenta a pancada toda
+        
+        if (totalFaltante > 0) {
+            boxesToBuyTotal = Math.ceil(totalFaltante / minBox); // Só compra o que realmente faltar globalmente
+        }
 
-        // 4. Se tiver demanda ou se for pra repor estoque local, entra na Mesa de Compras!
+        let caixasDisponiveisParaDistribuir = boxesToBuyTotal;
+        let totalSedeNeed = 0;
+        const crossDockingDetails = [];
+
+        // 4. Distribuição das caixas compradas (Manda quem tem maior demanda primeiro)
+        demandaRotas.sort((a, b) => b.demandaAgrupada - a.demandaAgrupada).forEach(rota => {
+            if (rota.demandaAgrupada > 0) {
+                // Calcula quantas caixas a rota merece (O Arredondamento que deixa eles devolverem as sobrinhas)
+                const caixasIdeais = Math.round(rota.demandaAgrupada / minBox);
+                
+                // O SEGREDO ESTÁ AQUI: Só envia a caixa se tivermos precisado COMPRAR. 
+                // Se o estoque da Sede cobriu a demanda, `caixasDisponiveisParaDistribuir` será 0, forçando a Sede a enviar solto.
+                const caixasEnviadas = Math.min(caixasIdeais, caixasDisponiveisParaDistribuir);
+
+                if (caixasEnviadas > 0) {
+                    crossDockingDetails.push({ 
+                        polo: rota.nomeDisplay, 
+                        planilha: rota.nomePlanilha, 
+                        boxes: caixasEnviadas 
+                    });
+                    caixasDisponiveisParaDistribuir -= caixasEnviadas; // Desconta do montante comprado
+                }
+                
+                // Tudo que não foi na caixa direta para a Rota (por falta de caixa comprada, ou por devolução)
+                // vai para a conta da Sede separar na mão!
+                const cobertoPorCaixas = caixasEnviadas * minBox;
+                totalSedeNeed += (rota.demandaAgrupada - cobertoPorCaixas);
+            }
+        });
+
+        totalSedeNeed += totalSatellites;
+
+        // O que sobrou das caixas compradas que não foram enviadas diretas fica com a Sede
+        const boxesToBuySede = caixasDisponiveisParaDistribuir;
+
         if (totalDemandGeral > 0 || localStockSede > 0) {
-            let needToBuySede = Math.max(0, totalSedeNeed - localStockSede);
-            let suggestedBoxesSede = needToBuySede > 0 ? Math.ceil(needToBuySede / minBox) : 0;
-
             plan.push({
                 id: p.id, sku: p.sku || '-', name: p.name, minBox, stock: localStockSede,
-                demandSede: totalSedeNeed, demandCross: crossDockingDetails, boxesToBuy: suggestedBoxesSede
+                demandSede: totalSedeNeed, demandCross: crossDockingDetails, boxesToBuy: boxesToBuySede
             });
         }
     });
