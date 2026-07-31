@@ -3403,6 +3403,86 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       }
 
       if (adminTab === 'config') {
+        
+        // 🛠️ FUNÇÃO DE MIGRAÇÃO: FÍGADO ANTIGO (1kg) ➔ Figado Bp Bd 600 (SKU 1414) COM DOBRA DE QTD
+        const handleMigrarFigadoAgosto = async () => {
+          const produtoNovo = products.find(p => String(p.sku) === '1414');
+
+          if (!produtoNovo) {
+              return showToast('Produto SKU 1414 não encontrado no catálogo! Verifique o cadastro.', 'error');
+          }
+
+          const isPromo = produtoNovo.promotionalPrice > 0 && produtoNovo.promotionalPrice < produtoNovo.price;
+          const novoPrecoUnitario = isPromo ? produtoNovo.promotionalPrice : produtoNovo.price;
+
+          showConfirm(
+              'Atualizar Pedidos de Fígado',
+              `Isto trocará o Fígado antigo pelo "${produtoNovo.name}" (SKU 1414) a R$ ${novoPrecoUnitario.toFixed(2).replace('.', ',')} e DOBRARÁ a quantidade pedida (ex: quem pediu 1kg leva 2x 600g). Afeta apenas o ciclo ${sysConfig.mesReferencia}. Continuar?`,
+              async () => {
+                  try {
+                      // O filtro perfeito que você mencionou: Blinda os outros meses!
+                      const pedidosDoCiclo = orders.filter(o => {
+                          const ciclo = o.cicloFinanceiro || 'Julho/2026';
+                          return ciclo === sysConfig.mesReferencia;
+                      });
+
+                      let pedidosAtualizados = 0;
+
+                      for (const pedido of pedidosDoCiclo) {
+                          let teveAlteracao = false;
+                          let novoTotalItens = 0;
+
+                          const novosItens = (pedido.items || []).map(item => {
+                              const nomeItemLower = (item.name || '').toLowerCase();
+                              const ehFigadoAntigo = nomeItemLower.includes('fígado') || nomeItemLower.includes('figado');
+
+                              if (ehFigadoAntigo && String(item.id) !== String(produtoNovo.id)) {
+                                  teveAlteracao = true;
+                                  
+                                  // 👇 A MÁGICA DA QUANTIDADE DOBRADA 👇
+                                  const quantidadeOriginal = item.qtd || item.qty || 1;
+                                  const novaQuantidade = quantidadeOriginal * 2; 
+                                  
+                                  novoTotalItens += (novoPrecoUnitario * novaQuantidade);
+
+                                  return {
+                                      ...item,
+                                      id: produtoNovo.id,         
+                                      name: produtoNovo.name,     
+                                      price: novoPrecoUnitario,   
+                                      qtd: novaQuantidade,     // Salva a nova quantidade (x2)
+                                      qty: novaQuantidade      // Salva a nova quantidade (x2)
+                                  };
+                              } else {
+                                  const quantidade = item.qtd || item.qty || 1;
+                                  novoTotalItens += ((item.price || 0) * quantidade);
+                                  return item;
+                              }
+                          });
+
+                          if (teveAlteracao) {
+                              const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
+                              const totalFinal = Math.max(0, novoTotalItens - totalFaltas);
+
+                              await updateDoc(doc(db, "orders", pedido.id), {
+                                  items: novosItens,
+                                  total: totalFinal
+                              });
+                              pedidosAtualizados++;
+                          }
+                      }
+
+                      showToast(`Sucesso! ${pedidosAtualizados} pedido(s) atualizados com o dobro de quantidade.`, 'success');
+                  } catch (err) {
+                      console.error("Erro na atualização em lote:", err);
+                      showToast('Erro ao atualizar pedidos no banco de dados.', 'error');
+                  }
+              },
+              'warning'
+          );
+      };
+
+
         // 👇 NOVA FUNÇÃO: O BOTÃO MÁGICO DE CORREÇÃO 👇
         const handleCorrigirPrecosAntigos = async () => {
           if (!window.confirm('Isto fará uma varredura nos pedidos deste ciclo e atualizará os valores com os preços promocionais atuais do catálogo. Deseja continuar?')) return;
@@ -3495,19 +3575,26 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                
                <form onSubmit={handleSaveSettings} className="space-y-6">
 
-                {/* 🔧 BLOCO DE MANUTENÇÃO (BOTÃO MÁGICO) */}
-               <div className="bg-orange-50 p-6 rounded-3xl shadow-sm border border-orange-200 mb-6">
-                   <div className="flex items-center gap-3 mb-3">
-                       <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5"/></div>
-                       <div>
-                           <h3 className="font-black text-orange-900 text-lg">Manutenção do Banco de Dados</h3>
-                           <p className="text-xs text-orange-700 font-medium">Use apenas se houver divergência de preços em pedidos antigos.</p>
+                {/* 🔧 BLOCO DE MANUTENÇÃO */}
+                <div className="bg-orange-50 p-6 rounded-3xl shadow-sm border border-orange-200 mb-6">
+                       <div className="flex items-center gap-3 mb-3">
+                           <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5"/></div>
+                           <div>
+                               <h3 className="font-black text-orange-900 text-lg">Manutenção do Banco de Dados</h3>
+                               <p className="text-xs text-orange-700 font-medium">Ações de atualização e correção em lote.</p>
+                           </div>
+                       </div>
+                       <div className="flex flex-col gap-3">
+                           <button type="button" onClick={handleCorrigirPrecosAntigos} className="w-full bg-white text-orange-600 border-2 border-orange-300 font-black py-3 rounded-xl hover:bg-orange-100 transition-colors text-sm shadow-sm">
+                               🔄 Recalcular Preços de Pedidos Manuais Antigos
+                           </button>
+                           
+                           {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DO FÍGADO 👇 */}
+                           <button type="button" onClick={handleMigrarFigadoAgosto} className="w-full bg-orange-600 text-white font-black py-3 rounded-xl hover:bg-orange-700 transition-colors text-sm shadow-sm">
+                               🥩 Converter Fígado 1kg ➔ Fígado 600g nos Pedidos de Agosto
+                           </button>
                        </div>
                    </div>
-                   <button type="button" onClick={handleCorrigirPrecosAntigos} className="w-full bg-white text-orange-600 border-2 border-orange-300 font-black py-3 rounded-xl hover:bg-orange-100 transition-colors text-sm shadow-sm">
-                       🔄 Recalcular Preços de Pedidos Manuais Antigos
-                   </button>
-               </div>
                    
                    {/* BLOCO 1: PARAMETRIZAÇÃO DO CICLO */}
                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200">
