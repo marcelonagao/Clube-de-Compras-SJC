@@ -1284,11 +1284,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       const prod = products.find(p => String(p.id) === String(manualItemProduct));
       if (!prod) return;
       
+      // 👇 MÁGICA DO PREÇO PROMOCIONAL AQUI 👇
+      const isPromo = prod.promotionalPrice > 0 && prod.promotionalPrice < prod.price;
+      const activePrice = isPromo ? prod.promotionalPrice : prod.price;
+
       const existing = manualCart.find(i => i.id === prod.id);
       if (existing) {
         setManualCart(manualCart.map(i => i.id === prod.id ? { ...i, qty: i.qty + manualItemQty } : i));
       } else {
-        setManualCart([...manualCart, { id: prod.id, name: prod.name, price: prod.price, qty: manualItemQty }]);
+        // Agora ele salva o activePrice (com ou sem desconto) no carrinho!
+        setManualCart([...manualCart, { id: prod.id, name: prod.name, price: activePrice, qty: manualItemQty }]);
       }
       setManualItemProduct('');
       setManualItemQty(1);
@@ -1522,11 +1527,17 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                               return !p.pausado;
                           })
                           .sort((a, b) => a.name.localeCompare(b.name))
-                          .map(p => (
-                              <option key={p.id} value={p.id}>
-                                  {p.name} - R$ {(p.price || 0).toFixed(2)} {(storeMode === 'estoque' || storeMode === 'pronta_entrega') ? `(Restam: ${p.stock})` : ''}
-                              </option>
-                      ))}
+                          .map(p => {
+                            // Calcula o preço correto para exibir na lista
+                            const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                            const priceToShow = isPromo ? p.promotionalPrice : p.price;
+
+                            return (
+                                <option key={p.id} value={p.id}>
+                                    {p.name} - R$ {(priceToShow || 0).toFixed(2)} {isPromo ? '🔥(PROMO)' : ''} {(storeMode === 'estoque' || storeMode === 'pronta_entrega') ? `(Restam: ${p.stock})` : ''}
+                                </option>
+                            );
+                        })}
                     </select>
                     <div className="flex gap-2 justify-end">
                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
