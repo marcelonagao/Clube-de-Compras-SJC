@@ -3210,6 +3210,66 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       }
 
       if (adminTab === 'config') {
+        // 👇 NOVA FUNÇÃO: O BOTÃO MÁGICO DE CORREÇÃO 👇
+        const handleCorrigirPrecosAntigos = async () => {
+          if (!window.confirm('Isto fará uma varredura nos pedidos deste ciclo e atualizará os valores com os preços promocionais atuais do catálogo. Deseja continuar?')) return;
+          
+          try {
+              // Pega todos os pedidos que pertencem ao ciclo atual
+              const pedidosDesteCiclo = orders.filter(o => {
+                  const ciclo = o.cicloFinanceiro || 'Julho/2026';
+                  return ciclo === sysConfig.mesReferencia;
+              });
+
+              let pedidosCorrigidos = 0;
+
+              for (const pedido of pedidosDesteCiclo) {
+                  let precisaAtualizar = false;
+                  let novoTotalItens = 0;
+                  const novosItens = [];
+
+                  // Analisa item por item do pedido
+                  for (const item of (pedido.items || [])) {
+                      const prodCatalogo = products.find(p => String(p.id) === String(item.id));
+                      let precoCorreto = item.price; // Começa com o preço que já estava
+
+                      if (prodCatalogo) {
+                          // Verifica se o produto tem promoção ativa hoje
+                          const isPromo = prodCatalogo.promotionalPrice > 0 && prodCatalogo.promotionalPrice < prodCatalogo.price;
+                          precoCorreto = isPromo ? prodCatalogo.promotionalPrice : prodCatalogo.price;
+                      }
+
+                      // Se o preço do catálogo estiver diferente do salvo no pedido, marca para atualizar
+                      if (precoCorreto !== item.price) {
+                          precisaAtualizar = true;
+                      }
+
+                      novosItens.push({ ...item, price: precoCorreto });
+                      const quantidade = item.qtd || item.qty || 1;
+                      novoTotalItens += (precoCorreto * quantidade);
+                  }
+
+                  // Se encontrou alguma diferença de preço, atualiza o banco de dados
+                  if (precisaAtualizar) {
+                      // Deduz as faltas (se houver) do novo total
+                      const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
+                      const totalFinalizado = Math.max(0, novoTotalItens - totalFaltas);
+
+                      await updateDoc(doc(db, "orders", pedido.id), {
+                          items: novosItens,
+                          total: totalFinalizado
+                      });
+                      pedidosCorrigidos++;
+                  }
+              }
+
+              showToast(`Varredura concluída! ${pedidosCorrigidos} pedidos foram corrigidos.`, 'success');
+          } catch (err) {
+              console.error(err);
+              showToast('Erro ao corrigir pedidos.', 'error');
+          }
+      };
+      // 👆 FIM DA NOVA FUNÇÃO 👆
         const handleSaveSettings = async (e) => {
             e.preventDefault();
             try {
@@ -3241,6 +3301,20 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                </div>
                
                <form onSubmit={handleSaveSettings} className="space-y-6">
+
+                {/* 🔧 BLOCO DE MANUTENÇÃO (BOTÃO MÁGICO) */}
+               <div className="bg-orange-50 p-6 rounded-3xl shadow-sm border border-orange-200 mb-6">
+                   <div className="flex items-center gap-3 mb-3">
+                       <div className="w-10 h-10 bg-orange-100 text-orange-600 rounded-xl flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5"/></div>
+                       <div>
+                           <h3 className="font-black text-orange-900 text-lg">Manutenção do Banco de Dados</h3>
+                           <p className="text-xs text-orange-700 font-medium">Use apenas se houver divergência de preços em pedidos antigos.</p>
+                       </div>
+                   </div>
+                   <button type="button" onClick={handleCorrigirPrecosAntigos} className="w-full bg-white text-orange-600 border-2 border-orange-300 font-black py-3 rounded-xl hover:bg-orange-100 transition-colors text-sm shadow-sm">
+                       🔄 Recalcular Preços de Pedidos Manuais Antigos
+                   </button>
+               </div>
                    
                    {/* BLOCO 1: PARAMETRIZAÇÃO DO CICLO */}
                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200">
