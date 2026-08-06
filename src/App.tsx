@@ -3409,6 +3409,85 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       }
 
       if (adminTab === 'config') {
+
+        // 🛠️ FUNÇÃO DE MIGRAÇÃO: OVOS 20 UN (OVOS20U) ➔ OVOS 30 UN (OVOS30U) NAS UNIDADES ESPECÍFICAS
+        const handleMigrarOvos = async () => {
+          // 1. Busca os IDs corretos através dos SKUs
+          const produtoAntigo = products.find(p => String(p.sku) === 'OVOS20U');
+          const produtoNovo = products.find(p => String(p.sku) === 'OVOS30U');
+
+          if (!produtoAntigo || !produtoNovo) {
+              return showToast('Erro: Verifique se os produtos com SKUs OVOS20U e OVOS30U existem no catálogo!', 'error');
+          }
+
+          // Calcula o preço da nova bandeja (considerando se está em promo)
+          const isPromo = produtoNovo.promotionalPrice > 0 && produtoNovo.promotionalPrice < produtoNovo.price;
+          const novoPrecoUnitario = isPromo ? produtoNovo.promotionalPrice : produtoNovo.price;
+
+          // Lista estrita de polos que sofrerão a alteração
+          const polosAlvo = ['Caçapava', 'Jacareí', 'Caraguatatuba', 'Cruzeiro', 'Guaratinguetá', 'São José dos Campos (Sede)'];
+
+          showConfirm(
+              'Atualizar Pedidos de Ovos',
+              `Isto trocará "${produtoAntigo.name}" por "${produtoNovo.name}" apenas para os polos de satélite e sede. O valor passará a ser R$ ${novoPrecoUnitario.toFixed(2).replace('.', ',')}. Deseja continuar?`,
+              async () => {
+                  try {
+                      // Filtro Duplo: Mês Vigente E Unidades Alvo
+                      const pedidosDoCiclo = orders.filter(o => {
+                          const ciclo = o.cicloFinanceiro || 'Julho/2026';
+                          return ciclo === sysConfig.mesReferencia && polosAlvo.includes(o.polo);
+                      });
+
+                      let pedidosAtualizados = 0;
+
+                      for (const pedido of pedidosDoCiclo) {
+                          let teveAlteracao = false;
+                          let novoTotalItens = 0;
+
+                          const novosItens = (pedido.items || []).map(item => {
+                              // Encontrou a bandeja antiga? Substitui pela nova!
+                              if (String(item.id) === String(produtoAntigo.id)) {
+                                  teveAlteracao = true;
+                                  
+                                  const quantidade = item.qtd || item.qty || 1;
+                                  novoTotalItens += (novoPrecoUnitario * quantidade);
+
+                                  return {
+                                      ...item,
+                                      id: produtoNovo.id,
+                                      name: produtoNovo.name,
+                                      price: novoPrecoUnitario
+                                      // Diferente do fígado, aqui a quantidade não é multiplicada
+                                  };
+                              } else {
+                                  const quantidade = item.qtd || item.qty || 1;
+                                  novoTotalItens += ((item.price || 0) * quantidade);
+                                  return item;
+                              }
+                          });
+
+                          if (teveAlteracao) {
+                              // Abate eventuais cortes
+                              const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
+                              const totalFinal = Math.max(0, novoTotalItens - totalFaltas);
+
+                              await updateDoc(doc(db, "orders", pedido.id), {
+                                  items: novosItens,
+                                  total: totalFinal
+                              });
+                              pedidosAtualizados++;
+                          }
+                      }
+
+                      showToast(`Sucesso! ${pedidosAtualizados} pedido(s) foram atualizados para a Bandeja de 30.`, 'success');
+                  } catch (err) {
+                      console.error("Erro na atualização em lote:", err);
+                      showToast('Erro ao atualizar pedidos no banco de dados.', 'error');
+                  }
+              },
+              'warning'
+          );
+      };
         
         // 🛠️ FUNÇÃO DE MIGRAÇÃO: FÍGADO ANTIGO (1kg) ➔ Figado Bp Bd 600 (SKU 1414) COM DOBRA DE QTD
         const handleMigrarFigadoAgosto = async () => {
@@ -3598,6 +3677,10 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                            {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DO FÍGADO 👇 */}
                            <button type="button" onClick={handleMigrarFigadoAgosto} className="w-full bg-orange-600 text-white font-black py-3 rounded-xl hover:bg-orange-700 transition-colors text-sm shadow-sm">
                                🥩 Converter Fígado 1kg ➔ Fígado 600g nos Pedidos de Agosto
+                           </button>
+                           {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DOS OVOS 👇 */}
+                           <button type="button" onClick={handleMigrarOvos} className="w-full bg-emerald-600 text-white font-black py-3 rounded-xl hover:bg-emerald-700 transition-colors text-sm shadow-sm">
+                               🥚 Converter OVOS 20un ➔ OVOS 30un (Sede e Satélites)
                            </button>
                        </div>
                    </div>
