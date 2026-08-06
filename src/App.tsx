@@ -497,10 +497,15 @@ export default function App() {
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
     
-    const ordersToUpdate = orders.filter(o => 
-       ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
-       (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct))
-    );
+    // Filtro travado no ciclo financeiro atual
+    const ordersToUpdate = orders.filter(o => {
+       const ciclo = o.cicloFinanceiro || 'Julho/2026';
+       const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+       
+       return ehDoCicloAtual && 
+              ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
+              (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct));
+    });
     
     if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
     
@@ -3913,10 +3918,15 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                   >
                     <option value="">Selecione o produto ausente...</option>
                     {products
-                      .filter(p => orders.some(order => 
-                         ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
-                         (order.items || []).some(item => String(item.id) === String(p.id))
-                      ))
+                      .filter(p => orders.some(order => {
+                         // 👇 MÁGICA: O dropdown também só vai mostrar produtos pedidos neste ciclo 👇
+                         const ciclo = order.cicloFinanceiro || 'Julho/2026';
+                         const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+
+                         return ehDoCicloAtual && 
+                                ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
+                                (order.items || []).some(item => String(item.id) === String(p.id));
+                      }))
                       .map(p => (
                         <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
