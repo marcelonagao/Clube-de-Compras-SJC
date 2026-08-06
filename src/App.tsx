@@ -2000,6 +2000,106 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     );
   };
 
+  const renderPrintLogistica = () => {
+    // Recalcula a lista para impressão com a mesma lógica da tela
+    const currentCycleOrders = orders.filter(o => {
+        const ciclo = o.cicloFinanceiro || 'Julho/2026';
+        return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && ciclo === sysConfig.mesReferencia;
+    });
+
+    const demandaPorProduto = {};
+    currentCycleOrders.forEach(order => {
+        (order.items || []).forEach(item => {
+            if (!demandaPorProduto[item.id]) demandaPorProduto[item.id] = { id: item.id, name: item.name, reqTaubate: 0, reqAdyana: 0 };
+            const qty = item.qtd || item.qty || 1;
+            if (order.polo === 'Taubaté' || order.polo === 'Pindamonhangaba') demandaPorProduto[item.id].reqTaubate += qty;
+            else if (order.polo === 'Vila Adyana') demandaPorProduto[item.id].reqAdyana += qty;
+        });
+    });
+
+    const listaLogistica = Object.values(demandaPorProduto).map(demanda => {
+        const prodCatalogo = products.find(p => p.id === demanda.id);
+        const tamanhoCaixa = prodCatalogo?.minBox || prodCatalogo?.itensPorCaixa || 1; 
+        const sugeridoTaubate = Math.floor(demanda.reqTaubate / tamanhoCaixa);
+        const sugeridoAdyana = Math.floor(demanda.reqAdyana / tamanhoCaixa);
+        const inputTaubate = caixasDirecionadas[demanda.id]?.taubate !== undefined ? caixasDirecionadas[demanda.id].taubate : sugeridoTaubate;
+        const inputAdyana = caixasDirecionadas[demanda.id]?.adyana !== undefined ? caixasDirecionadas[demanda.id].adyana : sugeridoAdyana;
+        
+        return {
+            ...demanda,
+            tamanhoCaixa,
+            caixasTaubate: inputTaubate,
+            caixasAdyana: inputAdyana,
+            unidadesTaubate: inputTaubate * tamanhoCaixa,
+            unidadesAdyana: inputAdyana * tamanhoCaixa
+        };
+    }).filter(item => item.caixasTaubate > 0 || item.caixasAdyana > 0);
+
+    return (
+        <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black">
+            <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
+                <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">🖨️ Imprimir PDF Agora</button>
+                <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
+            </div>
+
+            <div className="text-center mb-8 border-b-2 border-black pb-4">
+                <h1 className="text-3xl font-black uppercase tracking-tight">Ordem de Transferência (Cross-Docking)</h1>
+                <p className="mt-1 font-bold text-gray-600 uppercase tracking-widest text-sm">Lote Logístico: {sysConfig.loteMensal}</p>
+            </div>
+
+            {/* TABELA DE TAUBATÉ */}
+            <div className="mb-10 page-break-inside-avoid">
+                <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
+                    <span>Destino: 🚚 TAUBATÉ + PINDA</span>
+                </div>
+                <table className="w-full text-left border-collapse border border-black">
+                    <thead>
+                        <tr className="bg-gray-100 border-b-2 border-black">
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Qtd. Caixas</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Total Unidades</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {listaLogistica.filter(i => i.caixasTaubate > 0).map((item, idx) => (
+                            <tr key={item.id} className="border-b border-gray-300">
+                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasTaubate}</td>
+                                <td className="py-3 px-3 font-black text-xl text-center">{item.unidadesTaubate}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* TABELA DE VILA ADYANA */}
+            <div className="page-break-inside-avoid">
+                <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
+                    <span>Destino: 🚚 VILA ADYANA</span>
+                </div>
+                <table className="w-full text-left border-collapse border border-black">
+                    <thead>
+                        <tr className="bg-gray-100 border-b-2 border-black">
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Qtd. Caixas</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Total Unidades</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {listaLogistica.filter(i => i.caixasAdyana > 0).map((item, idx) => (
+                            <tr key={item.id} className="border-b border-gray-300">
+                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasAdyana}</td>
+                                <td className="py-3 px-3 font-black text-xl text-center">{item.unidadesAdyana}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
   const renderPrintCatalog = () => {
     // Puxa apenas os produtos ativos
     const activeProducts = products.filter(p => !p.pausado && (p.stock || 0) > 0).sort((a, b) => a.name.localeCompare(b.name));
@@ -2992,13 +3092,11 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
      }
 
      if (adminTab === 'logistica') {
-      // 1. Filtra os pedidos válidos do ciclo atual
       const currentCycleOrders = validOrders.filter(o => {
           const ciclo = o.cicloFinanceiro || 'Julho/2026';
           return ciclo === sysConfig.mesReferencia;
       });
 
-      // 2. Agrupa a demanda real (itens) por Polo
       const demandaPorProduto = {};
       
       currentCycleOrders.forEach(order => {
@@ -3007,7 +3105,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                   demandaPorProduto[item.id] = {
                       id: item.id,
                       name: item.name,
-                      // Unificando Taubaté e Pinda como um polo só para a logística
                       reqTaubate: 0, 
                       reqAdyana: 0,
                   };
@@ -3022,38 +3119,47 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           });
       });
 
-      // 3. Monta a lista cruzando com o tamanho da caixa do produto
       const listaLogistica = Object.values(demandaPorProduto).map(demanda => {
           const prodCatalogo = products.find(p => p.id === demanda.id);
-          // Se o produto não tiver "itensPorCaixa" cadastrado, assume 1 para não quebrar a conta
-          const tamanhoCaixa = prodCatalogo?.itensPorCaixa || 1; 
+          const tamanhoCaixa = prodCatalogo?.minBox || prodCatalogo?.itensPorCaixa || 1; 
           
-          // Pega o que o gestor digitou que enviou de caixas físicas
-          const caixasEnviadas = caixasDirecionadas[demanda.id] || { taubate: 0, adyana: 0 };
+          const sugeridoTaubate = Math.floor(demanda.reqTaubate / tamanhoCaixa);
+          const sugeridoAdyana = Math.floor(demanda.reqAdyana / tamanhoCaixa);
           
-          // Calcula o recebimento físico (Caixas enviadas * Tamanho da Caixa)
-          const recebidoFisicoTaubate = caixasEnviadas.taubate * tamanhoCaixa;
-          const recebidoFisicoAdyana = caixasEnviadas.adyana * tamanhoCaixa;
+          const inputTaubate = caixasDirecionadas[demanda.id]?.taubate !== undefined ? caixasDirecionadas[demanda.id].taubate : sugeridoTaubate;
+          const inputAdyana = caixasDirecionadas[demanda.id]?.adyana !== undefined ? caixasDirecionadas[demanda.id].adyana : sugeridoAdyana;
+          
+          const numTaubate = Number(inputTaubate) || 0;
+          const numAdyana = Number(inputAdyana) || 0;
 
-          // SALDO: Se for positivo (>0), sobrou e tem que devolver pra Sede. Se negativo (<0), faltou e tem que retirar na Sede.
-          const saldoTaubate = recebidoFisicoTaubate - demanda.reqTaubate;
-          const saldoAdyana = recebidoFisicoAdyana - demanda.reqAdyana;
+          const unidadesTaubate = numTaubate * tamanhoCaixa;
+          const unidadesAdyana = numAdyana * tamanhoCaixa;
+
+          // Calcula o que faltou ou o que sobrou
+          const retiraTaubate = demanda.reqTaubate - unidadesTaubate;
+          const retiraAdyana = demanda.reqAdyana - unidadesAdyana;
 
           return {
               ...demanda,
               tamanhoCaixa,
-              caixasEnviadas,
-              saldoTaubate,
-              saldoAdyana
+              inputTaubate,
+              inputAdyana,
+              unidadesTaubate,
+              unidadesAdyana,
+              retiraTaubate,
+              retiraAdyana
           };
-      }).filter(item => item.reqTaubate > 0 || item.reqAdyana > 0); // Mostra só o que Taubaté ou V. Adyana pediram
+      }).filter(item => item.reqTaubate > 0 || item.reqAdyana > 0);
 
+      // 👇 CORREÇÃO AQUI: Permite digitar ZERO ou apagar o número sem o React travar
       const handleAtualizarCaixa = (prodId, polo, valor) => {
-          const num = parseInt(valor) || 0;
+          let num = valor === '' ? '' : parseInt(valor);
+          if (num !== '' && isNaN(num)) num = 0;
+
           setCaixasDirecionadas(prev => ({
               ...prev,
               [prodId]: {
-                  ...(prev[prodId] || { taubate: 0, adyana: 0 }),
+                  ...(prev[prodId] || {}),
                   [polo]: num
               }
           }));
@@ -3061,9 +3167,14 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
       return (
           <div className="space-y-6 text-left max-w-6xl mx-auto">
-              <div className="mb-6">
-                  <h2 className="text-2xl font-black text-slate-800">Mapa de Transferências (Cross-Docking)</h2>
-                  <p className="text-sm font-medium text-gray-500 mt-1">Informe quantas caixas fechadas foram direto para o polo. O sistema calculará o que deve ser devolvido ou retirado na Sede (SJC).</p>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
+                  <div>
+                      <h2 className="text-2xl font-black text-slate-800">Mapa de Separação (Cross-Docking)</h2>
+                      <p className="text-sm font-medium text-gray-500 mt-1">Ajuste as caixas enviadas. O sistema calculará o que vai na Van e o que a unidade precisará buscar na Sede.</p>
+                  </div>
+                  <button onClick={() => setPrintLayout('logistica')} className="bg-emerald-600 text-white font-black px-6 py-3 rounded-xl shadow-md hover:bg-emerald-700 transition flex items-center shrink-0">
+                      <Printer className="w-5 h-5 mr-2"/> Imprimir Ordem de Separação
+                  </button>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -3080,7 +3191,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                               {listaLogistica.length === 0 ? (
                                   <tr><td colSpan="3" className="text-center py-8 text-gray-400 font-medium">Nenhum pedido para estes polos neste ciclo.</td></tr>
                               ) : (
-                                  listaLogistica.map((item, idx) => (
+                                  listaLogistica.map((item) => (
                                       <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                                           <td className="px-4 py-3">
                                               <p className="font-bold text-slate-800">{item.name}</p>
@@ -3094,20 +3205,32 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                                       Pedidos: <span className="font-black text-slate-800">{item.reqTaubate} un</span>
                                                   </div>
                                                   <div className="flex items-center gap-2">
-                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas Enviadas:</span>
+                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas:</span>
                                                       <input 
                                                           type="number" 
                                                           min="0"
-                                                          value={item.caixasEnviadas.taubate || ''} 
+                                                          value={item.inputTaubate === '' ? '' : item.inputTaubate} 
                                                           onChange={e => handleAtualizarCaixa(item.id, 'taubate', e.target.value)}
                                                           className="w-16 p-1 text-center border border-gray-300 rounded font-bold outline-none focus:border-blue-500"
                                                       />
                                                   </div>
-                                                  {item.caixasEnviadas.taubate > 0 && (
-                                                      <div className={`mt-1 px-3 py-1 rounded text-[11px] font-black uppercase tracking-wider ${item.saldoTaubate > 0 ? 'bg-orange-100 text-orange-700 border border-orange-200' : item.saldoTaubate < 0 ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
-                                                          {item.saldoTaubate > 0 ? `📦 Devolve ${item.saldoTaubate} para Sede` : item.saldoTaubate < 0 ? `🛒 Retira ${Math.abs(item.saldoTaubate)} na Sede` : '✅ Bateu exato'}
-                                                      </div>
-                                                  )}
+                                                  <div className="flex flex-col gap-1.5 w-full mt-1 px-4">
+                                                      {item.unidadesTaubate > 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-blue-600 text-white shadow-sm flex items-center justify-center">
+                                                              <Truck className="w-3.5 h-3.5 mr-1.5 shrink-0"/> Na Van: {item.unidadesTaubate} un
+                                                          </div>
+                                                      )}
+                                                      {item.retiraTaubate > 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-200 shadow-sm flex items-center justify-center text-center">
+                                                              🛒 Separar na Sede: {item.retiraTaubate} un
+                                                          </div>
+                                                      )}
+                                                      {item.retiraTaubate < 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-800 border border-red-200 shadow-sm flex items-center justify-center text-center">
+                                                              ⚠️ Sobram: {Math.abs(item.retiraTaubate)} un
+                                                          </div>
+                                                      )}
+                                                  </div>
                                               </div>
                                           </td>
 
@@ -3118,20 +3241,32 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                                       Pedidos: <span className="font-black text-slate-800">{item.reqAdyana} un</span>
                                                   </div>
                                                   <div className="flex items-center gap-2">
-                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas Enviadas:</span>
+                                                      <span className="text-[10px] font-bold uppercase text-gray-400">Caixas:</span>
                                                       <input 
                                                           type="number" 
                                                           min="0"
-                                                          value={item.caixasEnviadas.adyana || ''} 
+                                                          value={item.inputAdyana === '' ? '' : item.inputAdyana} 
                                                           onChange={e => handleAtualizarCaixa(item.id, 'adyana', e.target.value)}
                                                           className="w-16 p-1 text-center border border-gray-300 rounded font-bold outline-none focus:border-orange-500"
                                                       />
                                                   </div>
-                                                  {item.caixasEnviadas.adyana > 0 && (
-                                                      <div className={`mt-1 px-3 py-1 rounded text-[11px] font-black uppercase tracking-wider ${item.saldoAdyana > 0 ? 'bg-orange-100 text-orange-700 border border-orange-200' : item.saldoAdyana < 0 ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
-                                                          {item.saldoAdyana > 0 ? `📦 Devolve ${item.saldoAdyana} para Sede` : item.saldoAdyana < 0 ? `🛒 Retira ${Math.abs(item.saldoAdyana)} na Sede` : '✅ Bateu exato'}
-                                                      </div>
-                                                  )}
+                                                  <div className="flex flex-col gap-1.5 w-full mt-1 px-4">
+                                                      {item.unidadesAdyana > 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-orange-600 text-white shadow-sm flex items-center justify-center">
+                                                              <Truck className="w-3.5 h-3.5 mr-1.5 shrink-0"/> Na Van: {item.unidadesAdyana} un
+                                                          </div>
+                                                      )}
+                                                      {item.retiraAdyana > 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-200 shadow-sm flex items-center justify-center text-center">
+                                                              🛒 Separar na Sede: {item.retiraAdyana} un
+                                                          </div>
+                                                      )}
+                                                      {item.retiraAdyana < 0 && (
+                                                          <div className="px-2 py-1.5 rounded text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-800 border border-red-200 shadow-sm flex items-center justify-center text-center">
+                                                              ⚠️ Sobram: {Math.abs(item.retiraAdyana)} un
+                                                          </div>
+                                                      )}
+                                                  </div>
                                               </div>
                                           </td>
                                       </tr>
@@ -4028,6 +4163,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       {printLayout === 'catalogo' ? renderPrintCatalog() :
        printLayout === 'plaquinhas' ? renderPrintTags() :
        printLayout === 'cartaz' ? renderPrintCartaz() : // 👈 NOVA LINHA AQUI
+       printLayout === 'logistica' ? renderPrintLogistica() : // 👈 ADICIONE ESTA LINHA
        isPrintMode ? renderDispatchPDF() : (
         <>
           {currentScreen !== 'login' && currentScreen !== 'dashboard_admin' && (
