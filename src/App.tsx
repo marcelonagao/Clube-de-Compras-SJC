@@ -1783,22 +1783,28 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     const viewingPolo = isGestor ? (manualSelectedPolo || user?.polo || polos[0]) : user?.polo;
 
     // A MÁGICA AQUI: O Romaneio agora obedece a etiqueta de Lote (Data de Entrega)
+    // A MÁGICA AQUI: O Romaneio agora obedece o Ciclo (Mês) E a etiqueta de Lote (Data)
     const validOrders = orders.filter(o => {
-        const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
-        
-        // 👇 2. AGORA ELE USA O VIEWING POLO SEM DAR ERRO 👇
-        // 🌟 RETROCOMPATIBILIDADE DA SEDE: Se o PDF for aberto na tela de 'compras' (Gestão), 
-        // ele ignora os filtros e traz TODOS os polos do lote! Se for na Logística, separa por unidade.
-        const hasValidPolo = currentScreen === 'dashboard_admin' ? true : (o.polo === viewingPolo);
-        
-        const hasDate = !!o.date;
+      const hasValidStatus = (o.status === 'pago' || o.status === 'confirmado' || o.status === 'pago_polo');
+      
+      // 👇 2. AGORA ELE USA O VIEWING POLO SEM DAR ERRO 👇
+      // 🌟 RETROCOMPATIBILIDADE DA SEDE: Se o PDF for aberto na tela de 'compras' (Gestão), 
+      // ele ignora os filtros e traz TODOS os polos do lote! Se for na Logística, separa por unidade.
+      const hasValidPolo = currentScreen === 'dashboard_admin' ? true : (o.polo === viewingPolo);
+      
+      const hasDate = !!o.date;
 
-        // Regra de Retrocompatibilidade e Filtro
-        const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
-        const matchesLote = mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter;
+      // 👇 A CORREÇÃO DE OURO ENTRA AQUI: A Trava do Mês (Ciclo) 👇
+      const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026'; // Garante compatibilidade com pedidos antigos
+      const ehDoCicloAtual = cicloDoPedido === sysConfig.mesReferencia;
 
-        return hasValidStatus && hasDate && hasValidPolo && matchesLote;
-    });
+      // Regra de Lote/Data de Entrega
+      const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
+      const matchesLote = mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter;
+
+      // Agora ele exige obrigatoriamente que o pedido pertença ao Mês Atual (ehDoCicloAtual)
+      return hasValidStatus && hasDate && hasValidPolo && matchesLote && ehDoCicloAtual;
+  });
 
     const summaryByPolo = {};
 
