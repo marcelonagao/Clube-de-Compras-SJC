@@ -574,8 +574,13 @@ export default function App() {
   const generatePurchasePlan = () => {
     const validOrders = orders.filter(o => {
         const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
+        const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026';
+        
+        // 👇 A TRAVA DO MÊS ENTRA AQUI (Substituindo a regra velha de 30 dias) 👇
+        const ehDoCicloAtual = cicloDoPedido === sysConfig.mesReferencia;
+
         return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
-               new Date(o.date).getTime() > Date.now() - (30 * 24 * 60 * 60 * 1000) &&
+               ehDoCicloAtual && 
                (mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter);
     });
 
@@ -1274,18 +1279,20 @@ export default function App() {
   const ciclosExistentes = [...pastasFinanceiras, ...lotesLogisticos];
   const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
-  // 2. FILTRA AS ENCOMENDAS APENAS DO POLO E DO CICLO SELECIONADO
-  const poloOrdersFiltered = orders.filter(o => {
-    if (o.polo !== viewingPolo || !o.date) return false;
-    
-    if (filtroAtivo.startsWith('Consolidado:')) {
-        const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-        if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
-        return 'Julho/2026' === pastaFiltro;
-    } else {
-        return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
-    }
-  });
+ // 2. FILTRA AS ENCOMENDAS APENAS DO POLO E DO CICLO SELECIONADO
+ const poloOrdersFiltered = orders.filter(o => {
+  if (o.polo !== viewingPolo || !o.date) return false;
+  
+  const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026';
+  
+  if (filtroAtivo.startsWith('Consolidado:')) {
+      const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+      return cicloDoPedido === pastaFiltro;
+  } else {
+      // 👇 A TRAVA DO MÊS ESTÁ AQUI 👇
+      return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo && cicloDoPedido === mesReferenciaGlobal;
+  }
+});
 
 // 3. NOVA ESTEIRA LOGÍSTICA BLINDADA (Aba 1, 2 e 3)
 const pedidosConfirmados = poloOrdersFiltered.filter(o => o.status === 'confirmado');
@@ -2202,19 +2209,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
         // 3. FILTRO INTELIGENTE E BLINDADO
         const currentCycleOrders = validOrders.filter(o => {
-            if (filtroAtivo.startsWith('Consolidado:')) {
-                const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-                
-                if (o.cicloFinanceiro) {
-                    return o.cicloFinanceiro === pastaFiltro;
-                } else {
-                    // Qualquer pedido sem etiqueta vai para a pasta de Julho/2026
-                    return 'Julho/2026' === pastaFiltro;
-                }
-            } else {
-                return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
-            }
-        });
+          const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026';
+
+          if (filtroAtivo.startsWith('Consolidado:')) {
+              const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+              return cicloDoPedido === pastaFiltro;
+          } else {
+              // 👇 A TRAVA DO MÊS ESTÁ AQUI 👇
+              return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo && cicloDoPedido === mesReferenciaGlobal;
+          }
+      });
 
         // 4. CÁLCULO DAS MÉTRICAS FINANCEIRAS DO FILTRO SELECIONADO
         const faturamentoLote = currentCycleOrders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -2727,14 +2731,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         const filtroAtivo = ciclosExistentes.includes(dashCycleFilter) ? dashCycleFilter : (ciclosExistentes[0] || '');
 
         const currentCycleOrders = validOrders.filter(o => {
-            if (filtroAtivo.startsWith('Consolidado:')) {
-                const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
-                if (o.cicloFinanceiro) return o.cicloFinanceiro === pastaFiltro;
-                return 'Julho/2026' === pastaFiltro;
-            } else {
-                return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo;
-            }
-        });
+          const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026';
+
+          if (filtroAtivo.startsWith('Consolidado:')) {
+              const pastaFiltro = filtroAtivo.replace('Consolidado:', '').trim();
+              return cicloDoPedido === pastaFiltro;
+          } else {
+               // 👇 A TRAVA DO MÊS ESTÁ AQUI 👇
+               return (o.deliveryDate || 'Ciclo Mensal') === filtroAtivo && cicloDoPedido === mesReferenciaGlobal;
+          }
+      });
 
         // 2. O CÉREBRO: Agrupa todos os pedidos, quebrando-os por Produto
         const produtosAgrupados = {};
