@@ -2022,18 +2022,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         const tamanhoCaixa = prodCatalogo?.minBox || prodCatalogo?.itensPorCaixa || 1; 
         const sugeridoTaubate = Math.floor(demanda.reqTaubate / tamanhoCaixa);
         const sugeridoAdyana = Math.floor(demanda.reqAdyana / tamanhoCaixa);
+        
         const inputTaubate = caixasDirecionadas[demanda.id]?.taubate !== undefined ? caixasDirecionadas[demanda.id].taubate : sugeridoTaubate;
         const inputAdyana = caixasDirecionadas[demanda.id]?.adyana !== undefined ? caixasDirecionadas[demanda.id].adyana : sugeridoAdyana;
         
+        const numTaubate = Number(inputTaubate) || 0;
+        const numAdyana = Number(inputAdyana) || 0;
+
+        const unidadesTaubate = numTaubate * tamanhoCaixa;
+        const unidadesAdyana = numAdyana * tamanhoCaixa;
+
         return {
             ...demanda,
             tamanhoCaixa,
-            caixasTaubate: inputTaubate,
-            caixasAdyana: inputAdyana,
-            unidadesTaubate: inputTaubate * tamanhoCaixa,
-            unidadesAdyana: inputAdyana * tamanhoCaixa
+            caixasTaubate: numTaubate,
+            caixasAdyana: numAdyana,
+            unidadesTaubate,
+            unidadesAdyana,
+            retiraTaubate: demanda.reqTaubate - unidadesTaubate,
+            retiraAdyana: demanda.reqAdyana - unidadesAdyana
         };
-    }).filter(item => item.caixasTaubate > 0 || item.caixasAdyana > 0);
+    }).filter(item => item.reqTaubate > 0 || item.reqAdyana > 0);
 
     return (
         <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black">
@@ -2056,16 +2065,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                     <thead>
                         <tr className="bg-gray-100 border-b-2 border-black">
                             <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Qtd. Caixas</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Total Unidades</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Acerto na Sede</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {listaLogistica.filter(i => i.caixasTaubate > 0).map((item, idx) => (
+                        {/* 👇 O FILTRO AGORA MOSTRA TUDO QUE FOI PEDIDO (Mesmo se 0 caixas enviadas) 👇 */}
+                        {listaLogistica.filter(i => i.reqTaubate > 0).map((item) => (
                             <tr key={item.id} className="border-b border-gray-300">
-                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
                                 <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasTaubate}</td>
-                                <td className="py-3 px-3 font-black text-xl text-center">{item.unidadesTaubate}</td>
+                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesTaubate}</td>
+                                <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider">
+                                    {item.retiraTaubate > 0 ? (
+                                        <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded block border border-orange-200">🛒 Retirar: {item.retiraTaubate} un</span>
+                                    ) : item.retiraTaubate < 0 ? (
+                                        <span className="text-red-700 bg-red-100 px-2 py-1 rounded block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraTaubate)} un</span>
+                                    ) : (
+                                        <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded block border border-emerald-200">✅ Exato (0)</span>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -2081,16 +2101,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                     <thead>
                         <tr className="bg-gray-100 border-b-2 border-black">
                             <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Qtd. Caixas</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Total Unidades</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
+                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Acerto na Sede</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {listaLogistica.filter(i => i.caixasAdyana > 0).map((item, idx) => (
+                        {/* 👇 O FILTRO AGORA MOSTRA TUDO QUE FOI PEDIDO (Mesmo se 0 caixas enviadas) 👇 */}
+                        {listaLogistica.filter(i => i.reqAdyana > 0).map((item) => (
                             <tr key={item.id} className="border-b border-gray-300">
-                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
                                 <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasAdyana}</td>
-                                <td className="py-3 px-3 font-black text-xl text-center">{item.unidadesAdyana}</td>
+                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesAdyana}</td>
+                                <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider">
+                                    {item.retiraAdyana > 0 ? (
+                                        <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded block border border-orange-200">🛒 Retirar: {item.retiraAdyana} un</span>
+                                    ) : item.retiraAdyana < 0 ? (
+                                        <span className="text-red-700 bg-red-100 px-2 py-1 rounded block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraAdyana)} un</span>
+                                    ) : (
+                                        <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded block border border-emerald-200">✅ Exato (0)</span>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
