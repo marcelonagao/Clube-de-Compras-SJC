@@ -570,6 +570,82 @@ export default function App() {
         }
     });
   };
+  
+  const desfazerFaltaGlobal = async (productIdToUndo) => {
+    if (!productIdToUndo) return showToast('Selecione um produto para desfazer a falta.', 'error');
+
+    // 1. Encontra todos os pedidos do ciclo atual que possuem este produto marcado como falta
+    const ordersToFix = orders.filter(o => {
+       const ciclo = o.cicloFinanceiro || 'Julho/2026';
+       const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+       
+       return ehDoCicloAtual && 
+              (o.faltas || []).some(f => String(f.productId) === String(productIdToUndo));
+    });
+    
+    if (ordersToFix.length === 0) return showToast('Nenhum pedido deste ciclo possui falta registrada para este item.', 'error');
+
+    showConfirm('Desfazer Corte (Re-incluir Produto)', `Você está prestes a DEVOLVER este produto para ${ordersToFix.length} membro(s). O valor será somado novamente ao total a pagar deles. Deseja continuar?`, async () => {
+        try {
+          for (const order of ordersToFix) {
+            const orderRef = doc(db, "orders", order.id);
+            const orderDoc = await getDoc(orderRef);
+            
+            if (orderDoc.exists()) {
+              const oData = orderDoc.data();
+              
+              // Localiza a falta específica que precisa ser revertida
+              const faltaParaDesfazer = (oData.faltas || []).find(f => String(f.productId) === String(productIdToUndo));
+              if (!faltaParaDesfazer) continue;
+
+              const qtyRestaurar = faltaParaDesfazer.qtyMissing || 1;
+              // Pega o valor total da falta (ou refundValue, dependendo de como foi salvo)
+              const valorRestaurar = faltaParaDesfazer.value || faltaParaDesfazer.refundValue || 0; 
+              const precoUnitarioOriginal = valorRestaurar / qtyRestaurar;
+
+              // 2. Atualizar array de itens (Devolver o produto)
+              let updatedItems = [...(oData.items || [])];
+              const itemIndex = updatedItems.findIndex(i => String(i.id) === String(productIdToUndo));
+
+              if (itemIndex >= 0) {
+                  // O item ainda existe na sacola (foi corte parcial), apenas devolvemos a quantidade
+                  updatedItems[itemIndex].qtd = (updatedItems[itemIndex].qtd || 0) + qtyRestaurar;
+                  updatedItems[itemIndex].qty = (updatedItems[itemIndex].qty || 0) + qtyRestaurar;
+              } else {
+                  // O item havia sido 100% cortado, precisamos recriá-lo na sacola
+                  updatedItems.push({
+                      id: productIdToUndo,
+                      name: faltaParaDesfazer.name,
+                      price: precoUnitarioOriginal,
+                      qtd: qtyRestaurar,
+                      qty: qtyRestaurar
+                  });
+              }
+
+              // 3. Remover o produto do array de faltas
+              const newFaltas = (oData.faltas || []).filter(f => String(f.productId) !== String(productIdToUndo));
+              
+              // 4. Reajustar o Total (Somar o valor de volta)
+              const newTotal = (oData.total || 0) + valorRestaurar;
+              
+              await updateDoc(orderRef, { 
+                  items: updatedItems, 
+                  faltas: newFaltas, 
+                  total: newTotal 
+              });
+            }
+          }
+          
+          showToast(`Falta desfeita com sucesso! Produtos devolvidos às sacolas.`);
+          setShortageSelectedProduct(''); // Limpa a seleção
+          setShortagePreview(null);
+          
+        } catch (e) { 
+          console.error("Erro ao desfazer falta global:", e);
+          showToast('Erro ao re-incluir produtos', 'error'); 
+        }
+    });
+  };
 
   const generatePurchasePlan = () => {
     const validOrders = orders.filter(o => {
@@ -4000,6 +4076,10 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
             <div className="mt-4 shrink-0 pb-4">
                <button onClick={() => {setFaltaGlobalModal(true); setIsSidebarOpen(false);}} className="w-full bg-red-500/10 text-red-400 font-bold text-xs p-3 rounded-lg border border-red-500/30 hover:bg-red-500 hover:text-white flex justify-start items-center"><AlertTriangle className="w-4 h-4 mr-2"/> Informar Falta Global</button>
+            </div>
+
+            <div className="mt-4 shrink-0 pb-4">
+            <button onClick={() => desfazerFaltaGlobal(shortageSelectedProduct)} className="bg-emerald-600 text-white font-bold py-2 px-4 rounded shadow-sm hover:bg-emerald-700 transition">♻️ Desfazer Falta Global (Re-incluir) </button>
             </div>
           </div>
         </div>
