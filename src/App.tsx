@@ -2134,75 +2134,77 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
             {/* TABELA DE TAUBATÉ */}
             <div className="mb-10 page-break-inside-avoid">
-                <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
-                    <span>Destino: 🚚 TAUBATÉ + PINDA</span>
-                </div>
-                <table className="w-full text-left border-collapse border border-black">
-                    <thead>
-                        <tr className="bg-gray-100 border-b-2 border-black">
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Acerto na Sede</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {/* 👇 O FILTRO AGORA MOSTRA TUDO QUE FOI PEDIDO (Mesmo se 0 caixas enviadas) 👇 */}
-                        {listaLogistica.filter(i => i.reqTaubate > 0).map((item) => (
-                            <tr key={item.id} className="border-b border-gray-300">
-                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
-                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasTaubate}</td>
-                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesTaubate}</td>
-                                <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider">
-                                    {item.retiraTaubate > 0 ? (
-                                        <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded block border border-orange-200">🛒 Retirar: {item.retiraTaubate} un</span>
-                                    ) : item.retiraTaubate < 0 ? (
-                                        <span className="text-red-700 bg-red-100 px-2 py-1 rounded block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraTaubate)} un</span>
-                                    ) : (
-                                        <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded block border border-emerald-200">✅ Exato (0)</span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                  <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
+                      <span>Destino: 🚚 TAUBATÉ + PINDA</span>
+                  </div>
+                  <table className="w-full text-left border-collapse border border-black">
+                      <thead>
+                          <tr className="bg-gray-100 border-b-2 border-black">
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
+                              {/* Largura aumentada para w-40 para caber tudo na mesma linha */}
+                              <th className="py-2 px-3 font-black uppercase text-xs text-center w-40">Acerto na Sede</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {listaLogistica.filter(i => i.reqTaubate > 0).map((item) => (
+                              <tr key={item.id} className="border-b border-gray-300">
+                                  <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasTaubate}</td>
+                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesTaubate}</td>
+                                  {/* Adicionado o whitespace-nowrap para não quebrar a palavra "un" */}
+                                  <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider whitespace-nowrap">
+                                      {item.retiraTaubate > 0 ? (
+                                          <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded inline-block border border-orange-200">🛒 Retirar: {item.retiraTaubate} un</span>
+                                      ) : item.retiraTaubate < 0 ? (
+                                          <span className="text-red-700 bg-red-100 px-2 py-1 rounded inline-block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraTaubate)} un</span>
+                                      ) : (
+                                          <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded inline-block border border-emerald-200">✅ Exato (0)</span>
+                                      )}
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
 
-            {/* TABELA DE VILA ADYANA */}
-            <div className="page-break-inside-avoid">
-                <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
-                    <span>Destino: 🚚 VILA ADYANA</span>
-                </div>
-                <table className="w-full text-left border-collapse border border-black">
-                    <thead>
-                        <tr className="bg-gray-100 border-b-2 border-black">
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
-                            <th className="py-2 px-3 font-black uppercase text-xs text-center w-32">Acerto na Sede</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {/* 👇 O FILTRO AGORA MOSTRA TUDO QUE FOI PEDIDO (Mesmo se 0 caixas enviadas) 👇 */}
-                        {listaLogistica.filter(i => i.reqAdyana > 0).map((item) => (
-                            <tr key={item.id} className="border-b border-gray-300">
-                                <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
-                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasAdyana}</td>
-                                <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesAdyana}</td>
-                                <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider">
-                                    {item.retiraAdyana > 0 ? (
-                                        <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded block border border-orange-200">🛒 Retirar: {item.retiraAdyana} un</span>
-                                    ) : item.retiraAdyana < 0 ? (
-                                        <span className="text-red-700 bg-red-100 px-2 py-1 rounded block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraAdyana)} un</span>
-                                    ) : (
-                                        <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded block border border-emerald-200">✅ Exato (0)</span>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+              {/* TABELA DE VILA ADYANA */}
+              <div className="page-break-inside-avoid">
+                  <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
+                      <span>Destino: 🚚 VILA ADYANA</span>
+                  </div>
+                  <table className="w-full text-left border-collapse border border-black">
+                      <thead>
+                          <tr className="bg-gray-100 border-b-2 border-black">
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
+                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
+                              {/* Largura aumentada para w-40 para caber tudo na mesma linha */}
+                              <th className="py-2 px-3 font-black uppercase text-xs text-center w-40">Acerto na Sede</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          {listaLogistica.filter(i => i.reqAdyana > 0).map((item) => (
+                              <tr key={item.id} className="border-b border-gray-300">
+                                  <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasAdyana}</td>
+                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesAdyana}</td>
+                                  {/* Adicionado o whitespace-nowrap para não quebrar a palavra "un" */}
+                                  <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider whitespace-nowrap">
+                                      {item.retiraAdyana > 0 ? (
+                                          <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded inline-block border border-orange-200">🛒 Retirar: {item.retiraAdyana} un</span>
+                                      ) : item.retiraAdyana < 0 ? (
+                                          <span className="text-red-700 bg-red-100 px-2 py-1 rounded inline-block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraAdyana)} un</span>
+                                      ) : (
+                                          <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded inline-block border border-emerald-200">✅ Exato (0)</span>
+                                      )}
+                                  </td>
+                              </tr>
+                          ))}
+                      </tbody>
+                  </table>
+              </div>
         </div>
     );
 };
