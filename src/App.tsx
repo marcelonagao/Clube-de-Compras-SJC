@@ -3663,6 +3663,97 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
       if (adminTab === 'config') {
 
+        // 🛠️ FUNÇÃO DE SOCORRO: DESFAZER FALTA GLOBAL DE UM ITEM
+        const handleEstornarFaltaGlobal = async () => {
+          const skuAlvo = window.prompt("🆘 ESTORNO DE FALTA GLOBAL\n\nDigite o código SKU exato do produto que você marcou como falta por engano (Ex: 1414):");
+          
+          if (!skuAlvo) return; // Usuário cancelou ou deixou em branco
+
+          // Busca o produto oficial no catálogo para garantir
+          const produtoRef = products.find(p => String(p.sku) === String(skuAlvo));
+          
+          if (!produtoRef) {
+              return showToast("Produto não encontrado com esse SKU no catálogo.", "error");
+          }
+
+          showConfirm(
+              'Desfazer Falta Global',
+              `Isso vai vasculhar o ciclo atual (${sysConfig.mesReferencia}), remover a falta de "${produtoRef.name}" e DEVOLVER o item para a sacola dos membros, somando o valor novamente. Continuar?`,
+              async () => {
+                  try {
+                      // Filtra APENAS pedidos do ciclo atual que possuam este item na lista de FALTAS
+                      const pedidosComFalta = orders.filter(o => {
+                          const ciclo = o.cicloFinanceiro || 'Julho/2026';
+                          return ciclo === sysConfig.mesReferencia && 
+                                 o.faltas && 
+                                 o.faltas.some(f => String(f.productId) === String(produtoRef.id));
+                      });
+
+                      if (pedidosComFalta.length === 0) {
+                          return showToast('Nenhuma falta deste produto foi encontrada neste ciclo.', 'error');
+                      }
+
+                      let pedidosAtualizados = 0;
+
+                      for (const pedido of pedidosComFalta) {
+                          const faltaIndex = pedido.faltas.findIndex(f => String(f.productId) === String(produtoRef.id));
+                          if (faltaIndex === -1) continue;
+
+                          const registroFalta = pedido.faltas[faltaIndex];
+                          const qtyDevolvida = registroFalta.qtyMissing || 1;
+                          const valorEstornado = registroFalta.value || registroFalta.refundValue || 0;
+
+                          // 1. Remove da lista de Faltas
+                          const novasFaltas = [...pedido.faltas];
+                          novasFaltas.splice(faltaIndex, 1);
+
+                          // 2. Devolve para a lista de Itens
+                          const novosItens = [...(pedido.items || [])];
+                          const itemExistenteIndex = novosItens.findIndex(i => String(i.id) === String(produtoRef.id));
+
+                          if (itemExistenteIndex >= 0) {
+                              // Se sobrou algum (ex: pediu 5, faltaram 2), só soma a quantidade de volta
+                              const currentQty = novosItens[itemExistenteIndex].qtd || novosItens[itemExistenteIndex].qty || 0;
+                              novosItens[itemExistenteIndex] = {
+                                  ...novosItens[itemExistenteIndex],
+                                  qtd: currentQty + qtyDevolvida,
+                                  qty: currentQty + qtyDevolvida
+                              };
+                          } else {
+                              // Se a falta foi total e o item sumiu da sacola, recria ele
+                              const unitPrice = valorEstornado / qtyDevolvida;
+                              novosItens.push({
+                                  id: produtoRef.id,
+                                  name: produtoRef.name,
+                                  price: unitPrice,
+                                  qtd: qtyDevolvida,
+                                  qty: qtyDevolvida
+                              });
+                          }
+
+                          // 3. Atualiza o Total do Pedido (adicionando o valor de volta)
+                          const novoTotal = pedido.total + valorEstornado;
+
+                          // 4. Salva o pedido corrigido no banco de dados
+                          await updateDoc(doc(db, "orders", pedido.id), {
+                              items: novosItens,
+                              faltas: novasFaltas,
+                              total: novoTotal
+                          });
+
+                          pedidosAtualizados++;
+                      }
+
+                      showToast(`Sucesso! A falta de ${produtoRef.name} foi revertida em ${pedidosAtualizados} pedidos.`);
+                  } catch (e) {
+                      console.error("Erro ao estornar falta:", e);
+                      showToast("Erro ao reverter falta no banco de dados.", "error");
+                  }
+              },
+              'warning'
+          );
+      };
+
         // 🛠️ FUNÇÃO DE MIGRAÇÃO: OVOS 20 UN (OVOS20U) ➔ OVOS 30 UN (OVOS30U) NAS UNIDADES ESPECÍFICAS
         const handleMigrarOvos = async () => {
           // 1. Busca os IDs corretos através dos SKUs
@@ -3934,6 +4025,10 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                            {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DOS OVOS 👇 */}
                            <button type="button" onClick={handleMigrarOvos} className="w-full bg-emerald-600 text-white font-black py-3 rounded-xl hover:bg-emerald-700 transition-colors text-sm shadow-sm">
                                🥚 Converter OVOS 20un ➔ OVOS 30un (Sede e Satélites)
+                           </button>
+                            {/* 👇 NOVO BOTÃO DE ESTORNO DE FALTA 👇 */}
+                           <button type="button" onClick={handleEstornarFaltaGlobal} className="w-full bg-red-50 text-red-600 border-2 border-red-200 font-black py-3 rounded-xl hover:bg-red-100 transition-colors text-sm shadow-sm flex items-center justify-center">
+                               <AlertTriangle className="w-4 h-4 mr-2"/> Desfazer Falta Global de um Produto (Por SKU)
                            </button>
                        </div>
                    </div>
