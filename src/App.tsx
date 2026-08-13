@@ -98,6 +98,10 @@ export default function App() {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
 
+  const [crmSearch, setCrmSearch] = useState('');
+  const [crmRoleFilter, setCrmRoleFilter] = useState('Todos');
+  const [editingUser, setEditingUser] = useState(null);
+
   const [toast, setToast] = useState(null);
   const [pixRefundModal, setPixRefundModal] = useState({ open: false, key: '' });
   const [faltaGlobalModal, setFaltaGlobalModal] = useState(false);
@@ -3689,27 +3693,168 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       );
      }
 
-      if (adminTab === 'clientes') {
-         return (
-             <div className="space-y-4 text-left">
-                 <h2 className="text-2xl font-black text-slate-800 mb-4">Base de Clientes (CRM)</h2>
-                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
-                     {allUsers.filter(u=>u.role!=='consolidador').map(u => (
-                         <div key={u.id} className="p-3 border border-gray-100 rounded-xl flex justify-between items-center hover:border-emerald-200">
-                             <div>
-                                 <p className="font-bold text-slate-800 text-sm">{u.name}</p>
-                                 <p className="text-[10px] text-gray-500">{u.email} • Polo: {u.polo} • Papel: {u.role}</p>
-                             </div>
-                             <div className="flex items-center gap-2">
-                                <button onClick={()=>window.open(`https://wa.me/55${(u.whatsapp||'').replace(/\D/g,'')}`)} className="bg-emerald-50 text-emerald-600 p-2 rounded-lg hover:bg-emerald-100"><MessageCircle className="w-4 h-4"/></button>
-                                <button onClick={async()=>{await deleteDoc(doc(db,"users",u.id)); showToast('Cliente Apagado');}} className="bg-red-50 text-red-500 p-2 rounded-lg hover:bg-red-100"><Trash2 className="w-4 h-4"/></button>
-                             </div>
-                         </div>
-                     ))}
-                 </div>
-             </div>
-         )
-      }
+     if (adminTab === 'clientes') {
+      // 1. Aplica a Busca, o Filtro por Cargo e Ordena Alfabeticamente
+      const filteredUsers = allUsers.filter(u => {
+          if (u.role === 'consolidador') return false; // Esconde os gestores master por padrão
+          
+          const matchName = (u.name || '').toLowerCase().includes(crmSearch.toLowerCase()) || 
+                            (u.email || '').toLowerCase().includes(crmSearch.toLowerCase());
+          const matchRole = crmRoleFilter === 'Todos' || u.role === crmRoleFilter;
+          
+          return matchName && matchRole;
+      }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+      return (
+          <div className="space-y-4 text-left max-w-6xl mx-auto">
+              {/* CABEÇALHO E FILTROS */}
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
+                  <div>
+                      <h2 className="text-2xl font-black text-slate-800">Base de Clientes (CRM)</h2>
+                      <p className="text-xs font-bold text-gray-500 mt-1">Gerencie os membros, representantes e caixas.</p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                      {/* Filtro de Papel (Dropdown) */}
+                      <select value={crmRoleFilter} onChange={e => setCrmRoleFilter(e.target.value)} className="bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-emerald-500 outline-none text-sm font-bold text-slate-700 cursor-pointer">
+                          <option value="Todos">Todos os Papéis</option>
+                          <option value="cliente">Apenas Clientes</option>
+                          <option value="representante">Apenas Representantes</option>
+                          <option value="pdv">Apenas Caixas (PDV)</option>
+                      </select>
+                      
+                      {/* Barra de Busca (Nome/Email) */}
+                      <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                          <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                          <input 
+                              type="text" 
+                              placeholder="Buscar nome ou email..." 
+                              value={crmSearch}
+                              onChange={(e) => setCrmSearch(e.target.value)}
+                              className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                          />
+                          {crmSearch && <button onClick={() => setCrmSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                      </div>
+                  </div>
+              </div>
+
+              {/* LISTA DE CLIENTES */}
+              <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+                  {filteredUsers.length === 0 ? (
+                      <div className="text-center py-10">
+                          <Users className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
+                          <p className="text-gray-500 font-medium text-sm">Nenhum usuário encontrado com estes filtros.</p>
+                      </div>
+                  ) : (
+                      filteredUsers.map(u => (
+                          <div key={u.id} className="p-3 border border-gray-100 rounded-xl flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 hover:border-emerald-200 transition-colors">
+                              <div>
+                                  <p className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                      {u.name} 
+                                      {u.role === 'representante' && <span className="bg-blue-100 text-blue-700 text-[9px] px-2 py-0.5 rounded uppercase font-black">Rep</span>}
+                                      {u.role === 'pdv' && <span className="bg-purple-100 text-purple-700 text-[9px] px-2 py-0.5 rounded uppercase font-black">PDV</span>}
+                                  </p>
+                                  <p className="text-[10px] text-gray-500 mt-0.5 font-medium">{u.email} • Unidade: <span className="font-bold text-slate-700">{u.polo}</span></p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                  <button onClick={()=>window.open(`https://wa.me/55${(u.whatsapp||'').replace(/\D/g,'')}`)} title="Conversar no WhatsApp" className="bg-emerald-50 text-emerald-600 p-2.5 rounded-lg hover:bg-emerald-100 transition-colors"><MessageCircle className="w-4 h-4"/></button>
+                                  <button onClick={()=>setEditingUser(u)} title="Editar Cadastro" className="bg-blue-50 text-blue-600 p-2.5 rounded-lg hover:bg-blue-100 transition-colors"><Edit2 className="w-4 h-4"/></button>
+                                  <button onClick={async()=>{ 
+                                      showConfirm('Excluir Cliente', `Tem certeza que deseja apagar o cadastro de ${u.name}? Esta ação não pode ser desfeita.`, async () => { 
+                                          await deleteDoc(doc(db,"users",u.id)); 
+                                          showToast('Cliente Apagado'); 
+                                      }, 'danger'); 
+                                  }} title="Excluir Definitivamente" className="bg-red-50 text-red-500 p-2.5 rounded-lg hover:bg-red-100 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                              </div>
+                          </div>
+                      ))
+                  )}
+              </div>
+
+              {/* MODAL (POP-UP) DE EDIÇÃO DE CLIENTE */}
+              {editingUser && (
+                  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+                      <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
+                          <div className="flex justify-between items-center mb-5 border-b border-gray-100 pb-4">
+                              <div>
+                                  <h3 className="font-black text-slate-800 text-lg">Editar Usuário</h3>
+                                  <p className="text-xs text-gray-500 font-medium">{editingUser.name}</p>
+                              </div>
+                              <button onClick={() => setEditingUser(null)} className="p-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
+                          </div>
+                          
+                          <form onSubmit={async (e) => {
+                                 e.preventDefault();
+                                 const fd = new FormData(e.target);
+                                 const novoPolo = fd.get('polo');
+                                 const novoRole = fd.get('role');
+
+                                 try {
+                                     // 1. Atualiza o cadastro do usuário
+                                     await updateDoc(doc(db, "users", editingUser.id), {
+                                         polo: novoPolo,
+                                         role: novoRole
+                                     });
+
+                                     // 2. MÁGICA DA MIGRAÇÃO DE PEDIDOS
+                                     // Se o gestor mudou o polo do cliente, o sistema caça os pedidos vigentes e altera a rota de entrega!
+                                     if (novoPolo !== editingUser.polo) {
+                                         const pedidosVigentes = orders.filter(o => 
+                                             (o.email === editingUser.email || (o.customer === editingUser.name && o.whatsapp === editingUser.whatsapp)) &&
+                                             (o.cicloFinanceiro || 'Julho/2026') === sysConfig.mesReferencia
+                                         );
+
+                                         let pedidosMigrados = 0;
+                                         for (const pedido of pedidosVigentes) {
+                                             await updateDoc(doc(db, "orders", pedido.id), { polo: novoPolo });
+                                             pedidosMigrados++;
+                                         }
+
+                                         if (pedidosMigrados > 0) {
+                                             showToast(`Cadastro atualizado e ${pedidosMigrados} pedido(s) redirecionado(s) para ${novoPolo}!`, 'success');
+                                         } else {
+                                             showToast('Cadastro atualizado com sucesso!');
+                                         }
+                                     } else {
+                                         showToast('Cadastro atualizado com sucesso!');
+                                     }
+                                     
+                                     setEditingUser(null);
+                                 } catch(err) {
+                                     showToast('Erro ao atualizar usuário.', 'error');
+                                 }
+                             }} className="space-y-4">
+                                 
+                                 {/* Edição do Polo */}
+                                 <div>
+                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Unidade (Polo)</label>
+                                     <select name="polo" defaultValue={editingUser.polo} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm focus:border-emerald-500 cursor-pointer">
+                                         {polos.map(p => <option key={p} value={p}>{p}</option>)}
+                                     </select>
+                                 </div>
+                                 
+                                 {/* Edição do Papel (Cargo) */}
+                                 <div>
+                                     <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block">Nível de Acesso no App</label>
+                                     <select name="role" defaultValue={editingUser.role} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm focus:border-emerald-500 cursor-pointer">
+                                         <option value="cliente">Membro Comum (Cliente)</option>
+                                         <option value="representante">Representante (Logística)</option>
+                                         <option value="pdv">Caixa Local (PDV)</option>
+                                         <option value="consolidador">Gestor Master (Sede)</option>
+                                     </select>
+                                 </div>
+                                 
+                                 {/* Botões do Formulário */}
+                                 <div className="pt-4 border-t border-gray-100 flex gap-3">
+                                     <button type="button" onClick={() => setEditingUser(null)} className="flex-1 bg-gray-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 text-sm transition-colors">Cancelar</button>
+                                     <button type="submit" className="flex-1 bg-emerald-600 text-white font-black py-3.5 rounded-xl shadow-md hover:bg-emerald-700 text-sm flex justify-center items-center transition-colors"><CheckCircle className="w-4 h-4 mr-2"/> Salvar Alterações</button>
+                                 </div>
+                             </form>
+                      </div>
+                  </div>
+              )}
+          </div>
+      )
+   }
 
       if (adminTab === 'config') {
 
