@@ -4222,10 +4222,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             <div className="mt-4 shrink-0 pb-4">
                <button onClick={() => {setFaltaGlobalModal(true); setIsSidebarOpen(false);}} className="w-full bg-red-500/10 text-red-400 font-bold text-xs p-3 rounded-lg border border-red-500/30 hover:bg-red-500 hover:text-white flex justify-start items-center"><AlertTriangle className="w-4 h-4 mr-2"/> Informar Falta Global</button>
             </div>
-
-            <div className="mt-4 shrink-0 pb-4">
-            <button onClick={() => desfazerFaltaGlobal(shortageSelectedProduct)} className="bg-emerald-600 text-white font-bold py-2 px-4 rounded shadow-sm hover:bg-emerald-700 transition">♻️ Desfazer Falta Global (Re-incluir) </button>
-            </div>
           </div>
         </div>
 
