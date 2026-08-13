@@ -91,6 +91,8 @@ export default function App() {
   // Memória da Logística de Transferências
   const [caixasDirecionadas, setCaixasDirecionadas] = useState({});
 
+  const [repSearchClient, setRepSearchClient] = useState('');
+
   const [checkoutCpf, setCheckoutCpf] = useState(''); 
   const [paymentMethod, setPaymentMethod] = useState('pix');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -1700,6 +1702,25 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           </div>
         )}
 
+       {/* BARRA DE BUSCA RÁPIDA (UX DO REPRESENTANTE) */}
+       <div className="mb-4">
+            <div className="flex items-center bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm focus-within:border-emerald-500 transition-colors">
+                <Search className="w-5 h-5 text-gray-400 mr-3 shrink-0"/>
+                <input 
+                    type="text" 
+                    placeholder="Buscar cliente pelo nome..." 
+                    value={repSearchClient}
+                    onChange={(e) => setRepSearchClient(e.target.value)}
+                    className="bg-transparent outline-none w-full text-sm font-bold text-slate-700 placeholder-gray-400"
+                />
+                {repSearchClient && (
+                    <button onClick={() => setRepSearchClient('')} className="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 p-1.5 rounded-lg ml-2">
+                        <X className="w-4 h-4"/>
+                    </button>
+                )}
+            </div>
+        </div>
+
        {/* CONTROLE DE ABAS: ESTEIRA LOGÍSTICA */}
        <div className="flex gap-2 mb-6 bg-slate-200 p-1.5 rounded-2xl shadow-inner overflow-x-auto scrollbar-hide">
             <button onClick={() => setRepTab('separar')} className={`flex-1 min-w-[110px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all ${repTab === 'separar' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>📦 1. A Separar ({aba1Aseparar.length})</button>
@@ -1710,20 +1731,30 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         {/* LISTAGEM DOS PEDIDOS DA ABA ATIVA */}
         <div className="space-y-6">
             {(() => {
-                const currentOrders = repTab === 'separar' ? aba1Aseparar : repTab === 'retirada' ? aba2Retirada : aba3Entregues;
+                let currentOrders = repTab === 'separar' ? aba1Aseparar : repTab === 'retirada' ? aba2Retirada : aba3Entregues;
+                
+                // 👇 1. APLICA A BUSCA (SE HOUVER) 👇
+                if (repSearchClient) {
+                    currentOrders = currentOrders.filter(o => o.customer.toLowerCase().includes(repSearchClient.toLowerCase()));
+                }
+
+                // 👇 2. ORDENA TUDO ALFABETICAMENTE 👇
+                currentOrders = currentOrders.sort((a, b) => a.customer.localeCompare(b.customer));
                 
                 if (currentOrders.length === 0) {
                     return (
                       <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
                           <Package className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
-                          <p className="text-gray-500 font-medium text-sm">Nenhum pedido nesta fase.</p>
+                          <p className="text-gray-500 font-medium text-sm">
+                             {repSearchClient ? `Nenhum cliente encontrado com "${repSearchClient}" nesta fase.` : 'Nenhum pedido nesta fase.'}
+                          </p>
                       </div>
                     );
                 }
 
                 return (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {currentOrders.slice().reverse().map(o => {
+                  {currentOrders.map(o => {
                       
                       // 👇 AQUI ESTÃO AS VARIÁVEIS QUE EVITAM O ERRO! 👇
                       const temFalta = o.faltas && o.faltas.length > 0;
@@ -1740,7 +1771,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                   
                                   <div className="flex gap-1.5 shrink-0">
                                       <button onClick={() => {
-                                          // MENSAGEM RICA RESTAURADA!
                                           let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\n`;
                                           if (repTab === 'retirada' || repTab === 'separar') {
                                               text += `A sua encomenda já chegou no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
@@ -1902,25 +1932,13 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
     });
 
     return (
-      <div className="bg-white p-8 max-w-4xl mx-auto font-mono text-sm text-black">
-        <div className="text-center mb-8 border-b-2 border-black pb-4">
-          {/* Título dinâmico: Sede ou Representante */}
-          <h1 className="text-2xl font-black uppercase">
-            {isGestor ? 'Romaneio de Despacho (Sede)' : `Lista de Conferência - JC ${user?.polo}`}
-          </h1>
-          <p className="mt-2">Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
-          
-          {/* 👇 AVISO GIGANTE NO PDF PARA O MOTORISTA 👇 */}
-          {mesaDateFilter !== 'Todos' && (
-             <div className="mt-3">
-                 <span className="font-black text-lg bg-gray-200 px-4 py-1.5 border-2 border-black uppercase tracking-widest">
-                   Lote: {mesaDateFilter}
-                 </span>
-             </div>
-          )}
+      <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-sm text-black">
+        <div className="text-center mb-8 border-b-2 border-black pb-4 print:hidden">
+          <button onClick={() => window.print()} className="bg-black text-white px-8 py-3 font-bold uppercase rounded">Imprimir Agora</button>
+          <button onClick={() => setIsPrintMode(false)} className="ml-4 text-black underline">Voltar</button>
         </div>
 
-        {Object.entries(summaryByPolo).map(([poloName, data], index) => {
+        {Object.entries(summaryByPolo).sort((a,b) => a[0].localeCompare(b[0])).map(([poloName, data], index) => {
            const poloTotals = {};
            data.customers.forEach(cust => {
                (cust.items || []).forEach(item => {
@@ -1929,66 +1947,95 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                });
            });
 
-           // 👇 A MÁGICA ENTRA AQUI: Calcula o valor total global que este Polo movimentou 👇
            const totalGeralDoPolo = data.customers.reduce((acc, cust) => acc + (cust.total || 0), 0);
 
            return (
-            <div key={poloName} style={{ pageBreakBefore: index === 0 ? 'auto' : 'always' }} className="mb-10 page-break-after">
+            <div key={poloName}>
               
-              {/* BANNER DO POLO ATUALIZADO COM VALOR DO REPASSE */}
-              <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
-                  <span>Destino: Unidade {poloName}</span>
-                  <span className="text-sm">Valor Total do Repasse à Sede: R$ {totalGeralDoPolo.toFixed(2).replace('.', ',')}</span>
-              </div>
-              
-              <div style={{ pageBreakInside: 'avoid' }} className="mb-6 border border-black p-4">
-                <h3 className="font-bold underline mb-2">Resumo Total para a Van:</h3>
-                <div className="grid grid-cols-2 gap-2">
-                   {Object.entries(poloTotals).map(([itemName, qty]) => (
-                      <div key={itemName} className="flex justify-between border-b border-dotted border-gray-400">
-                        <span>{itemName}</span><span className="font-bold">{qty}x</span>
+              {/* =========================================
+                  PÁGINA 1: RESUMO TOTAL DA VAN (PROFISSIONAL)
+                  ========================================= */}
+              <div style={{ pageBreakAfter: 'always' }} className="mb-10">
+                  {/* Cabeçalho do Romaneio */}
+                  <div className="text-center mb-6">
+                      <h1 className="text-2xl font-black uppercase tracking-tight">Romaneio de Despacho</h1>
+                      <p className="font-bold text-gray-600 uppercase tracking-widest text-xs mt-1">Data: {new Date().toLocaleDateString('pt-BR')} • {mesaDateFilter !== 'Todos' ? `Lote: ${mesaDateFilter}` : 'Todos os Lotes'}</p>
+                  </div>
+
+                  <div className="bg-gray-100 border-2 border-black p-4 mb-6 shadow-sm flex flex-col sm:flex-row justify-between items-center rounded-xl gap-2">
+                      <div className="text-left">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 block">Destino</span>
+                          <span className="text-xl font-black uppercase tracking-tight">🚚 Unidade {poloName}</span>
                       </div>
-                   ))}
+                      <div className="text-right bg-white px-4 py-2 border border-gray-300 rounded-lg">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 block">Total do Repasse à Sede</span>
+                          <span className="text-lg font-black text-emerald-800">R$ {totalGeralDoPolo.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                  </div>
+                  
+                  <div className="border-2 border-black rounded-xl p-6 bg-white shadow-sm">
+                    <h3 className="font-black uppercase tracking-widest border-b-2 border-gray-200 pb-2 mb-4 text-center text-lg">Resumo Total para a Van</h3>
+                    
+                    {/* 👇 O SEGREDO DO LAYOUT LIMPO: COLUMNS-2 COM GAPS LONGOS 👇 */}
+                    <div className="columns-1 md:columns-2 gap-12 text-sm">
+                       {Object.entries(poloTotals).sort((a,b) => a[0].localeCompare(b[0])).map(([itemName, qty]) => (
+                          <div key={itemName} className="flex justify-between items-end border-b border-dotted border-gray-400 pb-1.5 mb-2.5 break-inside-avoid">
+                            <span className="font-bold text-gray-700 pr-4 leading-tight">{itemName}</span>
+                            <span className="font-black text-black whitespace-nowrap text-base">{qty} <span className="text-[10px] font-normal uppercase text-gray-500">un</span></span>
+                          </div>
+                       ))}
+                    </div>
+                  </div>
+              </div>
+
+              {/* =========================================
+                  PÁGINA 2 em diante: SEPARAÇÃO POR CLIENTE
+                  ========================================= */}
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight border-b-2 border-black pb-2 mb-6">📦 Separação por Cliente - {poloName}</h3>
+                <div className="grid grid-cols-1 gap-6">
+                    {data.customers.sort((a,b) => a.customer.localeCompare(b.customer)).map(cust => (
+                       <div key={cust.id} style={{ pageBreakInside: 'avoid' }} className="border border-gray-300 rounded-xl overflow-hidden shadow-sm">
+                           
+                           {/* CABEÇALHO DO CLIENTE */}
+                           <div className="bg-gray-100 border-b border-gray-300 p-3 flex justify-between items-center">
+                               <div>
+                                   <span className="font-black text-base uppercase block leading-tight">{cust.customer}</span>
+                                   <span className="text-[10px] font-bold text-gray-500 font-mono">PEDIDO #{cust.id.slice(0,5).toUpperCase()}</span>
+                               </div>
+                               <div className="text-right">
+                                   <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 block">Total a Pagar</span>
+                                   <span className="font-black text-lg">R$ {(cust.total || 0).toFixed(2).replace('.', ',')}</span>
+                               </div>
+                           </div>
+                           
+                           {/* LISTA DE ITENS DO CLIENTE */}
+                           <div className="p-4 bg-white">
+                             {(cust.items || []).map((it, idx) => {
+                                 const q = it.qtd || it.qty || 1;
+                                 const totalItem = (it.price || 0) * q;
+                                 return (
+                                   <div key={idx} className="flex items-center justify-between gap-4 mb-2.5 last:mb-0 border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                      <div className="flex items-center gap-3">
+                                          <div className="w-5 h-5 border-2 border-gray-300 rounded-md shrink-0"></div>
+                                          <span className="font-black text-sm">{q}x</span>
+                                          <span className="font-bold text-gray-700 text-sm leading-tight">
+                                              {it.name} <span className="text-[10px] text-gray-400 font-medium ml-1 whitespace-nowrap">(R$ {(it.price || 0).toFixed(2).replace('.', ',')} /un)</span>
+                                          </span>
+                                      </div>
+                                      <span className="font-black text-sm whitespace-nowrap">R$ {totalItem.toFixed(2).replace('.', ',')}</span>
+                                   </div>
+                                 )
+                             })}
+                           </div>
+                       </div>
+                    ))}
                 </div>
               </div>
 
-              <div>
-                <h3 className="font-bold mb-3">Separação por Cliente:</h3>
-                {data.customers.map(cust => (
-                   <div key={cust.id} style={{ pageBreakInside: 'avoid' }} className="mb-4 border-b border-black pb-2">
-                   {/* CABEÇALHO DO CLIENTE COM O TOTAL */}
-                   <div className="font-bold bg-gray-100 p-1 flex justify-between items-center px-2">
-                       <span>Cliente: {cust.customer} (Pedido #{cust.id.slice(0,5)})</span>
-                       <span className="text-sm">Total: R$ {(cust.total || 0).toFixed(2).replace('.', ',')}</span>
-                   </div>
-                   
-                   {/* LISTA DE ITENS COM OS VALORES UNITÁRIOS E TOTAIS */}
-                   <div className="pl-4 mt-1">
-                     {(cust.items || []).map((it, idx) => {
-                         const q = it.qtd || it.qty || 1;
-                         const totalItem = (it.price || 0) * q;
-                         return (
-                           <div key={idx} className="flex items-center justify-between gap-2 mb-1 pr-4">
-                              <div className="flex items-center gap-2">
-                                  <div className="w-4 h-4 border border-black shrink-0"></div>
-                                  <span>{q}x {it.name} <span className="text-[10px] text-gray-500 font-normal ml-1">(R$ {(it.price || 0).toFixed(2).replace('.', ',')} /un)</span></span>
-                              </div>
-                              <span className="font-bold">R$ {totalItem.toFixed(2).replace('.', ',')}</span>
-                           </div>
-                         )
-                     })}
-                   </div>
-                 </div>
-                ))}
-              </div>
             </div>
           )
         })}
-
-        <div className="text-center mt-10 print:hidden">
-          <button onClick={() => window.print()} className="bg-black text-white px-8 py-3 font-bold uppercase rounded">Imprimir Agora</button>
-          <button onClick={() => setIsPrintMode(false)} className="ml-4 text-black underline">Voltar</button>
-        </div>
       </div>
     );
   };
