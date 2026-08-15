@@ -82,8 +82,8 @@ export default function App() {
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
   const [tempGoogleUser, setTempGoogleUser] = useState<any>(null);
-  
-  const [shopCategory, setShopCategory] = useState('Todos');
+
+    const [shopCategory, setShopCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [adminTab, setAdminTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -139,6 +139,9 @@ export default function App() {
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
 
+// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
+ const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
+  
 
   // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
   const [sysConfig, setSysConfig] = useState({
@@ -4633,7 +4636,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                    <div className="flex justify-center mb-6">
                      <div className="w-16 h-16 bg-emerald-700 rounded-2xl flex items-center justify-center shadow-lg rotate-3"><Leaf className="w-8 h-8 text-white" /></div>
                    </div>
-                   <h2 className="text-2xl font-black text-center text-slate-800 tracking-tight mb-1">Clube de Compras SJC</h2>
+                   <h2 className="text-2xl font-black text-slate-800 tracking-tight text-center">{nomeUnidade}</h2>
                    <p className="text-center text-gray-500 font-bold text-xs mb-6">Acesse a sua conta</p>
                    
                    <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
