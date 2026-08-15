@@ -9,7 +9,7 @@ import {
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, User } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 
@@ -70,7 +70,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [shortageSelectedOrders, setShortageSelectedOrders] = useState({});
+  const [shortageSelectedOrders, setShortageSelectedOrders] = useState<Record<string, number>>({});
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState('login');
   const [loginEmail, setLoginEmail] = useState('');
@@ -80,7 +80,7 @@ export default function App() {
   const [loginName, setLoginName] = useState('');
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
-  const [tempGoogleUser, setTempGoogleUser] = useState(null);
+  const [tempGoogleUser, setTempGoogleUser] = useState<User | any>(null);
   
   const [shopCategory, setShopCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,7 +109,7 @@ export default function App() {
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'warning' });
   const showConfirm = (title, message, onConfirm, type = 'warning') => setConfirmDialog({ open: true, title, message, onConfirm, type });
   const [shortageSelectedProduct, setShortageSelectedProduct] = useState('');
-  const [shortagePreview, setShortagePreview] = useState(null);
+  const [shortagePreview, setShortagePreview] = useState<{ product: any, impact: any[] } | null>(null);
   const [expandedMonths, setExpandedMonths] = useState({});
   const [purchasePlan, setPurchasePlan] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -4325,7 +4325,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                             />
                         </div>
                     </div>
-                    
+
                    <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-xl hover:bg-slate-900 transition flex items-center justify-center text-sm">
                       <CheckCircle className="w-5 h-5 mr-2"/> Gravar e Atualizar Loja Agora
                    </button>
