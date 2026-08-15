@@ -35,9 +35,6 @@ if (typeof window !== 'undefined' && !document.getElementById('tailwind-cdn')) {
   document.head.appendChild(script);
 }
 
-const polos = ['São José dos Campos (Sede)','Caçapava','Caraguatatuba','Cruzeiro','Guaratinguetá','Jacareí','Pindamonhangaba','Taubaté','Vila Adyana'];
-const polosEntregaDireta = ['Taubaté', 'Vila Adyana'];
-
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -65,6 +62,8 @@ const compressImage = (file) => {
 };
 
 export default function App() {
+  const [polos, setPolos] = useState(['São José dos Campos (Sede)','Caçapava','Caraguatatuba','Cruzeiro','Guaratinguetá','Jacareí','Pindamonhangaba','Taubaté','Vila Adyana']);
+  const [polosText, setPolosText] = useState(polos.join(', '));  
   const [currentScreen, setCurrentScreen] = useState('login');
   const [user, setUser] = useState(null);
   const [cart, setCart] = useState([]);
@@ -240,6 +239,11 @@ export default function App() {
             const cData = docSnap.data();
             if(cData.storeMode) setStoreMode(cData.storeMode);
             if(cData.sysConfig) setSysConfig(cData.sysConfig); 
+            // 👇 A MÁGICA DE LER OS POLOS DO BANCO 👇
+            if(cData.polos) {
+                setPolos(cData.polos);
+                setPolosText(cData.polos.join(', '));
+            }
         }
     });
   
@@ -4169,15 +4173,22 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           }
       };
       // 👆 FIM DA NOVA FUNÇÃO 👆
-        const handleSaveSettings = async (e) => {
-            e.preventDefault();
-            try {
-                await setDoc(doc(db, "settings", "global"), { sysConfig: sysConfig }, { merge: true });
-                showToast('Configurações Salvas com Sucesso!');
-            } catch(err) {
-                showToast('Erro ao salvar as configurações.', 'error');
-            }
-        };
+      const handleSaveSettings = async (e) => {
+        e.preventDefault();
+        try {
+            // Converte o texto separado por vírgulas em uma lista de verdade
+            const polosArray = polosText.split(',').map(p => p.trim()).filter(Boolean);
+
+            await setDoc(doc(db, "settings", "global"), { 
+                sysConfig: sysConfig,
+                polos: polosArray
+            }, { merge: true });
+            
+            showToast('Configurações Salvas com Sucesso!');
+        } catch(err) {
+            showToast('Erro ao salvar as configurações.', 'error');
+        }
+    };
 
         return (
            <div className="space-y-6 text-left max-w-4xl mx-auto pb-10">
@@ -4294,6 +4305,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                        </div>
                    </div>
 
+                    {/* BLOCO 3: GESTÃO DE UNIDADES (POLOS) */}
+                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 relative overflow-hidden">
+                        <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4 relative z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center shrink-0"><MapPin className="w-5 h-5"/></div>
+                                <div>
+                                    <h3 className="font-black text-slate-800 text-lg">Unidades da Franquia (Polos)</h3>
+                                    <p className="text-xs text-gray-500 font-medium">Digite os nomes dos JCs separados por vírgula.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <textarea 
+                                value={polosText} 
+                                onChange={e => setPolosText(e.target.value)} 
+                                className="w-full p-4 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-purple-500 font-bold text-slate-700 text-sm min-h-[100px]" 
+                                placeholder="Ex: Sede, Centro, Norte..."
+                            />
+                        </div>
+                    </div>
+                    
                    <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow-xl hover:bg-slate-900 transition flex items-center justify-center text-sm">
                       <CheckCircle className="w-5 h-5 mr-2"/> Gravar e Atualizar Loja Agora
                    </button>
