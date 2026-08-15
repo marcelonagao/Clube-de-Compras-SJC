@@ -9,7 +9,7 @@ import {
 
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, query, where, onSnapshot } from "firebase/firestore";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail, User } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail} from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 
@@ -80,7 +80,7 @@ export default function App() {
   const [loginName, setLoginName] = useState('');
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
-  const [tempGoogleUser, setTempGoogleUser] = useState<User | any>(null);
+  const [tempGoogleUser, setTempGoogleUser] = useState<any>(null);
   
   const [shopCategory, setShopCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
