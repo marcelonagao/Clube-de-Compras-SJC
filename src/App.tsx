@@ -12,14 +12,16 @@ import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, s
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
+
+// O código agora lê as chaves dinamicamente do ambiente onde está hospedado
 const firebaseConfig = {
-  apiKey: "AIzaSyD7RvxvIGsnl5AP8tcNpATdS94PKjFzLV4",
-  authDomain: "clube-de-compra-sjc.firebaseapp.com",
-  projectId: "clube-de-compra-sjc",
-  storageBucket: "clube-de-compra-sjc.firebasestorage.app",
-  messagingSenderId: "671016891814",
-  appId: "1:671016891814:web:71038467bacedebb534b67"
-};
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID
+  };
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
