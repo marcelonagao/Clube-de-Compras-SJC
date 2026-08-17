@@ -299,12 +299,19 @@ export default function App() {
     setAuthLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithRedirect(auth, provider);
+      
+      // 👇 MUDANÇA AQUI: Trocamos Redirect por Popup!
+      await signInWithPopup(auth, provider);
+      
     } catch (err) {
-      console.error("ERRO GOOGLE:", err);
+      // Agora o erro COMPLETO com todos os detalhes vai explodir no seu console (F12)
+      console.error("=== ERRO COMPLETO GOOGLE ===", err); 
+      console.error("Código:", err.code);
+      console.error("Mensagem:", err.message);
+      
       if (err.code !== 'auth/popup-closed-by-user') {
-        // Agora o sistema vai cuspir o código exato do erro na tela!
-        showToast(`Erro Firebase: ${err.code}`, 'error');
+        // Exibe a mensagem de erro real no Toast para você ler na tela
+        showToast(`Erro: ${err.message}`, 'error');
       }
       setAuthLoading(false);
     }
