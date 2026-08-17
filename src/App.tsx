@@ -24,10 +24,13 @@ const firebaseConfig = {
     appId: (import.meta.env.VITE_FIREBASE_APP_ID || '').trim()
 };
 
+// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
+const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
+
 // Muda o título da Aba do navegador dinamicamente!
 useEffect(() => {
     document.title = nomeUnidade || "Clube de Compras";
-  }, [nomeUnidade]);
+  }, []);
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -66,6 +69,8 @@ const compressImage = (file) => {
     };
   });
 };
+
+
 
 export default function App() {
   const [polos, setPolos] = useState(['Sede Principal']);
@@ -135,9 +140,6 @@ export default function App() {
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
 
-// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
- const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
-  
 
   // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
   const [sysConfig, setSysConfig] = useState({
