@@ -63,7 +63,7 @@ const compressImage = (file) => {
 };
 
 export default function App() {
-  const [polos, setPolos] = useState(['São José dos Campos (Sede)','Caçapava','Caraguatatuba','Cruzeiro','Guaratinguetá','Jacareí','Pindamonhangaba','Taubaté','Vila Adyana']);
+  const [polos, setPolos] = useState(['Sede Principal']);
   const [polosText, setPolosText] = useState(polos.join(', '));  
   const [currentScreen, setCurrentScreen] = useState('login');
   const [user, setUser] = useState(null);
@@ -82,8 +82,7 @@ export default function App() {
   const [loginWhatsapp, setLoginWhatsapp] = useState('');
   const [selectedPolo, setSelectedPolo] = useState(polos[1]);
   const [tempGoogleUser, setTempGoogleUser] = useState<any>(null);
-
-    const [shopCategory, setShopCategory] = useState('Todos');
+  const [shopCategory, setShopCategory] = useState('Todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [adminTab, setAdminTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -92,18 +91,14 @@ export default function App() {
   const [storeMode, setStoreMode] = useState('mensal'); // Fases da loja: 'mensal', 'estoque', 'pausado'
   // Memória da Logística de Transferências
   const [caixasDirecionadas, setCaixasDirecionadas] = useState({});
-
   const [repSearchClient, setRepSearchClient] = useState('');
-
   const [checkoutCpf, setCheckoutCpf] = useState(''); 
   const [paymentMethod, setPaymentMethod] = useState('pix');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
-
   const [crmSearch, setCrmSearch] = useState('');
   const [crmRoleFilter, setCrmRoleFilter] = useState('Todos');
   const [editingUser, setEditingUser] = useState(null);
-
   const [toast, setToast] = useState(null);
   const [pixRefundModal, setPixRefundModal] = useState({ open: false, key: '' });
   const [faltaGlobalModal, setFaltaGlobalModal] = useState(false);
@@ -116,7 +111,6 @@ export default function App() {
   const [editingProduct, setEditingProduct] = useState(null);
   // --- CHAVE DA FASE 1 (BETA) ---
   const CONFIG_APENAS_COLETA = true; // Mude para false no futuro para ativar o Mercado Pago!
-
   /// --- ESTADOS DO PEDIDO MANUAL (REP) ---
   const [showManualOrder, setShowManualOrder] = useState(false);
   const [manualClientName, setManualClientName] = useState('');
@@ -125,16 +119,13 @@ export default function App() {
   const [manualCart, setManualCart] = useState([]); // Agora é um mini-carrinho!
   const [manualItemProduct, setManualItemProduct] = useState('');
   const [manualItemQty, setManualItemQty] = useState(1);
-
   const [expandedCatalogCats, setExpandedCatalogCats] = useState({});
-
   const [manualDeliveryDate, setManualDeliveryDate] = useState('');
   const [manualSelectedPolo, setManualSelectedPolo] = useState('');
   const [dashCycleFilter, setDashCycleFilter] = useState('Ciclo Mensal');
   const [showMassNotify, setShowMassNotify] = useState(false);
   const [editCart, setEditCart] = useState([]);
   const [editItemProduct, setEditItemProduct] = useState('');
-
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
@@ -176,14 +167,38 @@ export default function App() {
   const [repManualItems, setRepManualItems] = useState([]);
   const [mesaDateFilter, setMesaDateFilter] = useState('Todos');
   const [vendasSearchTerm, setVendasSearchTerm] = useState('');
-
   const [itensVendidosSearch, setItensVendidosSearch] = useState('');
   const [expandedProductReport, setExpandedProductReport] = useState({});
-
   const [expandedPolos, setExpandedPolos] = useState({}); 
   const [editingAdminOrder, setEditingAdminOrder] = useState(null);
   const [vendasStartDate, setVendasStartDate] = useState('');
   const [vendasEndDate, setVendasEndDate] = useState('');
+  // 🧠 CÉREBRO LOGÍSTICO: Dinamiza rotas, mas protege as regras de SJC
+  const getRotasLogisticas = (listaPolos) => {
+    const hub = listaPolos[0] || 'Sede Principal'; // O 1º polo da lista é sempre a HUB
+    let rotas = [];
+
+    // Regra de Retrocompatibilidade: Se existir Taubaté na lista, ele roda a lógica de SJC
+    const isSJC = listaPolos.includes('Taubaté') && listaPolos.includes('Pindamonhangaba');
+    
+    if (isSJC) {
+        rotas = [
+            { id: 'taubate', nomeDisplay: 'Taubaté + Pinda', polosFisicos: ['Taubaté', 'Pindamonhangaba'], nomePlanilha: 'TAUBATÉ' },
+            { id: 'adyana', nomeDisplay: 'Vila Adyana', polosFisicos: ['Vila Adyana'], nomePlanilha: 'VILA ADYANA' }
+        ];
+    } else {
+        // Lógica Universal: Se for qualquer outra franquia, cada polo ganha sua própria Van!
+        const satelites = listaPolos.slice(1);
+        rotas = satelites.map(polo => ({
+            id: polo.toLowerCase().replace(/[^a-z0-9]/g, ''),
+            nomeDisplay: polo,
+            polosFisicos: [polo],
+            nomePlanilha: polo.toUpperCase()
+        }));
+    }
+    return { hub, rotas };
+  };
+
   
   
 
@@ -666,21 +681,20 @@ export default function App() {
     const validOrders = orders.filter(o => {
         const etiquetaDoPedido = o.deliveryDate || 'Ciclo Mensal';
         const cicloDoPedido = o.cicloFinanceiro || 'Julho/2026';
-        
-        // 👇 A TRAVA DO MÊS ENTRA AQUI (Substituindo a regra velha de 30 dias) 👇
         const ehDoCicloAtual = cicloDoPedido === sysConfig.mesReferencia;
-
         return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && 
                ehDoCicloAtual && 
                (mesaDateFilter === 'Todos' || etiquetaDoPedido === mesaDateFilter);
     });
 
+    const { hub, rotas } = getRotasLogisticas(polos); // 🔥 INJETANDO O MOTOR AQUI
     const plan = [];
+
     products.forEach(p => {
         const minBox = p.minBox || 1;
         const localStockSede = p.stock || 0;
         
-        // 1. Calcula a Demanda Individual por Polo
+        // 1. Calcula a Demanda Individual
         const demandByPolo = {};
         polos.forEach(polo => demandByPolo[polo] = 0);
         validOrders.forEach(o => {
@@ -688,70 +702,44 @@ export default function App() {
             if (item) demandByPolo[o.polo] += (item.qtd || item.qty || 0);
         });
 
-        // 2. Agrupamento de Rotas Diretas
-        const rotasDiretas = [
-            { nomeDisplay: 'Taubaté + Pinda', polosFisicos: ['Taubaté', 'Pindamonhangaba'], nomePlanilha: 'TAUBATÉ' },
-            { nomeDisplay: 'Vila Adyana', polosFisicos: ['Vila Adyana'], nomePlanilha: 'VILA ADYANA' }
-        ];
-
-        const demandaRotas = rotasDiretas.map(rota => ({
+        // 2. Agrupamento Dinâmico de Rotas Diretas
+        const demandaRotas = rotas.map(rota => ({
             ...rota,
-            demandaAgrupada: rota.polosFisicos.reduce((sum, polo) => sum + demandByPolo[polo], 0)
+            demandaAgrupada: rota.polosFisicos.reduce((sum, polo) => sum + (demandByPolo[polo] || 0), 0)
         }));
 
-        const polosRotasFisicos = rotasDiretas.flatMap(r => r.polosFisicos);
-        
+        const polosRotasFisicos = rotas.flatMap(r => r.polosFisicos);
         let totalSatellites = 0;
         polos.forEach(polo => {
-            if (!polosRotasFisicos.includes(polo)) {
-                totalSatellites += demandByPolo[polo];
-            }
+            if (!polosRotasFisicos.includes(polo)) totalSatellites += demandByPolo[polo];
         });
 
-        // 3. MÁGICA DE PRIORIDADE: Consumir Estoque Local Antes de Comprar!
+        // 3. Abatimento de Estoque e Compras
         const totalDemandGeral = demandaRotas.reduce((sum, r) => sum + r.demandaAgrupada, 0) + totalSatellites;
-        
         let boxesToBuyTotal = 0;
         const totalFaltante = totalDemandGeral - localStockSede; 
-        
-        if (totalFaltante > 0) {
-            boxesToBuyTotal = Math.ceil(totalFaltante / minBox); 
-        }
+        if (totalFaltante > 0) boxesToBuyTotal = Math.ceil(totalFaltante / minBox); 
 
         let caixasDisponiveisParaDistribuir = boxesToBuyTotal;
         let totalSedeNeed = 0;
         const crossDockingDetails = [];
 
-        // 4. Distribuição das caixas (AGORA COM CORTE EXATO)
+        // 4. Distribuição com corte exato
         demandaRotas.sort((a, b) => b.demandaAgrupada - a.demandaAgrupada).forEach(rota => {
             if (rota.demandaAgrupada > 0) {
-                // 👇 A NOVA REGRA AQUI 👇
-                // Math.floor pega apenas a quantidade inteira de caixas que cabem no pedido.
-                // Ex: Pediram 25, caixa é 10. (25/10) = 2.5. O Math.floor transforma em 2 caixas exatas.
                 const caixasIdeais = Math.floor(rota.demandaAgrupada / minBox);
-                
-                // Só envia se a Sede precisou comprar caixas
                 const caixasEnviadas = Math.min(caixasIdeais, caixasDisponiveisParaDistribuir);
 
                 if (caixasEnviadas > 0) {
-                    crossDockingDetails.push({ 
-                        polo: rota.nomeDisplay, 
-                        planilha: rota.nomePlanilha, 
-                        boxes: caixasEnviadas 
-                    });
+                    crossDockingDetails.push({ polo: rota.nomeDisplay, planilha: rota.nomePlanilha, boxes: caixasEnviadas });
                     caixasDisponiveisParaDistribuir -= caixasEnviadas; 
                 }
-                
-                // Os itens que "faltaram" para completar o pedido do polo caem automaticamente 
-                // para a Sede separar na sacola, junto com a demanda dos outros polos!
                 const cobertoPorCaixas = caixasEnviadas * minBox;
                 totalSedeNeed += (rota.demandaAgrupada - cobertoPorCaixas);
             }
         });
 
         totalSedeNeed += totalSatellites;
-
-        // O que sobrou das caixas compradas que não foram enviadas diretas fica com a Sede
         const boxesToBuySede = caixasDisponiveisParaDistribuir;
 
         if (totalDemandGeral > 0 || localStockSede > 0) {
@@ -769,6 +757,9 @@ export default function App() {
     if (!purchasePlan) return;
     const rows = [["LOCAL DESCARGA", "SKU", "PRODUTO", "CAIXAS FECHADAS", "QTDE FRACIONADA USADA", "ESTOQUE FINAL PREVISTO"]];
 
+    // 👇 1. DESCOBRE QUEM É A SEDE (HUB) DINAMICAMENTE
+    const { hub } = getRotasLogisticas(polos);
+
     for (const item of purchasePlan) {
         // As caixas inteiras vão direto para as Rotas agrupadas (Pinda cai em Taubaté)
         item.demandCross.forEach(cd => {
@@ -778,9 +769,9 @@ export default function App() {
         // Calcula a Nova Sobra após as edições manuais
         const newStock = (item.stock + (item.boxesToBuy * item.minBox)) - item.demandSede;
 
-        // Manda comprar as caixas para a HUB
+        // 👇 2. AQUI ESTÁ A SUBSTITUIÇÃO! Usamos a variável hub em vez de "SEDE SJC"
         if (item.boxesToBuy > 0 || item.demandSede > 0) {
-            rows.push(["SEDE SJC (HUB)", item.sku, item.name, item.boxesToBuy, item.demandSede, newStock]);
+            rows.push([`${hub.toUpperCase()} (HUB)`, item.sku, item.name, item.boxesToBuy, item.demandSede, newStock]);
         }
         
         // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
@@ -885,7 +876,7 @@ export default function App() {
             <div className="max-w-5xl mx-auto">
                 <div className="flex items-center justify-between mb-3">
                    <div className="flex items-center text-[11px] font-medium text-white/90 bg-black/10 px-2.5 py-1 rounded-full">
-                     <MapPin className="w-3 h-3 mr-1" /> Enviar para: <span className="ml-1 font-semibold text-white truncate max-w-[120px] sm:max-w-[200px]">{user?.polo || polos[0]}</span>
+                   <MapPin className="w-3 h-3 mr-1" /> Enviar para: <span className="ml-1 font-semibold text-white truncate max-w-[120px] sm:max-w-[200px]">{user?.polo || polos[0] || 'Unidade Principal'}</span>
                    </div>
                    
                    {user?.walletBalance > 0 && (
@@ -1610,7 +1601,7 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                      </div>
                                      <button 
                                          onClick={async () => {
-                                          let text = `Olá ${o.customer}! Aqui é do Clube de Compras.\n\nA sua encomenda já chegou e está pronta para retirada no Johrei Center de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
+                                          let text = `Olá ${o.customer}! Aqui é do Clube de Compras ${nomeUnidade}.\n\nA sua encomenda já chegou e está pronta para retirada na Unidade de ${o.polo}. 📦\n\nNesta cesta você tem:\n`;
                                           (o.items || []).forEach(i => {
                                               const q = i.qtd || i.qty || 1;
                                               const totalItem = (i.price || 0) * q;
@@ -2137,138 +2128,124 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
   };
 
   const renderPrintLogistica = () => {
-    // Recalcula a lista para impressão com a mesma lógica da tela
-    const currentCycleOrders = orders.filter(o => {
-        const ciclo = o.cicloFinanceiro || 'Julho/2026';
-        return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && ciclo === sysConfig.mesReferencia;
-    });
+      const currentCycleOrders = orders.filter(o => {
+          const ciclo = o.cicloFinanceiro || 'Julho/2026';
+          return o.status === (CONFIG_APENAS_COLETA ? 'confirmado' : 'pago') && ciclo === sysConfig.mesReferencia;
+      });
 
-    const demandaPorProduto = {};
-    currentCycleOrders.forEach(order => {
-        (order.items || []).forEach(item => {
-            if (!demandaPorProduto[item.id]) demandaPorProduto[item.id] = { id: item.id, name: item.name, reqTaubate: 0, reqAdyana: 0 };
-            const qty = item.qtd || item.qty || 1;
-            if (order.polo === 'Taubaté' || order.polo === 'Pindamonhangaba') demandaPorProduto[item.id].reqTaubate += qty;
-            else if (order.polo === 'Vila Adyana') demandaPorProduto[item.id].reqAdyana += qty;
-        });
-    });
+      const { hub, rotas } = getRotasLogisticas(polos); // 🔥 MOTOR MÁGICO AQUI
+      const demandaPorProduto = {};
+      
+      currentCycleOrders.forEach(order => {
+          (order.items || []).forEach(item => {
+              if (!demandaPorProduto[item.id]) {
+                  demandaPorProduto[item.id] = { id: item.id, name: item.name, req: {} };
+                  rotas.forEach(r => demandaPorProduto[item.id].req[r.id] = 0);
+              }
+              const qty = item.qtd || item.qty || 1;
+              
+              // Verifica a qual Rota a unidade do pedido pertence
+              const rotaEncontrada = rotas.find(r => r.polosFisicos.includes(order.polo));
+              if (rotaEncontrada) demandaPorProduto[item.id].req[rotaEncontrada.id] += qty;
+          });
+      });
 
-    const listaLogistica = Object.values(demandaPorProduto).map(demanda => {
-        const prodCatalogo = products.find(p => p.id === demanda.id);
-        const tamanhoCaixa = prodCatalogo?.minBox || prodCatalogo?.itensPorCaixa || 1; 
-        const sugeridoTaubate = Math.floor(demanda.reqTaubate / tamanhoCaixa);
-        const sugeridoAdyana = Math.floor(demanda.reqAdyana / tamanhoCaixa);
-        
-        const inputTaubate = caixasDirecionadas[demanda.id]?.taubate !== undefined ? caixasDirecionadas[demanda.id].taubate : sugeridoTaubate;
-        const inputAdyana = caixasDirecionadas[demanda.id]?.adyana !== undefined ? caixasDirecionadas[demanda.id].adyana : sugeridoAdyana;
-        
-        const numTaubate = Number(inputTaubate) || 0;
-        const numAdyana = Number(inputAdyana) || 0;
+      const listaLogistica = Object.values(demandaPorProduto).map(demanda => {
+          const prodCatalogo = products.find(p => p.id === demanda.id);
+          const tamanhoCaixa = prodCatalogo?.minBox || prodCatalogo?.itensPorCaixa || 1; 
+          
+          const rotasData = {};
+          let temDemandaQualquerRota = false;
 
-        const unidadesTaubate = numTaubate * tamanhoCaixa;
-        const unidadesAdyana = numAdyana * tamanhoCaixa;
+          rotas.forEach(rota => {
+              const req = demanda.req[rota.id] || 0;
+              if (req > 0) temDemandaQualquerRota = true;
 
-        return {
-            ...demanda,
-            tamanhoCaixa,
-            caixasTaubate: numTaubate,
-            caixasAdyana: numAdyana,
-            unidadesTaubate,
-            unidadesAdyana,
-            retiraTaubate: demanda.reqTaubate - unidadesTaubate,
-            retiraAdyana: demanda.reqAdyana - unidadesAdyana
-        };
-    }).filter(item => item.reqTaubate > 0 || item.reqAdyana > 0);
+              const sugerido = Math.floor(req / tamanhoCaixa);
+              const inputVal = caixasDirecionadas[demanda.id]?.[rota.id] !== undefined ? caixasDirecionadas[demanda.id][rota.id] : sugerido;
+              const numCaixas = Number(inputVal) || 0;
+              const totalUnidades = numCaixas * tamanhoCaixa;
 
-    return (
-        <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black">
-            <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
-                <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">🖨️ Imprimir PDF Agora</button>
-                <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
-            </div>
+              rotasData[rota.id] = { req, inputVal, numCaixas, totalUnidades, retiraSede: req - totalUnidades };
+          });
 
-            <div className="text-center mb-8 border-b-2 border-black pb-4">
-                <h1 className="text-3xl font-black uppercase tracking-tight">Ordem de Transferência (Cross-Docking)</h1>
-                <p className="mt-1 font-bold text-gray-600 uppercase tracking-widest text-sm">Lote Logístico: {sysConfig.loteMensal}</p>
-            </div>
+          return { ...demanda, tamanhoCaixa, rotasData, temDemandaQualquerRota };
+      }).filter(item => item.temDemandaQualquerRota);
 
-            {/* TABELA DE TAUBATÉ */}
-            <div className="mb-10 page-break-inside-avoid">
-                  <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
-                      <span>Destino: 🚚 TAUBATÉ + PINDA</span>
-                  </div>
-                  <table className="w-full text-left border-collapse border border-black">
-                      <thead>
-                          <tr className="bg-gray-100 border-b-2 border-black">
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
-                              {/* Largura aumentada para w-40 para caber tudo na mesma linha */}
-                              <th className="py-2 px-3 font-black uppercase text-xs text-center w-40">Acerto na Sede</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {listaLogistica.filter(i => i.reqTaubate > 0).map((item) => (
-                              <tr key={item.id} className="border-b border-gray-300">
-                                  <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
-                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasTaubate}</td>
-                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesTaubate}</td>
-                                  {/* Adicionado o whitespace-nowrap para não quebrar a palavra "un" */}
-                                  <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider whitespace-nowrap">
-                                      {item.retiraTaubate > 0 ? (
-                                          <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded inline-block border border-orange-200">🛒 Retirar: {item.retiraTaubate} un</span>
-                                      ) : item.retiraTaubate < 0 ? (
-                                          <span className="text-red-700 bg-red-100 px-2 py-1 rounded inline-block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraTaubate)} un</span>
-                                      ) : (
-                                          <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded inline-block border border-emerald-200">✅ Exato (0)</span>
-                                      )}
-                                  </td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+      const handleAtualizarCaixaDinamica = (prodId, rotaId, valor) => {
+          let num = valor === '' ? '' : parseInt(valor);
+          if (num !== '' && isNaN(num)) num = 0;
+          setCaixasDirecionadas(prev => ({
+              ...prev,
+              [prodId]: { ...(prev[prodId] || {}), [rotaId]: num }
+          }));
+      };
+
+      return (
+          <div className="bg-white p-8 max-w-4xl mx-auto font-sans text-black">
+              <div className="print:hidden text-center mb-8 border-b border-gray-200 pb-6">
+                  <button onClick={() => window.print()} className="bg-emerald-700 text-white px-8 py-3 font-black uppercase tracking-widest rounded-xl shadow-lg mr-4 hover:bg-emerald-800 transition-colors">🖨️ Imprimir PDF</button>
+                  <button onClick={() => setPrintLayout(null)} className="text-gray-500 font-bold hover:text-red-500 underline">Voltar</button>
               </div>
 
-              {/* TABELA DE VILA ADYANA */}
-              <div className="page-break-inside-avoid">
-                  <div className="bg-gray-200 p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4">
-                      <span>Destino: 🚚 VILA ADYANA</span>
-                  </div>
-                  <table className="w-full text-left border-collapse border border-black">
-                      <thead>
-                          <tr className="bg-gray-100 border-b-2 border-black">
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
-                              <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
-                              {/* Largura aumentada para w-40 para caber tudo na mesma linha */}
-                              <th className="py-2 px-3 font-black uppercase text-xs text-center w-40">Acerto na Sede</th>
-                          </tr>
-                      </thead>
-                      <tbody>
-                          {listaLogistica.filter(i => i.reqAdyana > 0).map((item) => (
-                              <tr key={item.id} className="border-b border-gray-300">
-                                  <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
-                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.caixasAdyana}</td>
-                                  <td className="py-3 px-3 font-black text-lg text-center border-r border-black">{item.unidadesAdyana}</td>
-                                  {/* Adicionado o whitespace-nowrap para não quebrar a palavra "un" */}
-                                  <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider whitespace-nowrap">
-                                      {item.retiraAdyana > 0 ? (
-                                          <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded inline-block border border-orange-200">🛒 Retirar: {item.retiraAdyana} un</span>
-                                      ) : item.retiraAdyana < 0 ? (
-                                          <span className="text-red-700 bg-red-100 px-2 py-1 rounded inline-block border border-red-200">⚠️ Devolver: {Math.abs(item.retiraAdyana)} un</span>
-                                      ) : (
-                                          <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded inline-block border border-emerald-200">✅ Exato (0)</span>
-                                      )}
-                                  </td>
-                              </tr>
-                          ))}
-                      </tbody>
-                  </table>
+              <div className="text-center mb-8 border-b-2 border-black pb-4">
+                  <h1 className="text-3xl font-black uppercase tracking-tight">Ordem de Transferência (Cross-Docking)</h1>
+                  <p className="mt-1 font-bold text-gray-600 uppercase tracking-widest text-sm">Lote Logístico: {sysConfig.loteMensal}</p>
               </div>
 
-        </div>
-    );
-};
+              {/* RENDERIZA TABELAS INFINITAS DE ACORDO COM AS ROTAS */}
+              {rotas.map((rota, index) => {
+                  const itensDaRota = listaLogistica.filter(i => i.rotasData[rota.id].req > 0);
+                  if (itensDaRota.length === 0) return null;
+
+                  return (
+                      <div key={rota.id} className="mb-10 page-break-inside-avoid">
+                          <div className={`p-2 font-black text-lg mb-4 uppercase border border-black flex justify-between items-center px-4 ${index % 2 === 0 ? 'bg-gray-200' : 'bg-gray-100'}`}>
+                              <span>Destino: 🚚 {rota.nomeDisplay}</span>
+                          </div>
+                          <table className="w-full text-left border-collapse border border-black">
+                              <thead>
+                                  <tr className="bg-gray-100 border-b-2 border-black">
+                                      <th className="py-2 px-3 font-black uppercase text-xs border-r border-black">Produto</th>
+                                      <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-20">Caixas na Van</th>
+                                      <th className="py-2 px-3 font-black uppercase text-xs border-r border-black text-center w-24">Total (Unid.)</th>
+                                      <th className="py-2 px-3 font-black uppercase text-xs text-center w-40">Acerto na Sede</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {itensDaRota.map((item) => {
+                                      const rotaDados = item.rotasData[rota.id];
+                                      return (
+                                          <tr key={item.id} className="border-b border-gray-300">
+                                              <td className="py-3 px-3 font-bold text-sm border-r border-black">{item.name} <span className="text-[10px] font-normal ml-2 text-gray-600">(Cx c/ {item.tamanhoCaixa})</span></td>
+                                              <td className="py-3 px-3 border-r border-black flex justify-center print:border-none">
+                                                  <input 
+                                                      type="number" min="0" value={rotaDados.inputVal} 
+                                                      onChange={e => handleAtualizarCaixaDinamica(item.id, rota.id, e.target.value)}
+                                                      className="w-16 p-1 text-center border border-gray-300 rounded font-bold outline-none focus:border-blue-500 print:border-none print:text-lg print:p-0"
+                                                  />
+                                              </td>
+                                              <td className="py-3 px-3 font-black text-lg text-center border-r border-black border-l">{rotaDados.totalUnidades}</td>
+                                              <td className="py-2 px-2 font-bold text-[11px] text-center uppercase tracking-wider whitespace-nowrap">
+                                                  {rotaDados.retiraSede > 0 ? (
+                                                      <span className="text-orange-700 bg-orange-100 px-2 py-1 rounded inline-block border border-orange-200">🛒 Retirar: {rotaDados.retiraSede} un</span>
+                                                  ) : rotaDados.retiraSede < 0 ? (
+                                                      <span className="text-red-700 bg-red-100 px-2 py-1 rounded inline-block border border-red-200">⚠️ Devolver: {Math.abs(rotaDados.retiraSede)} un</span>
+                                                  ) : (
+                                                      <span className="text-emerald-700 bg-emerald-100 px-2 py-1 rounded inline-block border border-emerald-200">✅ Exato (0)</span>
+                                                  )}
+                                              </td>
+                                          </tr>
+                                      )
+                                  })}
+                              </tbody>
+                          </table>
+                      </div>
+                  )
+              })}
+          </div>
+      );
+  };
 
   const renderPrintCatalog = () => {
     // Puxa apenas os produtos ativos
