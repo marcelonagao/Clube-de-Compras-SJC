@@ -24,6 +24,11 @@ const firebaseConfig = {
     appId: (import.meta.env.VITE_FIREBASE_APP_ID || '').trim()
 };
 
+// Muda o título da Aba do navegador dinamicamente!
+useEffect(() => {
+    document.title = nomeUnidade || "Clube de Compras";
+  }, [nomeUnidade]);
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
