@@ -24,7 +24,8 @@ const firebaseConfig = {
     appId: (import.meta.env.VITE_FIREBASE_APP_ID || '').trim()
 };
 
-
+// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
+const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
 
 // Muda o título da Aba do navegador dinamicamente!
 useEffect(() => {
