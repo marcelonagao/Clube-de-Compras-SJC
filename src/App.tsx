@@ -313,17 +313,15 @@ export default function App() {
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
     try {
-      const provider = new GoogleAuthProvider();
-      
-      // Voltamos para o Redirect, já que consertamos o problema das chaves com o .trim()!
-      await signInWithRedirect(auth, provider);
-      
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
     } catch (err) {
-      showToast(`Erro Firebase: ${err.code}`, 'error');
-      setAuthLoading(false);
+        if (err.code !== 'auth/popup-closed-by-user') {
+            showToast(`Erro: ${err.message}`, 'error');
+        }
+        setAuthLoading(false);
     }
-  };
-
+};
   const handleCompleteGoogleProfile = async (e) => {
     e.preventDefault();
     setAuthLoading(true);
