@@ -27,11 +27,6 @@ const firebaseConfig = {
 // Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
 const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
 
-// Muda o título da Aba do navegador dinamicamente!
-useEffect(() => {
-    document.title = nomeUnidade || "Clube de Compras";
-  }, []);
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -180,6 +175,12 @@ export default function App() {
   const [editingAdminOrder, setEditingAdminOrder] = useState(null);
   const [vendasStartDate, setVendasStartDate] = useState('');
   const [vendasEndDate, setVendasEndDate] = useState('');
+
+  // Muda o título da Aba do navegador dinamicamente!
+useEffect(() => {
+    document.title = nomeUnidade || "Clube de Compras";
+  }, []);
+  
   // 🧠 CÉREBRO LOGÍSTICO: Dinamiza rotas, mas protege as regras de SJC
   const getRotasLogisticas = (listaPolos) => {
     const hub = listaPolos[0] || 'Sede Principal'; // O 1º polo da lista é sempre a HUB
