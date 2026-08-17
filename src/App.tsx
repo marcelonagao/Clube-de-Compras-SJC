@@ -24,8 +24,6 @@ const firebaseConfig = {
     appId: (import.meta.env.VITE_FIREBASE_APP_ID || '').trim()
 };
 
-// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
-const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -65,6 +63,8 @@ const compressImage = (file) => {
   });
 };
 
+// Puxa o nome da unidade da Vercel, ou usa um nome genérico como segurança
+const nomeUnidade = import.meta.env.VITE_CLUB_NAME || "Clube de Compras";
 
 
 export default function App() {
