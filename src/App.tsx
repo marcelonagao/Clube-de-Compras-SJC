@@ -1905,15 +1905,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                       }} className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-100 shadow-sm" title="Avisar no WhatsApp">
                                           <MessageCircle className="w-5 h-5"/>
                                       </button>
-                                      {/* 👇 NOVO BOTÃO DE EDITAR PARA O REPRESENTANTE 👇 */}
-                                        <button onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            setEditingAdminOrder(o);
-                                            setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
-                                        }} className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors border border-blue-100 shadow-sm" title="Editar Pedido">
-                                            <Edit2 className="w-5 h-5"/>
-                                        </button>
-                                        {/* 👆 FIM DO BOTÃO DE EDITAR 👆 */}
+                                      {/* 👇 BOTÃO DE EDITAR (BLINDADO PARA O REPRESENTANTE) 👇 */}
+{(isGestor || !(isPago && (o.entregue || repTab === 'historico'))) && (
+    <button onClick={(e) => { 
+        e.stopPropagation(); 
+        setEditingAdminOrder(o);
+        setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
+    }} className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors border border-blue-100 shadow-sm" title="Editar Pedido">
+        <Edit2 className="w-5 h-5"/>
+    </button>
+)}
                                   </div>
                               </div>
 
@@ -4760,39 +4761,47 @@ const handleAddToEditCart = () => {
                       </button>
                   </div>
 
-                  {/* NOVA ÁREA: INCLUIR PRODUTOS NOVOS */}
-                  <div className="p-4 bg-white border-b border-gray-200 shadow-sm z-10 shrink-0">
-                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Adicionar Produto ao Pedido</p>
-                      <div className="flex gap-2">
-                          <select 
-                              value={editItemProduct} 
-                              onChange={e => setEditItemProduct(e.target.value)} 
-                              className="flex-1 p-2 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:border-emerald-500"
-                          >
-                              <option value="">Selecione o Produto...</option>
-                              {[...products]
-                                  .filter(p => !p.pausado)
-                                  .sort((a, b) => a.name.localeCompare(b.name))
-                                  .map(p => {
-                                      const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
-                                      const priceToShow = isPromo ? p.promotionalPrice : p.price;
-                                      return (
-                                          <option key={p.id} value={p.id}>
-                                              {p.name} - R$ {(priceToShow || 0).toFixed(2).replace('.', ',')}
-                                          </option>
-                                      );
-                                  })}
-                          </select>
-                          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shrink-0">
-                              <button onClick={() => setEditItemQty(Math.max(1, editItemQty - 1))} className="w-8 flex justify-center font-black text-gray-500 hover:bg-gray-100">-</button>
-                              <span className="w-6 text-center font-bold text-sm text-slate-800">{editItemQty}</span>
-                              <button onClick={() => setEditItemQty(editItemQty + 1)} className="w-8 flex justify-center font-black text-emerald-600 hover:bg-emerald-50">+</button>
-                          </div>
-                          <button onClick={handleAddToEditCart} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition">
-                              + Add
-                          </button>
-                      </div>
-                  </div>
+                  {/* 👇 NOVA ÁREA: INCLUIR PRODUTOS NOVOS (LAYOUT CORRIGIDO) 👇 */}
+            <div className="p-4 bg-slate-50 border-b border-gray-200 shadow-sm z-10 shrink-0">
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Adicionar Produto ao Pedido</p>
+                <div className="flex flex-col gap-2">
+                    
+                    {/* Linha 1: O Dropdown ocupando tudo */}
+                    <select 
+                        value={editItemProduct} 
+                        onChange={e => setEditItemProduct(e.target.value)} 
+                        className="w-full p-3 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:border-emerald-500 bg-white shadow-sm"
+                    >
+                        <option value="">Selecione o Produto...</option>
+                        {[...products]
+                            .filter(p => !p.pausado)
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map(p => {
+                                const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                                const priceToShow = isPromo ? p.promotionalPrice : p.price;
+                                return (
+                                    <option key={p.id} value={p.id}>
+                                        {p.name} - R$ {(priceToShow || 0).toFixed(2).replace('.', ',')}
+                                    </option>
+                                );
+                            })}
+                    </select>
+                    
+                    {/* Linha 2: Os botões organizados à direita */}
+                    <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0 shadow-sm h-[42px]">
+                            <button onClick={() => setEditItemQty(Math.max(1, editItemQty - 1))} className="w-10 h-full flex justify-center items-center font-black text-gray-500 hover:bg-gray-100 transition-colors">-</button>
+                            <span className="w-8 text-center font-bold text-sm text-slate-800">{editItemQty}</span>
+                            <button onClick={() => setEditItemQty(editItemQty + 1)} className="w-10 h-full flex justify-center items-center font-black text-emerald-600 hover:bg-emerald-50 transition-colors">+</button>
+                        </div>
+                        <button onClick={handleAddToEditCart} className="bg-emerald-600 text-white px-5 h-[42px] rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition flex items-center justify-center">
+                            + Adicionar
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+            {/* 👆 FIM DA NOVA ÁREA 👆 */}
 
                   {/* LISTA DE PRODUTOS PARA EDITAR (Já estavam no carrinho) */}
                   <div className="p-4 overflow-y-auto space-y-3 flex-1 bg-slate-50">
