@@ -1627,46 +1627,40 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
-            {/* 👇 CARTÕES FINANCEIROS (PADRÃO DE MERCADO: APP BANCÁRIO) 👇 */}
-            <div className="flex overflow-x-auto sm:grid sm:grid-cols-3 gap-3 pb-4 snap-x scrollbar-hide items-stretch">
+            {/* 👇 CARTÕES FINANCEIROS (LAYOUT COMPACTO E HARMÔNICO) 👇 */}
+            <div className="flex overflow-x-auto sm:grid sm:grid-cols-3 gap-3 pb-4 snap-x scrollbar-hide items-start">
               
               {/* Card 1: Fatura Total */}
-              <div className="bg-slate-800 text-white border border-slate-700 rounded-2xl p-4 shadow-sm flex flex-col justify-between min-w-[75vw] sm:min-w-0 snap-center text-left">
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">📋 Total do Lote</p>
-                  <h1 className="text-2xl font-black text-white leading-none">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
-                </div>
-                <p className="text-[10px] text-slate-400 mt-4 font-medium">Soma de todas as encomendas</p>
+              <div className="bg-slate-800 text-white border border-slate-700 rounded-2xl p-4 shadow-sm flex flex-col min-w-[75vw] sm:min-w-0 snap-center text-left">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">📋 Total do Lote</p>
+                <h1 className="text-2xl font-black text-white leading-none">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
+                <p className="text-[10px] text-slate-400 mt-1.5 font-medium">Soma de todas as encomendas</p>
               </div>
 
               {/* Card 2: Caixa do JC */}
-              <div className="bg-emerald-800 text-white border border-emerald-700 rounded-2xl p-4 shadow-sm flex flex-col justify-between min-w-[75vw] sm:min-w-0 snap-center text-left">
-                <div>
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa Local</p>
-                    <span className="text-[9px] font-bold bg-emerald-900/50 text-emerald-200 px-2 py-0.5 rounded-md">{pedidosPagosPolo.length} pagos</span>
-                  </div>
-                  <h1 className="text-2xl font-black text-white leading-none">R$ {totalArrecadadoPolo.toFixed(2).replace('.',',')}</h1>
+              <div className="bg-emerald-800 text-white border border-emerald-700 rounded-2xl p-4 shadow-sm flex flex-col min-w-[75vw] sm:min-w-0 snap-center text-left">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa Local</p>
+                  <span className="text-[9px] font-bold bg-emerald-900/50 text-emerald-200 px-2 py-0.5 rounded-md">{pedidosPagosPolo.length} pagos</span>
                 </div>
+                <h1 className="text-2xl font-black text-white leading-none">R$ {totalArrecadadoPolo.toFixed(2).replace('.',',')}</h1>
                 {totalArrecadadoPolo > 0 ? (
-                  <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] py-2 rounded-xl shadow-sm mt-4 transition">
+                  <button onClick={handleEfetuarRepassePolo} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] py-2 rounded-xl shadow-sm mt-3 transition">
                     💸 Enviar Repasse
                   </button>
                 ) : (
-                  <p className="text-[10px] text-emerald-400 mt-4 font-medium">Nenhum valor retido no caixa</p>
+                  <p className="text-[10px] text-emerald-400 mt-1.5 font-medium">Nenhum valor retido no caixa</p>
                 )}
               </div>
 
               {/* Card 3: Fiado / Pendente */}
-              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between min-w-[75vw] sm:min-w-0 snap-center text-left">
-                <div>
-                  <div className="flex justify-between items-start mb-1">
-                    <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber</p>
-                    <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md">{pedidosConfirmados.length} pend.</span>
-                  </div>
-                  <h1 className="text-2xl font-black text-orange-800 leading-none">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
+              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm flex flex-col min-w-[75vw] sm:min-w-0 snap-center text-left">
+                <div className="flex justify-between items-start mb-1">
+                  <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber</p>
+                  <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-md">{pedidosConfirmados.length} pend.</span>
                 </div>
-                <p className="text-[10px] text-orange-600/70 mt-4 font-medium">Pagamentos na retirada</p>
+                <h1 className="text-2xl font-black text-orange-800 leading-none">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
+                <p className="text-[10px] text-orange-600/70 mt-1.5 font-medium">Pagamentos na retirada</p>
               </div>
 
             </div>
