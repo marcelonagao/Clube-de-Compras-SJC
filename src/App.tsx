@@ -135,9 +135,72 @@ export default function App() {
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
   const [campanhaItens, setCampanhaItens] = useState([]); // A lista de produtos
-  const [novoItemNome, setNovoItemNome] = useState(''); // O campo de digitar o nome
-  const [novoItemPreco, setNovoItemPreco] = useState(''); // O campo de digitar o preço
+  const [produtoSelecionadoId, setProdutoSelecionadoId] = useState(''); // O campo de digitar o nome
+  // --- MOTOR DA MINI-LOJA (CAMPANHA EXPRESSA) ---
+  const [isCampanhaModalOpen, setIsCampanhaModalOpen] = useState(false); // Controla se a janelinha está aberta
+  const [campaignCart, setCampaignCart] = useState([]); // O carrinho isolado
 
+  // Função para ADICIONAR itens no carrinho paralelo
+  const adicionarAoCarrinhoCampanha = (produto) => {
+    setCampaignCart(prev => {
+      const itemExiste = prev.find(item => item.id === produto.id);
+      if (itemExiste) {
+        return prev.map(item => item.id === produto.id ? { ...item, qtd: item.qtd + 1 } : item);
+      }
+      return [...prev, { ...produto, qtd: 1 }];
+    });
+  };
+
+  // Função para REMOVER itens do carrinho paralelo
+  const removerDoCarrinhoCampanha = (produtoId) => {
+    setCampaignCart(prev => {
+      const itemExiste = prev.find(item => item.id === produtoId);
+      if (itemExiste && itemExiste.qtd > 1) {
+        return prev.map(item => item.id === produtoId ? { ...item, qtd: item.qtd - 1 } : item);
+      }
+      return prev.filter(item => item.id !== produtoId); // Remove da lista se a qtd chegar a zero
+    });
+  };
+
+  // Calcula o valor total apenas desta campanha
+  const totalCampanha = campaignCart.reduce((acc, item) => acc + (item.preco * item.qtd), 0);
+// --- FUNÇÃO DE CHECKOUT DA MINI-LOJA ---
+const finalizarPedidoCampanha = async () => {
+    setIsProcessingPayment(true);
+    
+    const expressOrder = {
+        customer: user?.name || 'Cliente',
+        email: user?.email || '',
+        whatsapp: user?.whatsapp || '',
+        polo: user?.polo || polos[0],
+        cpf: 'Não informado',
+        total: totalCampanha,
+        method: 'pix',
+        status: CONFIG_APENAS_COLETA ? 'confirmado' : 'aguardando_pagamento',
+        status_nfe: 'pendente',
+        date: new Date().toISOString(),
+        
+        // AS DUAS ETIQUETAS QUE PROTEGEM A LOGÍSTICA E O FINANCEIRO:
+        deliveryDate: sysConfig.ofertaEntrega, 
+        cicloFinanceiro: sysConfig.mesReferencia, 
+        
+        // Converte o carrinho da campanha para o formato do Firebase
+        items: campaignCart.map(i => ({ id: i.id, name: i.nome, price: i.preco, qtd: i.qtd, qty: i.qtd })),
+        faltas: []
+    };
+
+    try {
+        await addDoc(collection(db, "orders"), expressOrder);
+        showToast('Pedido da Campanha Confirmado!', 'success');
+        setCampaignCart([]); // Limpa o carrinho paralelo
+        setIsCampanhaModalOpen(false); // Fecha o modal
+        setIsProcessingPayment(false);
+        setCurrentScreen('my_orders'); // Joga o cliente para ver o recibo
+    } catch (error) {
+        showToast('Erro ao processar pedido.', 'error');
+        setIsProcessingPayment(false);
+    }
+  };
 
   // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
   const [sysConfig, setSysConfig] = useState({
@@ -152,23 +215,29 @@ export default function App() {
   });
 
   const adicionarItemCampanha = () => {
-    if (!novoItemNome || !novoItemPreco) {
-      alert("Preencha o nome e o preço do produto!");
+    if (!produtoSelecionadoId) {
+      alert("Selecione um produto da lista!");
       return;
     }
     
-    // Cria um item novo com um ID único
-    const novoProduto = {
-      id: Date.now().toString(), 
-      nome: novoItemNome,
-      preco: parseFloat(novoItemPreco.replace(',', '.'))
-    };
-  
-    setCampanhaItens([...campanhaItens, novoProduto]);
+    // Busca o produto real no seu catálogo (a variável products já existe no seu app)
+    const produtoReal = products.find(p => String(p.id) === String(produtoSelecionadoId));
     
-    // Limpa os campos para o Gestor digitar o próximo!
-    setNovoItemNome('');
-    setNovoItemPreco('');
+    if (produtoReal) {
+      // Pega o preço promocional (se for maior que zero e menor que o preço cheio), senão pega o preço normal
+      const isPromo = produtoReal.promotionalPrice > 0 && produtoReal.promotionalPrice < produtoReal.price;
+      const precoCorreto = isPromo ? produtoReal.promotionalPrice : produtoReal.price;
+
+      const novoProduto = {
+        id: produtoReal.id, 
+        nome: produtoReal.name,
+        preco: precoCorreto,
+        sku: produtoReal.sku || '' // Salva o SKU para amarrar com a logística
+      };
+
+      setCampanhaItens([...campanhaItens, novoProduto]);
+      setProdutoSelecionadoId(''); // Limpa a seleção para o próximo
+    }
   };
   
   const removerItemCampanha = (idParaRemover) => {
@@ -952,10 +1021,10 @@ useEffect(() => {
 
             {/* BANNERS AVISOS */}
             {campanhaAtiva.ativo && storeMode !== 'pausado' && !searchTerm && shopCategory === 'Todos' && (
-              <div onClick={() => setExpressModalOpen(true)} className={`${campanhaAtiva.cor} rounded-xl p-4 mb-6 text-white shadow-sm cursor-pointer transform transition hover:-translate-y-0.5 flex flex-col sm:flex-row items-center justify-between gap-4 border border-white/20`}>
+              <div onClick={() => setIsCampanhaModalOpen(true)} className={`${campanhaAtiva.cor} rounded-xl p-4 mb-6 text-white shadow-sm cursor-pointer transform transition hover:-translate-y-0.5 flex flex-col sm:flex-row items-center justify-between gap-4 border border-white/20`}>
                 <div>
                    <h3 className="text-lg font-bold mb-0.5">{campanhaAtiva.titulo}</h3>
-                   <p className="font-normal text-sm text-white/90">Aproveite: <span className="font-semibold">{campanhaAtiva.produtoNome}</span></p>
+                   <p className="font-normal text-sm text-white/90">Aproveite: <span className="font-semibold">Vários produtos selecionados!</span></p>
                 </div>
                 <button className="bg-white text-red-600 font-semibold px-6 py-2 rounded-lg shadow-sm hover:bg-gray-50 whitespace-nowrap w-full sm:w-auto text-sm">
                    Ver Oferta
@@ -4311,52 +4380,53 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaEntrega} onChange={e => setSysConfig({...sysConfig, ofertaEntrega: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm" placeholder="Ex: 30/06 - Ovos"/>
                            </div>
                            {/* --- ÁREA DE ADICIONAR PRODUTOS NA CAMPANHA --- */}
-<div className="mt-6 border-t pt-4">
-  <p className="text-sm font-semibold text-gray-600 mb-2">PRODUTOS DA CAMPANHA</p>
-  
-  {/* Linha para digitar o novo produto */}
+                           {/* Linha para selecionar o produto com Dropdown */}
   <div className="flex gap-2 items-end">
     <div className="flex-1">
-      <label className="text-xs text-gray-500">NOME DO PRODUTO</label>
-      <input 
-        type="text" 
-        className="w-full border rounded p-2" 
-        value={novoItemNome}
-        onChange={(e) => setNovoItemNome(e.target.value)}
-        placeholder="Ex: Queijo Canastra"
-      />
+      <label className="text-xs text-gray-500 font-bold mb-1 block">SELECIONE O PRODUTO DO CATÁLOGO</label>
+      <select 
+        className="w-full border border-gray-300 rounded-xl p-3 bg-white text-sm font-medium text-slate-700 outline-none focus:border-emerald-500"
+        value={produtoSelecionadoId}
+        onChange={(e) => setProdutoSelecionadoId(e.target.value)}
+      >
+        <option value="">Selecione um produto...</option>
+        {products.map(p => {
+           // Calcula o preço que vai aparecer na listinha
+           const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+           const precoExibicao = isPromo ? p.promotionalPrice : p.price;
+           
+           return (
+             <option key={p.id} value={p.id}>
+               {p.name} - R$ {precoExibicao.toFixed(2).replace('.', ',')}
+             </option>
+           );
+        })}
+      </select>
     </div>
-    <div className="w-32">
-      <label className="text-xs text-gray-500">PREÇO (R$)</label>
-      <input 
-        type="number" 
-        className="w-full border rounded p-2" 
-        value={novoItemPreco}
-        onChange={(e) => setNovoItemPreco(e.target.value)}
-        placeholder="45,00"
-      />
-    </div>
+    
+    {/* IMPORTANTE: type="button" impede que a página recarregue ao clicar */}
     <button 
+      type="button" 
       onClick={adicionarItemCampanha}
-      className="bg-emerald-600 text-white px-4 py-2 rounded font-bold hover:bg-emerald-700 transition"
+      className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-black hover:bg-emerald-700 transition shadow-sm h-[46px]"
     >
       + ADICIONAR
     </button>
   </div>
-
-  {/* Lista de produtos já adicionados */}
+   {/* 👇 COLE ESTA LISTA LOGO ABAIXO DA DIV DO BOTÃO "ADICIONAR" 👇 */}
   <div className="mt-4 flex flex-col gap-2">
     {campanhaItens.length === 0 ? (
       <p className="text-sm text-gray-400 italic">Nenhum produto adicionado ainda.</p>
     ) : (
       campanhaItens.map((item) => (
         <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded border">
-          <span className="font-medium text-gray-700">{item.nome}</span>
+          <span className="font-medium text-gray-700 text-sm">{item.nome}</span>
           <div className="flex items-center gap-4">
-            <span className="text-emerald-700 font-bold">R$ {item.preco.toFixed(2).replace('.', ',')}</span>
+            <span className="text-emerald-700 font-bold text-sm">R$ {item.preco.toFixed(2).replace('.', ',')}</span>
             <button 
+              type="button"
               onClick={() => removerItemCampanha(item.id)}
-              className="text-red-500 hover:text-red-700 font-bold text-sm"
+              className="text-red-500 hover:text-red-700 font-bold text-xs bg-red-50 px-2 py-1 rounded"
             >
               Remover
             </button>
@@ -4365,7 +4435,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       ))
     )}
   </div>
-</div>
                        </div>
                    </div>
 
@@ -4622,38 +4691,80 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         </div>
       )}
 
-      {/* 👇 O PASSO 4 ENTRA EXATAMENTE AQUI 👇 */}
-      {expressModalOpen && (
-         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 text-left">
-            <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100">
-               <button onClick={() => setExpressModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 bg-gray-100 p-1.5 rounded-full transition-colors"><X className="w-5 h-5"/></button>
-               
-               <div className="mb-6 mt-2 text-center">
-                   <h3 className="font-black text-2xl text-slate-800 leading-tight mb-2">{campanhaAtiva.produtoNome}</h3>
-                   <span className="bg-red-50 text-red-700 font-bold text-[10px] px-2.5 py-1 rounded-md uppercase tracking-wider border border-red-100">Entrega: {campanhaAtiva.dataEntrega}</span>
-               </div>
-
-               <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-6">
-                  <span className="font-bold text-gray-600 text-sm">Quantidade:</span>
-                  <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                     <button onClick={() => setExpressQty(Math.max(1, expressQty - 1))} className="w-12 h-12 flex items-center justify-center text-gray-500 hover:bg-gray-100 font-black text-xl transition-colors">-</button>
-                     <span className="w-10 text-center font-black text-slate-800 text-lg">{expressQty}</span>
-                     <button onClick={() => setExpressQty(expressQty + 1)} className="w-12 h-12 flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black text-xl transition-colors">+</button>
-                  </div>
-               </div>
-
-               <div className="flex justify-between items-end mb-6 px-2">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pb-1">Total a pagar<br/>na retirada:</span>
-                  <span className="text-4xl font-black text-emerald-700">R$ {(campanhaAtiva.preco * expressQty).toFixed(2).replace('.', ',')}</span>
-               </div>
-
-               <button onClick={handleExpressCheckout} disabled={isProcessingPayment} className="w-full bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg hover:bg-emerald-700 transition flex justify-center items-center text-base">
-                  {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Pedido Expresso'}
-               </button>
+      {/* --- NOVO MODAL DA MINI-LOJA (CARRINHO PARALELO) --- */}
+      {isCampanhaModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[200] flex items-center justify-center p-4 text-left">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
+            
+            {/* Cabeçalho */}
+            <div className="bg-red-600 p-5 text-white flex justify-between items-center shadow-md z-10 shrink-0">
+              <div>
+                <p className="text-xs font-bold text-red-200 uppercase tracking-widest">Campanha Especial</p>
+                <h2 className="font-black text-xl">{sysConfig.ofertaTitulo}</h2>
+                <span className="bg-red-800 text-white font-bold text-[10px] px-2.5 py-1 rounded-md uppercase tracking-wider mt-1 inline-block">Entrega: {sysConfig.ofertaEntrega}</span>
+              </div>
+              <button onClick={() => setIsCampanhaModalOpen(false)} className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center font-bold text-xl hover:bg-white/30 transition">&times;</button>
             </div>
-         </div>
+
+            {/* Prateleira de Produtos */}
+            <div className="p-4 overflow-y-auto flex-1 bg-slate-50">
+              {campanhaItens.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <p className="font-bold text-lg text-slate-800">Prateleira vazia</p>
+                  <p className="text-sm text-slate-600">Nenhum produto cadastrado nesta campanha.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {campanhaItens.map(produto => {
+                    const itemNoCarrinho = campaignCart.find(i => i.id === produto.id);
+                    const qtd = itemNoCarrinho ? itemNoCarrinho.qtd : 0;
+
+                    return (
+                      <div key={produto.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-4">
+                          <p className="font-bold text-slate-800 text-sm leading-tight">{produto.nome}</p>
+                          <p className="text-emerald-600 font-black mt-1">R$ {produto.preco.toFixed(2).replace('.', ',')}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          {qtd > 0 ? (
+                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl p-1 shadow-sm">
+                              <button onClick={() => removerDoCarrinhoCampanha(produto.id)} className="w-8 h-8 rounded-lg bg-white text-gray-500 font-black flex items-center justify-center">-</button>
+                              <span className="w-8 text-center font-black text-slate-800">{qtd}</span>
+                              <button onClick={() => adicionarAoCarrinhoCampanha(produto)} className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 font-black flex items-center justify-center">+</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => adicionarAoCarrinhoCampanha(produto)} className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl font-black text-xs hover:bg-emerald-200 transition">
+                              ADICIONAR
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Rodapé (Checkout Expresso) */}
+            {campaignCart.length > 0 && (
+              <div className="bg-white p-5 border-t border-gray-200 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] z-10 shrink-0">
+                <div className="flex justify-between items-end mb-4">
+                  <span className="font-bold text-gray-500 text-xs uppercase tracking-widest pb-1">Total a pagar<br/>na retirada:</span>
+                  <span className="font-black text-emerald-600 text-3xl">R$ {totalCampanha.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <button 
+                  onClick={finalizarPedidoCampanha} 
+                  disabled={isProcessingPayment}
+                  className="w-full bg-slate-800 text-white font-black py-4 rounded-xl hover:bg-slate-900 transition shadow-lg text-sm flex justify-center items-center"
+                >
+                  {isProcessingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : 'FINALIZAR PEDIDO DA CAMPANHA'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
-      {/* 👆 FIM DO PASSO 4 👆 */}
 
       {printLayout === 'catalogo' ? renderPrintCatalog() :
        printLayout === 'plaquinhas' ? renderPrintTags() :
