@@ -1627,16 +1627,17 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
         {CONFIG_APENAS_COLETA && (
           <div className="mb-6 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* 👇 CARTÕES FINANCEIROS (CARROSSEL NO MOBILE) 👇 */}
+            <div className="flex overflow-x-auto sm:grid sm:grid-cols-3 gap-3 pb-2 snap-x scrollbar-hide">
               {/* Card 1: Fatura Total (Obrigação com a Sede) */}
-              <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center">
+              <div className="bg-slate-800 text-white border-2 border-slate-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-center min-w-[85vw] sm:min-w-0 snap-center">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">📋 Total do Lote</p>
                 <h1 className="text-2xl font-black mt-1 text-white">R$ {totalGeralPolo.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-slate-300 mt-1 font-medium">Soma de todas as encomendas do polo</p>
               </div>
 
               {/* Card 2: Caixa do JC (O que já está no bolso) */}
-              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between">
+              <div className="bg-emerald-800 text-white border-2 border-emerald-900 rounded-2xl p-4 text-center shadow-md flex flex-col justify-between min-w-[85vw] sm:min-w-0 snap-center">
                 <div>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-widest">💰 Caixa da Unidade</p>
                   <h1 className="text-2xl font-black mt-1 text-white">R$ {totalArrecadadoPolo.toFixed(2).replace('.',',')}</h1>
@@ -1650,25 +1651,27 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
               </div>
 
               {/* Card 3: Fiado / Pendente */}
-              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center">
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center shadow-sm flex flex-col justify-center min-w-[85vw] sm:min-w-0 snap-center">
                 <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest">⏳ A Receber de Clientes</p>
                 <h1 className="text-2xl font-black text-orange-800 mt-1">R$ {totalAindaAReceber.toFixed(2).replace('.',',')}</h1>
                 <p className="text-[9px] text-orange-600 mt-1 font-medium">{pedidosConfirmados.length} membros pendentes</p>
               </div>
             </div>
+            {/* 👆 FIM DOS CARTÕES 👆 */}
 
-            {/* Botões de Ação do Representante */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                <button onClick={() => setShowMassNotify(true)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
-                    <BellRing className="w-5 h-5 mr-2"/> 🚨 Avisar Chegada de Carga
+            {/* 👇 BOTÕES DE AÇÃO (GRID COMPACTO NO MOBILE) 👇 */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 mb-4">
+                <button onClick={() => setShowMassNotify(true)} className="col-span-2 sm:col-span-1 sm:flex-1 bg-blue-600 text-white font-black py-2.5 sm:py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
+                    <BellRing className="w-4 h-4 sm:w-5 sm:h-5 mr-2"/> 🚨 Avisar Chegada
                 </button>
-                <button onClick={() => setIsPrintMode(true)} className="flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-sm flex items-center justify-center">
-                    <Printer className="w-5 h-5 mr-2"/> Imprimir Romaneio
+                <button onClick={() => setIsPrintMode(true)} className="sm:flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-2.5 sm:py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-[11px] sm:text-sm flex items-center justify-center">
+                    <Printer className="w-4 h-4 mr-1.5 sm:mr-2"/> Imprimir
                 </button>
-                <button onClick={() => setShowManualOrder(!showManualOrder)} className="flex-1 bg-slate-800 text-white font-bold py-3 rounded-xl shadow hover:bg-slate-900 transition text-sm">
-                    ➕ Incluir Pedido Manual
+                <button onClick={() => setShowManualOrder(!showManualOrder)} className="sm:flex-1 bg-slate-800 text-white font-bold py-2.5 sm:py-3 rounded-xl shadow hover:bg-slate-900 transition text-[11px] sm:text-sm flex items-center justify-center">
+                    ➕ Pedido Manual
                 </button>
             </div>
+            {/* 👆 FIM DOS BOTÕES 👆 */}
 
             {/* MODAL DE FILA DE NOTIFICAÇÕES */}
             {showMassNotify && (
