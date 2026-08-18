@@ -131,6 +131,7 @@ export default function App() {
   const [showMassNotify, setShowMassNotify] = useState(false);
   const [editCart, setEditCart] = useState([]);
   const [editItemProduct, setEditItemProduct] = useState('');
+  const [editItemQty, setEditItemQty] = useState(1);
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
@@ -1904,6 +1905,15 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                       }} className="p-2.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-colors border border-emerald-100 shadow-sm" title="Avisar no WhatsApp">
                                           <MessageCircle className="w-5 h-5"/>
                                       </button>
+                                      {/* 👇 NOVO BOTÃO DE EDITAR PARA O REPRESENTANTE 👇 */}
+                                        <button onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            setEditingAdminOrder(o);
+                                            setEditCart(o.items ? JSON.parse(JSON.stringify(o.items)) : []);
+                                        }} className="p-2.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors border border-blue-100 shadow-sm" title="Editar Pedido">
+                                            <Edit2 className="w-5 h-5"/>
+                                        </button>
+                                        {/* 👆 FIM DO BOTÃO DE EDITAR 👆 */}
                                   </div>
                               </div>
 
@@ -2455,6 +2465,28 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
       </div>
     );
   };
+
+// 👇 NOVA FUNÇÃO: ADICIONA PRODUTO NOVO NA EDIÇÃO DO PEDIDO 👇
+const handleAddToEditCart = () => {
+    if (!editItemProduct) return showToast('Selecione um produto!', 'error');
+    const prod = products.find(p => String(p.id) === String(editItemProduct));
+    if (!prod) return;
+    
+    const isPromo = prod.promotionalPrice > 0 && prod.promotionalPrice < prod.price;
+    const activePrice = isPromo ? prod.promotionalPrice : prod.price;
+
+    const existing = editCart.find(i => i.id === prod.id);
+    if (existing) {
+      setEditCart(editCart.map(i => i.id === prod.id ? { ...i, qty: (i.qty || i.qtd || 1) + editItemQty, qtd: (i.qty || i.qtd || 1) + editItemQty } : i));
+    } else {
+      setEditCart([...editCart, { id: prod.id, name: prod.name, price: activePrice, qty: editItemQty, qtd: editItemQty }]);
+    }
+    
+    setEditItemProduct('');
+    setEditItemQty(1);
+  };
+  // 👆 FIM DA NOVA FUNÇÃO 👆
+
   const handleSaveAdminOrder = async () => {
     try {
       // 1. Calcula o novo total baseado no carrinho editado
@@ -2463,8 +2495,10 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           return acc + ((item.price || 0) * quantidade);
       }, 0);
 
-      // 2. MÁGICA DO ESTOQUE: Compara o antes e o depois
-      if (storeMode === 'estoque' || storeMode === 'pronta_entrega') {
+      // 2. MÁGICA DO ESTOQUE: A REGRA DE BLINDAGEM DA SEDE
+      // Só mexe no estoque digital se quem estiver editando for o Gestor Master (na Sede).
+      // Se for o Representante no Polo, ele está usando a "Sobra Física" da Van, então ignoramos o banco!
+      if (isGestor && (storeMode === 'estoque' || storeMode === 'pronta_entrega')) {
           // Cria uma "memória" das quantidades antigas do pedido
           const oldQtyMap = {};
           (editingAdminOrder.items || []).forEach(i => {
@@ -2475,22 +2509,21 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           for (const newItem of editCart) {
               const newQty = newItem.qtd || newItem.qty || 1;
               const oldQty = oldQtyMap[newItem.id] || 0;
-              const diferenca = newQty - oldQty; // Se for positivo, o cliente adicionou. Se for negativo, removeu.
+              const diferenca = newQty - oldQty; 
 
               if (diferenca !== 0 && newItem.id !== 'oferta-1') {
                   const prodRef = doc(db, "products", newItem.id);
                   const prodDoc = await getDoc(prodRef);
                   if (prodDoc.exists()) {
                       const estoqueAtual = prodDoc.data().stock || 0;
-                      // Subtraímos a diferença (se ele adicionou 2, subtrai 2 do estoque. Se tirou 1, soma 1).
                       await updateDoc(prodRef, { stock: estoqueAtual - diferenca });
                   }
               }
-              // Apaga do mapa para sabermos o que foi completamente deletado do carrinho
+              // Apaga do mapa para sabermos o que foi completamente deletado
               delete oldQtyMap[newItem.id];
           }
 
-          // Se sobrou algo no oldQtyMap, é porque o item inteiro foi deletado (clicou no Lixo). Devolvemos o total pro estoque.
+          // Se sobrou algo no oldQtyMap, é porque o item inteiro foi deletado. Devolvemos pro estoque da Sede.
           for (const [deletedId, deletedQty] of Object.entries(oldQtyMap)) {
               if (deletedId !== 'oferta-1') {
                   const prodRef = doc(db, "products", deletedId);
@@ -2503,16 +2536,16 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           }
       }
 
-      // 3. Salva o pedido no banco de dados com os novos itens e o novo total
+      // 3. Salva o pedido no banco de dados com os novos itens e o novo total (Isso roda para ambos)
       await updateDoc(doc(db, "orders", editingAdminOrder.id), {
         items: editCart,
         total: newTotal
       });
       
-      showToast('Pedido atualizado com sucesso e estoque recalculado!', 'success');
+      showToast('Pedido atualizado com sucesso!', 'success');
       setEditingAdminOrder(null); // Fecha o modal
     } catch (err) {
-      showToast('Erro ao atualizar pedido e estoque.', 'error');
+      showToast('Erro ao atualizar pedido.', 'error');
     }
   };
 
@@ -2991,76 +3024,6 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                         ))}
                     </div>
                 )}
-                {/* MODAL DE EDIÇÃO DO ADMIN */}
-            {editingAdminOrder && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99] flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50">
-                            <div>
-                                <h3 className="font-black text-slate-800">Editar Pedido</h3>
-                                <p className="text-xs text-gray-500 font-bold">{editingAdminOrder.customer}</p>
-                            </div>
-                            <button onClick={() => setEditingAdminOrder(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                                <X className="w-5 h-5"/>
-                            </button>
-                        </div>
-
-                        {/* LISTA DE PRODUTOS PARA EDITAR */}
-                        <div className="p-4 overflow-y-auto space-y-3 flex-1">
-                            {editCart.map((item, idx) => {
-                                const quantidade = item.qtd || item.qty || 1;
-                                return (
-                                    <div key={idx} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-xl shadow-sm">
-                                        <div className="flex-1 pr-3">
-                                            <p className="font-bold text-sm text-slate-800 leading-tight">{item.name}</p>
-                                            <p className="text-xs text-gray-400 font-bold mt-0.5">R$ {(item.price || 0).toFixed(2)} / un</p>
-                                        </div>
-                                        <div className="flex items-center gap-3 bg-slate-50 border border-gray-200 rounded-lg p-1">
-                                            <button onClick={() => {
-                                                const newCart = [...editCart];
-                                                if (quantidade > 1) {
-                                                    newCart[idx].qtd = quantidade - 1;
-                                                    newCart[idx].qty = quantidade - 1;
-                                                    setEditCart(newCart);
-                                                } else {
-                                                    if(window.confirm('Remover este item do pedido?')) {
-                                                        newCart.splice(idx, 1);
-                                                        setEditCart(newCart);
-                                                    }
-                                                }
-                                            }} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-red-500 rounded-md font-bold text-lg transition-colors shadow-sm">-</button>
-                                            
-                                            <span className="w-4 text-center font-black text-slate-800 text-sm">{quantidade}</span>
-                                            
-                                            <button onClick={() => {
-                                                const newCart = [...editCart];
-                                                newCart[idx].qtd = quantidade + 1;
-                                                newCart[idx].qty = quantidade + 1;
-                                                setEditCart(newCart);
-                                            }} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-emerald-500 rounded-md font-bold text-lg transition-colors shadow-sm">+</button>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                            {editCart.length === 0 && (
-                                <div className="text-center py-6 bg-red-50 rounded-xl border border-red-100">
-                                    <p className="text-red-600 font-bold text-sm">O pedido ficará vazio.</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* RODAPÉ DO MODAL */}
-                        <div className="p-4 border-t border-gray-100 bg-slate-50 flex gap-3">
-                            <button onClick={() => setEditingAdminOrder(null)} className="flex-1 py-3 text-slate-600 font-bold text-sm hover:bg-gray-200 bg-gray-100 rounded-xl transition-colors">
-                                Cancelar
-                            </button>
-                            <button onClick={handleSaveAdminOrder} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl shadow-md transition-colors">
-                                Salvar Alterações
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             </div>
           </div>
         );
@@ -4781,6 +4744,14 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
           </div>
         </div>
       )}
+
+      {/* 👇 COLE O MODAL INTEIRO DE EDIÇÃO AQUI 👇 */}
+      {editingAdminOrder && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 text-left">
+             {/* ... todo aquele código gigante do modal que mandei no Passo 4B ... */}
+          </div>
+      )}
+      {/* 👆 FIM DO MODAL DE EDIÇÃO 👆 */}
 
       {printLayout === 'catalogo' ? renderPrintCatalog() :
        printLayout === 'plaquinhas' ? renderPrintTags() :
