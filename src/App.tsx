@@ -4744,14 +4744,113 @@ const handleAddToEditCart = () => {
           </div>
         </div>
       )}
-
-      {/* 👇 COLE O MODAL INTEIRO DE EDIÇÃO AQUI 👇 */}
-      {editingAdminOrder && (
+{/* --- MODAL GLOBAL DE EDIÇÃO DE PEDIDO (GESTOR E REP) --- */}
+{editingAdminOrder && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4 text-left">
-             {/* ... todo aquele código gigante do modal que mandei no Passo 4B ... */}
+              <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden border border-gray-100">
+                  
+                  {/* Cabeçalho */}
+                  <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-slate-50 shrink-0">
+                      <div>
+                          <h3 className="font-black text-slate-800">Editar Pedido</h3>
+                          <p className="text-xs text-gray-500 font-bold">{editingAdminOrder.customer}</p>
+                      </div>
+                      <button onClick={() => setEditingAdminOrder(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                          <X className="w-5 h-5"/>
+                      </button>
+                  </div>
+
+                  {/* NOVA ÁREA: INCLUIR PRODUTOS NOVOS */}
+                  <div className="p-4 bg-white border-b border-gray-200 shadow-sm z-10 shrink-0">
+                      <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-2">Adicionar Produto ao Pedido</p>
+                      <div className="flex gap-2">
+                          <select 
+                              value={editItemProduct} 
+                              onChange={e => setEditItemProduct(e.target.value)} 
+                              className="flex-1 p-2 border border-gray-300 rounded-lg text-sm font-medium outline-none focus:border-emerald-500"
+                          >
+                              <option value="">Selecione o Produto...</option>
+                              {[...products]
+                                  .filter(p => !p.pausado)
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map(p => {
+                                      const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
+                                      const priceToShow = isPromo ? p.promotionalPrice : p.price;
+                                      return (
+                                          <option key={p.id} value={p.id}>
+                                              {p.name} - R$ {(priceToShow || 0).toFixed(2).replace('.', ',')}
+                                          </option>
+                                      );
+                                  })}
+                          </select>
+                          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shrink-0">
+                              <button onClick={() => setEditItemQty(Math.max(1, editItemQty - 1))} className="w-8 flex justify-center font-black text-gray-500 hover:bg-gray-100">-</button>
+                              <span className="w-6 text-center font-bold text-sm text-slate-800">{editItemQty}</span>
+                              <button onClick={() => setEditItemQty(editItemQty + 1)} className="w-8 flex justify-center font-black text-emerald-600 hover:bg-emerald-50">+</button>
+                          </div>
+                          <button onClick={handleAddToEditCart} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-700 shadow-sm transition">
+                              + Add
+                          </button>
+                      </div>
+                  </div>
+
+                  {/* LISTA DE PRODUTOS PARA EDITAR (Já estavam no carrinho) */}
+                  <div className="p-4 overflow-y-auto space-y-3 flex-1 bg-slate-50">
+                      {editCart.map((item, idx) => {
+                          const quantidade = item.qtd || item.qty || 1;
+                          return (
+                              <div key={idx} className="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-xl shadow-sm">
+                                  <div className="flex-1 pr-3">
+                                      <p className="font-bold text-sm text-slate-800 leading-tight">{item.name}</p>
+                                      <p className="text-xs text-gray-400 font-bold mt-0.5">R$ {(item.price || 0).toFixed(2).replace('.', ',')} / un</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-50 border border-gray-200 rounded-lg p-1">
+                                      <button onClick={() => {
+                                          const newCart = [...editCart];
+                                          if (quantidade > 1) {
+                                              newCart[idx].qtd = quantidade - 1;
+                                              newCart[idx].qty = quantidade - 1;
+                                              setEditCart(newCart);
+                                          } else {
+                                              if(window.confirm('Remover este item do pedido?')) {
+                                                  newCart.splice(idx, 1);
+                                                  setEditCart(newCart);
+                                              }
+                                          }
+                                      }} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-red-500 rounded-md font-bold text-lg transition-colors shadow-sm">-</button>
+                                      
+                                      <span className="w-4 text-center font-black text-slate-800 text-sm">{quantidade}</span>
+                                      
+                                      <button onClick={() => {
+                                          const newCart = [...editCart];
+                                          newCart[idx].qtd = quantidade + 1;
+                                          newCart[idx].qty = quantidade + 1;
+                                          setEditCart(newCart);
+                                      }} className="w-8 h-8 flex items-center justify-center text-slate-600 hover:bg-white hover:text-emerald-500 rounded-md font-bold text-lg transition-colors shadow-sm">+</button>
+                                  </div>
+                              </div>
+                          )
+                      })}
+                      {editCart.length === 0 && (
+                          <div className="text-center py-6 bg-red-50 rounded-xl border border-red-100 shadow-inner">
+                              <p className="text-red-600 font-bold text-sm">Atenção: O pedido ficará vazio.</p>
+                          </div>
+                      )}
+                  </div>
+
+                  {/* RODAPÉ DO MODAL */}
+                  <div className="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0">
+                      <button onClick={() => setEditingAdminOrder(null)} className="flex-1 py-3 text-slate-600 font-bold text-sm hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors">
+                          Cancelar
+                      </button>
+                      <button onClick={handleSaveAdminOrder} className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-xl shadow-md transition-colors flex justify-center items-center">
+                          <CheckCircle className="w-4 h-4 mr-2"/> Salvar Pedido
+                      </button>
+                  </div>
+              </div>
           </div>
       )}
-      {/* 👆 FIM DO MODAL DE EDIÇÃO 👆 */}
+      {/* 👆 FIM DO MODAL GLOBAL DE EDIÇÃO 👆 */}
 
       {printLayout === 'catalogo' ? renderPrintCatalog() :
        printLayout === 'plaquinhas' ? renderPrintTags() :
