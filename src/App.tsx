@@ -4717,13 +4717,29 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                 <div className="space-y-3">
                   {campanhaItens.map(produto => {
                     const itemNoCarrinho = campaignCart.find(i => i.id === produto.id);
+                    const prodCat = products.find(p => p.id === produto.id);
+                    const hasDiscount = prodCat && prodCat.promotionalPrice > 0 && prodCat.promotionalPrice < prodCat.price;
                     const qtd = itemNoCarrinho ? itemNoCarrinho.qtd : 0;
 
                     return (
                       <div key={produto.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
                         <div className="flex-1 pr-4">
                           <p className="font-bold text-slate-800 text-sm leading-tight">{produto.nome}</p>
-                          <p className="text-emerald-600 font-black mt-1">R$ {produto.preco.toFixed(2).replace('.', ',')}</p>
+                          <div className="flex items-center gap-2 mt-1">
+  {hasDiscount && (
+    <span className="text-xs text-gray-400 line-through font-bold">
+      R$ {prodCat.price.toFixed(2).replace('.', ',')}
+    </span>
+  )}
+  <span className="text-emerald-600 font-black">
+    R$ {produto.preco.toFixed(2).replace('.', ',')}
+  </span>
+  {hasDiscount && (
+    <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-black">
+      Promo
+    </span>
+  )}
+</div>
                         </div>
                         
                         <div className="flex items-center gap-3">
