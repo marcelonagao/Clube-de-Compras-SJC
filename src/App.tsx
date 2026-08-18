@@ -134,6 +134,9 @@ export default function App() {
   const [expressModalOpen, setExpressModalOpen] = useState(false);
   const [expressQty, setExpressQty] = useState(1);
   const [valorRecebido, setValorRecebido] = useState('');
+  const [campanhaItens, setCampanhaItens] = useState([]); // A lista de produtos
+  const [novoItemNome, setNovoItemNome] = useState(''); // O campo de digitar o nome
+  const [novoItemPreco, setNovoItemPreco] = useState(''); // O campo de digitar o preço
 
 
   // --- O CÉREBRO: CONFIGURAÇÕES GLOBAIS VINDAS DO FIREBASE ---
@@ -147,6 +150,30 @@ export default function App() {
     ofertaPreco: 25.35,
     ofertaEntrega: "30/06 - Ovos"
   });
+
+  const adicionarItemCampanha = () => {
+    if (!novoItemNome || !novoItemPreco) {
+      alert("Preencha o nome e o preço do produto!");
+      return;
+    }
+    
+    // Cria um item novo com um ID único
+    const novoProduto = {
+      id: Date.now().toString(), 
+      nome: novoItemNome,
+      preco: parseFloat(novoItemPreco.replace(',', '.'))
+    };
+  
+    setCampanhaItens([...campanhaItens, novoProduto]);
+    
+    // Limpa os campos para o Gestor digitar o próximo!
+    setNovoItemNome('');
+    setNovoItemPreco('');
+  };
+  
+  const removerItemCampanha = (idParaRemover) => {
+    setCampanhaItens(campanhaItens.filter(item => item.id !== idParaRemover));
+  };
 
   // A PONTE MÁGICA: Conecta o Firebase ao resto do seu sistema automaticamente!
   const mesReferenciaGlobal = sysConfig.mesReferencia;
@@ -271,6 +298,8 @@ useEffect(() => {
                 setPolos(cData.polos);
                 setPolosText(cData.polos.join(', '));
             }
+            // 👇 LENDO A LISTA DA NOSSA CAMPANHA EXPRESSA 👇
+            setCampanhaItens(cData.campanhaItens || []);
         }
     });
   
@@ -4167,7 +4196,8 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
 
             await setDoc(doc(db, "settings", "global"), { 
                 sysConfig: sysConfig,
-                polos: polosArray
+                polos: polosArray,
+                campanhaItens: campanhaItens // 👉 AQUI ESTÁ A MÁGICA: Salvamos o array de produtos no banco!
             }, { merge: true });
             
             showToast('Configurações Salvas com Sucesso!');
@@ -4277,17 +4307,65 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
                                <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaTitulo} onChange={e => setSysConfig({...sysConfig, ofertaTitulo: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm"/>
                            </div>
                            <div>
-                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Nome do Produto</label>
-                               <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaProduto} onChange={e => setSysConfig({...sysConfig, ofertaProduto: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm"/>
-                           </div>
-                           <div>
                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 block">Lote/Entrega (Vai para a Van)</label>
                                <input type="text" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaEntrega} onChange={e => setSysConfig({...sysConfig, ofertaEntrega: e.target.value})} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none font-bold text-slate-800 text-sm" placeholder="Ex: 30/06 - Ovos"/>
                            </div>
-                           <div>
-                               <label className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mb-1 block">Preço de Venda (R$)</label>
-                               <input type="number" step="0.01" disabled={!sysConfig.ofertaAtiva} value={sysConfig.ofertaPreco} onChange={e => setSysConfig({...sysConfig, ofertaPreco: e.target.value})} className="w-full p-3 bg-orange-50 border border-orange-200 rounded-xl outline-none font-black text-orange-900 text-sm"/>
-                           </div>
+                           {/* --- ÁREA DE ADICIONAR PRODUTOS NA CAMPANHA --- */}
+<div className="mt-6 border-t pt-4">
+  <p className="text-sm font-semibold text-gray-600 mb-2">PRODUTOS DA CAMPANHA</p>
+  
+  {/* Linha para digitar o novo produto */}
+  <div className="flex gap-2 items-end">
+    <div className="flex-1">
+      <label className="text-xs text-gray-500">NOME DO PRODUTO</label>
+      <input 
+        type="text" 
+        className="w-full border rounded p-2" 
+        value={novoItemNome}
+        onChange={(e) => setNovoItemNome(e.target.value)}
+        placeholder="Ex: Queijo Canastra"
+      />
+    </div>
+    <div className="w-32">
+      <label className="text-xs text-gray-500">PREÇO (R$)</label>
+      <input 
+        type="number" 
+        className="w-full border rounded p-2" 
+        value={novoItemPreco}
+        onChange={(e) => setNovoItemPreco(e.target.value)}
+        placeholder="45,00"
+      />
+    </div>
+    <button 
+      onClick={adicionarItemCampanha}
+      className="bg-emerald-600 text-white px-4 py-2 rounded font-bold hover:bg-emerald-700 transition"
+    >
+      + ADICIONAR
+    </button>
+  </div>
+
+  {/* Lista de produtos já adicionados */}
+  <div className="mt-4 flex flex-col gap-2">
+    {campanhaItens.length === 0 ? (
+      <p className="text-sm text-gray-400 italic">Nenhum produto adicionado ainda.</p>
+    ) : (
+      campanhaItens.map((item) => (
+        <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded border">
+          <span className="font-medium text-gray-700">{item.nome}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-emerald-700 font-bold">R$ {item.preco.toFixed(2).replace('.', ',')}</span>
+            <button 
+              onClick={() => removerItemCampanha(item.id)}
+              className="text-red-500 hover:text-red-700 font-bold text-sm"
+            >
+              Remover
+            </button>
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
                        </div>
                    </div>
 
