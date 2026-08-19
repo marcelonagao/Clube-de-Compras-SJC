@@ -2983,6 +2983,22 @@ const handleAddToEditCart = () => {
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800">Histórico de Vendas</h2>
+                    <button 
+    onClick={() => {
+        // ATENÇÃO: Substitua 'orders' pelo nome da variável que guarda a lista de pedidos na sua tela atual
+        const pedidosValidos = orders.filter(p => p.status === 'pago'); // Filtra só quem pagou
+        if(pedidosValidos.length === 0) {
+            showToast('Nenhum pedido pago encontrado.', 'error');
+            return;
+        }
+        if(window.confirm(`Gerar numeração para ${pedidosValidos.length} pedidos?`)) {
+            gerarShortCodesExpedicao(pedidosValidos);
+        }
+    }}
+    className="bg-slate-800 hover:bg-slate-900 text-white font-black text-xs px-4 py-2 rounded-xl transition-colors shadow-md border border-slate-700 uppercase tracking-widest"
+>
+    🔢 Gerar Short Codes
+</button>
                     <p className="text-xs font-bold text-gray-500 mt-1">
                         Mostrando <span className="text-emerald-600">{filteredVendas.length} pedidos</span> • Total: R$ {totalFiltrado.toFixed(2)}
                     </p>
@@ -4515,6 +4531,48 @@ const handleAddToEditCart = () => {
         }
     };
 
+    const gerarShortCodesExpedicao = async (pedidosDoCiclo) => {
+      try {
+          // 1. Agrupamento: Separa os pedidos por Polo
+          const pedidosPorPolo = {};
+          
+          pedidosDoCiclo.forEach(pedido => {
+              // 👇 PRECISAMOS SABER QUAL O NOME DESTE CAMPO 👇
+              const poloDoPedido = pedido.polo || pedido.cidade || 'SEM_POLO'; 
+              if (!pedidosPorPolo[poloDoPedido]) pedidosPorPolo[poloDoPedido] = [];
+              pedidosPorPolo[poloDoPedido].push(pedido);
+          });
+
+          // 2. Ordenação e Numeração
+          let atualizacoes = 0;
+
+          for (const [nomePolo, pedidos] of Object.entries(pedidosPorPolo)) {
+              // Ordena em ordem alfabética usando o campo exato "customer" que vi no seu print
+              pedidos.sort((a, b) => (a.customer || '').localeCompare(b.customer || ''));
+
+              // Acha a sigla e a cor
+              const poloInfo = polosList.find(p => p.name === nomePolo);
+              const siglaPolo = poloInfo ? poloInfo.sigla : 'GEN';
+
+              // 3. Atribui o Short Code (ex: SJC-01)
+              for (let i = 0; i < pedidos.length; i++) {
+                  const numeroFormatado = String(i + 1).padStart(2, '0');
+                  const shortCode = `${siglaPolo}-${numeroFormatado}`;
+                  
+                  await updateDoc(doc(db, "orders", pedidos[i].id), { 
+                      shortCode: shortCode,
+                      statusExpedicao: 'PRONTO' // Podemos usar isso no PDF depois!
+                  });
+                  atualizacoes++;
+              }
+          }
+
+          showToast(`✅ ${atualizacoes} pedidos numerados com sucesso!`);
+      } catch (error) {
+          console.error("Erro ao gerar numeração:", error);
+          showToast('Erro ao numerar pedidos', 'error');
+      }
+  };
         return (
            <div className="space-y-6 text-left max-w-4xl mx-auto pb-10">
                <h2 className="text-2xl font-black text-slate-800 mb-4">Configurações Gerais do Sistema</h2>
@@ -4740,6 +4798,12 @@ const handleAddToEditCart = () => {
                                             <option value="bg-emerald-600" className="bg-emerald-600 text-white">🟢 Verde</option>
                                             <option value="bg-orange-500" className="bg-orange-500 text-white">🟠 Laranja</option>
                                             <option value="bg-purple-600" className="bg-purple-600 text-white">🟣 Roxo</option>
+                                            <option value="bg-pink-500" className="bg-pink-500 text-white">🌸 Rosa</option>
+                                            <option value="bg-yellow-500" className="bg-yellow-500 text-black">🟡 Amarelo</option>
+                                            <option value="bg-teal-500" className="bg-teal-500 text-white">🩵 Ciano</option>
+                                            <option value="bg-indigo-500" className="bg-indigo-500 text-white">🌌 Índigo</option>
+                                            <option value="bg-amber-800" className="bg-amber-800 text-white">🟤 Marrom</option>
+                                            <option value="bg-gray-500" className="bg-gray-500 text-white">⚪ Cinza</option>
                                         </select>
                                     </div>
                                     <div className="pt-5 flex items-center justify-center">
