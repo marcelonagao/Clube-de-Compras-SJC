@@ -2769,36 +2769,48 @@ const handleAddToEditCart = () => {
       };
 
       const exportarRelatorioVendas = () => {
-          let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;PRODUTO;QTD_VENDIDA;PRECO_MEDIO;TOTAL_ARRECADADO\n";
-          const currentStats = {};
-          
-          // Varre o lote e soma as quantidades vendidas de cada produto
-          currentCycleOrders.forEach(o => (o.items || []).forEach(i => {
-             if (!currentStats[i.id]) {
-                 // Busca o SKU original do produto no catálogo
-                 const prodCatalogo = products.find(p => String(p.id) === String(i.id));
-                 const sku = prodCatalogo ? (prodCatalogo.sku || '-') : '-';
-                 currentStats[i.id] = { sku: sku, name: i.name, qty: 0, val: 0 };
-             }
-             const qtd = i.qtd || i.qty || 1;
-             currentStats[i.id].qty += qtd; 
-             currentStats[i.id].val += ((i.price || 0) * qtd);
-          }));
-
-          // Organiza do que vendeu mais para o que vendeu menos
-          const rows = Object.values(currentStats)
-              .sort((a,b) => b.qty - a.qty)
-              .map(p => {
-                  const avgPrice = p.qty > 0 ? p.val / p.qty : 0;
-                  return `${p.sku};${p.name};${p.qty};${avgPrice.toFixed(2).replace('.',',')};${p.val.toFixed(2).replace('.',',')}`;
-              });
-          csvContent += rows.join("\n");
-          const link = document.createElement("a");
-          link.href = encodeURI(csvContent);
-          link.download = `Vendas_${filtroAtivo.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
-          link.click();
-          showToast("Relatório de Vendas baixado!");
-      };
+        // 1. Cabeçalho com o "\ufeff" para o Excel reconhecer acentuação e ponto e vírgula (;)
+        let csvContent = "data:text/csv;charset=utf-8,\ufeffDATA;CLIENTE;POLO;SKU;PRODUTO;QTD;PRECO_UNITARIO;TOTAL_ITEM\n";
+        const rows = [];
+        
+        // 2. Varre cada pedido do lote atual
+        currentCycleOrders.forEach(o => {
+            const dataPedido = o.date ? new Date(o.date).toLocaleDateString('pt-BR') : '-';
+            const cliente = o.customer || 'Cliente não identificado';
+            const polo = o.polo || 'Sem Polo';
+  
+            // 3. Varre os itens de dentro de cada pedido
+            (o.items || []).forEach(i => {
+                // Busca o SKU original do produto no catálogo
+                const prodCatalogo = products.find(p => String(p.id) === String(i.id));
+                const sku = prodCatalogo ? (prodCatalogo.sku || '-') : '-';
+                
+                const qtd = i.qtd || i.qty || 1;
+                const precoUnitario = Number(i.price || 0);
+                const totalItem = qtd * precoUnitario;
+  
+                // Adiciona a linha detalhada com aspas para proteger nomes com espaços ou caracteres
+                rows.push([
+                    dataPedido,
+                    `"${cliente}"`,
+                    `"${polo}"`,
+                    sku,
+                    `"${i.name}"`,
+                    qtd,
+                    precoUnitario.toFixed(2).replace('.', ','),
+                    totalItem.toFixed(2).replace('.', ',')
+                ]);
+            });
+        });
+  
+        // 4. Junta tudo e dispara o download do Excel
+        csvContent += rows.map(e => e.join(";")).join("\n");
+        const link = document.createElement("a");
+        link.href = encodeURI(csvContent);
+        link.download = `Fechamento_Analitico_${filtroAtivo.replace(/[^a-zA-Z0-9]/g, '_')}.csv`;
+        link.click();
+        showToast("Relatório Analítico baixado com sucesso!");
+    };
 
         return (
           <div className="space-y-6 text-left">
