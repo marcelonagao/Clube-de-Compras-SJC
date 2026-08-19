@@ -138,7 +138,6 @@ export default function App() {
   const [campanhaItens, setCampanhaItens] = useState([]); // A lista de produtos
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState(''); // O campo de digitar o nome
   const [catalogSearch, setCatalogSearch] = useState('');
-  const [editingProduct, setEditingProduct] = useState(null);
   const [estoqueSearch, setEstoqueSearch] = useState('');
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [pedidoEmConferencia, setPedidoEmConferencia] = useState(null);
