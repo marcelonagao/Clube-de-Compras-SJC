@@ -2769,12 +2769,16 @@ const handleAddToEditCart = () => {
       };
 
       const exportarRelatorioVendas = () => {
-        // 1. Cabeçalho com o "\ufeff" para o Excel reconhecer acentuação e ponto e vírgula (;)
-        let csvContent = "data:text/csv;charset=utf-8,\ufeffDATA;CLIENTE;POLO;SKU;PRODUTO;QTD;PRECO_UNITARIO;TOTAL_ITEM\n";
+        // 1. Cabeçalho atualizado com ID_PEDIDO e NUM_PEDIDO
+        let csvContent = "data:text/csv;charset=utf-8,\ufeffID_PEDIDO;NUM_PEDIDO;DATA;CLIENTE;POLO;SKU;PRODUTO;QTD;PRECO_UNITARIO;TOTAL_ITEM\n";
         const rows = [];
         
         // 2. Varre cada pedido do lote atual
         currentCycleOrders.forEach(o => {
+            // Captura os IDs do pedido
+            const idPedido = o.id || '-';
+            const numPedido = o.shortCode || 'S/N'; // Nosso código sequencial logístico
+            
             const dataPedido = o.date ? new Date(o.date).toLocaleDateString('pt-BR') : '-';
             const cliente = o.customer || 'Cliente não identificado';
             const polo = o.polo || 'Sem Polo';
@@ -2789,8 +2793,10 @@ const handleAddToEditCart = () => {
                 const precoUnitario = Number(i.price || 0);
                 const totalItem = qtd * precoUnitario;
   
-                // Adiciona a linha detalhada com aspas para proteger nomes com espaços ou caracteres
+                // Adiciona a linha detalhada na exata ordem do cabeçalho
                 rows.push([
+                    `"${idPedido}"`,
+                    `"${numPedido}"`,
                     dataPedido,
                     `"${cliente}"`,
                     `"${polo}"`,
