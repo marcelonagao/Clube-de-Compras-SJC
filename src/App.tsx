@@ -3964,6 +3964,80 @@ const handleAddToEditCart = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
+              {/* 👇 MODAL DE EDIÇÃO DE PRODUTO 👇 */}
+     {editingProduct && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-5 border-b border-gray-100 pb-4">
+                  <div>
+                      <h3 className="font-black text-slate-800 text-lg">Editar Produto</h3>
+                      <p className="text-xs text-gray-500 font-medium">SKU: {editingProduct.sku}</p>
+                  </div>
+                  <button onClick={() => setEditingProduct(null)} className="p-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
+              </div>
+              
+              <form onSubmit={async(e) => {
+                          e.preventDefault();
+                          const fd = new FormData(e.target);
+                          const np = { 
+                              name: fd.get('name'), 
+                              sku: fd.get('sku'), 
+                              supplierCode: fd.get('supplierCode') || fd.get('sku'), // 🧠 Inteligência
+                              category: fd.get('category'), 
+                              price: parseFloat(fd.get('price').replace(',','.')), 
+                              promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
+                              cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
+                              stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
+                          };
+                  const fileInput = e.target.querySelector('input[type="file"]');
+                  if (fileInput.files[0]) { 
+                      const imageBlob = await compressImage(fileInput.files[0]);
+                      const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
+                      const imageRef = ref(storage, imageName);
+                      await uploadBytes(imageRef, imageBlob);
+                      np.image = await getDownloadURL(imageRef);
+                  }
+                  try { 
+                      await updateDoc(doc(db,"products",editingProduct.id), np);
+                      setEditingProduct(null); showToast('Produto Atualizado!');
+                  } catch(er){ showToast('Erro ao atualizar', 'error'); }
+              }} className="space-y-4">
+                  
+                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-gray-200">
+                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
+                          {editingProduct.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
+                      </div>
+                      <label className="bg-white border border-gray-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-gray-50 shadow-sm">
+                          Trocar Foto <input type="file" accept="image/*" className="hidden" />
+                      </label>
+                  </div>
+                  
+                  <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nome</label><input name="name" defaultValue={editingProduct.name} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                              <div><label className="text-[10px] font-bold text-gray-500 uppercase">SKU Interno</label><input name="sku" defaultValue={editingProduct.sku} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                              <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Cód. NF (Fornecedor)</label><input name="supplierCode" defaultValue={editingProduct.supplierCode !== editingProduct.sku ? editingProduct.supplierCode : ''} placeholder="Opcional" className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800 placeholder-emerald-300 focus:border-emerald-500" /></div>
+                          </div>
+                          <div><label className="text-[10px] font-bold text-gray-500 uppercase">Categoria</label><input name="category" defaultValue={editingProduct.category} required list="categories-datalist" className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Preço (R$)</label><input name="price" defaultValue={editingProduct.price} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Promo (R$)</label><input name="promotionalPrice" defaultValue={editingProduct.promotionalPrice || ''} className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800" /></div>
+                  </div>
+                  <div><label className="text-[10px] font-bold text-red-600 uppercase">Custo Compra (R$)</label><input name="cost" defaultValue={editingProduct.cost || ''} required className="w-full p-3 bg-red-50 border border-red-200 rounded-xl outline-none text-sm font-bold text-red-800" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Unidades/Caixa</label><input name="minBox" defaultValue={editingProduct.minBox} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-bold text-orange-600 uppercase">Estoque Físico</label><input name="stock" defaultValue={editingProduct.stock} className="w-full p-3 bg-orange-50 border border-orange-200 rounded-xl outline-none text-sm font-bold text-orange-800" /></div>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-gray-100 flex gap-3">
+                      <button type="button" onClick={() => setEditingProduct(null)} className="flex-1 bg-gray-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 text-sm transition-colors">Cancelar</button>
+                      <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl shadow-md hover:bg-blue-700 text-sm flex justify-center items-center transition-colors">Salvar Edição</button>
+                  </div>
+              </form>
+          </div>
+      </div>
+  )}
+  {/* 👆 FIM DO MODAL DE EDIÇÃO 👇 */}
+
               {/* LADO ESQUERDO: APENAS NOVO PRODUTO */}
               <div className="w-full lg:col-span-5 lg:sticky lg:top-20 bg-transparent">
                   <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -4149,80 +4223,6 @@ const handleAddToEditCart = () => {
         </div>
       );
      }
-
-     {/* 👇 MODAL DE EDIÇÃO DE PRODUTO 👇 */}
-     {editingProduct && (
-      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-5 border-b border-gray-100 pb-4">
-                  <div>
-                      <h3 className="font-black text-slate-800 text-lg">Editar Produto</h3>
-                      <p className="text-xs text-gray-500 font-medium">SKU: {editingProduct.sku}</p>
-                  </div>
-                  <button onClick={() => setEditingProduct(null)} className="p-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
-              </div>
-              
-              <form onSubmit={async(e) => {
-                          e.preventDefault();
-                          const fd = new FormData(e.target);
-                          const np = { 
-                              name: fd.get('name'), 
-                              sku: fd.get('sku'), 
-                              supplierCode: fd.get('supplierCode') || fd.get('sku'), // 🧠 Inteligência
-                              category: fd.get('category'), 
-                              price: parseFloat(fd.get('price').replace(',','.')), 
-                              promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
-                              cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
-                              stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
-                          };
-                  const fileInput = e.target.querySelector('input[type="file"]');
-                  if (fileInput.files[0]) { 
-                      const imageBlob = await compressImage(fileInput.files[0]);
-                      const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
-                      const imageRef = ref(storage, imageName);
-                      await uploadBytes(imageRef, imageBlob);
-                      np.image = await getDownloadURL(imageRef);
-                  }
-                  try { 
-                      await updateDoc(doc(db,"products",editingProduct.id), np);
-                      setEditingProduct(null); showToast('Produto Atualizado!');
-                  } catch(er){ showToast('Erro ao atualizar', 'error'); }
-              }} className="space-y-4">
-                  
-                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-gray-200">
-                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
-                          {editingProduct.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
-                      </div>
-                      <label className="bg-white border border-gray-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-gray-50 shadow-sm">
-                          Trocar Foto <input type="file" accept="image/*" className="hidden" />
-                      </label>
-                  </div>
-                  
-                  <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nome</label><input name="name" defaultValue={editingProduct.name} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                              <div><label className="text-[10px] font-bold text-gray-500 uppercase">SKU Interno</label><input name="sku" defaultValue={editingProduct.sku} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
-                              <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Cód. NF (Fornecedor)</label><input name="supplierCode" defaultValue={editingProduct.supplierCode !== editingProduct.sku ? editingProduct.supplierCode : ''} placeholder="Opcional" className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800 placeholder-emerald-300 focus:border-emerald-500" /></div>
-                          </div>
-                          <div><label className="text-[10px] font-bold text-gray-500 uppercase">Categoria</label><input name="category" defaultValue={editingProduct.category} required list="categories-datalist" className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Preço (R$)</label><input name="price" defaultValue={editingProduct.price} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
-                      <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Promo (R$)</label><input name="promotionalPrice" defaultValue={editingProduct.promotionalPrice || ''} className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800" /></div>
-                  </div>
-                  <div><label className="text-[10px] font-bold text-red-600 uppercase">Custo Compra (R$)</label><input name="cost" defaultValue={editingProduct.cost || ''} required className="w-full p-3 bg-red-50 border border-red-200 rounded-xl outline-none text-sm font-bold text-red-800" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Unidades/Caixa</label><input name="minBox" defaultValue={editingProduct.minBox} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
-                      <div><label className="text-[10px] font-bold text-orange-600 uppercase">Estoque Físico</label><input name="stock" defaultValue={editingProduct.stock} className="w-full p-3 bg-orange-50 border border-orange-200 rounded-xl outline-none text-sm font-bold text-orange-800" /></div>
-                  </div>
-                  
-                  <div className="pt-2 border-t border-gray-100 flex gap-3">
-                      <button type="button" onClick={() => setEditingProduct(null)} className="flex-1 bg-gray-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 text-sm transition-colors">Cancelar</button>
-                      <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl shadow-md hover:bg-blue-700 text-sm flex justify-center items-center transition-colors">Salvar Edição</button>
-                  </div>
-              </form>
-          </div>
-      </div>
-  )}
-  {/* 👆 FIM DO MODAL DE EDIÇÃO 👇 */}
 
      if (adminTab === 'clientes') {
       // 1. Aplica a Busca, o Filtro por Cargo e Ordena Alfabeticamente
