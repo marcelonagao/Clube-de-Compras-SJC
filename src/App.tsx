@@ -143,6 +143,7 @@ export default function App() {
   const [pedidoEmConferencia, setPedidoEmConferencia] = useState(null);
   const [codigoBipado, setCodigoBipado] = useState('');
   const [qtdBipada, setQtdBipada] = useState('');
+  const [polosList, setPolosList] = useState([]);
 
   // 📡 Radar: Fica escutando os Pedidos da Mesa de Compras que estão a caminho
   useEffect(() => {
@@ -378,19 +379,37 @@ useEffect(() => {
     });
   
     const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-        if(docSnap.exists()) {
-            const cData = docSnap.data();
-            if(cData.storeMode) setStoreMode(cData.storeMode);
-            if(cData.sysConfig) setSysConfig(cData.sysConfig); 
-            // 👇 A MÁGICA DE LER OS POLOS DO BANCO 👇
-            if(cData.polos) {
-                setPolos(cData.polos);
-                setPolosText(cData.polos.join(', '));
-            }
-            // 👇 LENDO A LISTA DA NOSSA CAMPANHA EXPRESSA 👇
-            setCampanhaItens(cData.campanhaItens || []);
-        }
-    });
+      if(docSnap.exists()) {
+          const cData = docSnap.data();
+          if(cData.storeMode) setStoreMode(cData.storeMode);
+          if(cData.sysConfig) setSysConfig(cData.sysConfig); 
+          
+          // 👇 NOVA MÁGICA: MIGRAÇÃO INTELIGENTE DE POLOS 👇
+          if(cData.polos) {
+              // Mantemos o setPolos para não quebrar a Mesa de Compras antiga
+              setPolos(cData.polos);
+              
+              // Verifica se o banco de dados ainda tem o formato antigo (apenas texto)
+              if (typeof cData.polos[0] === 'string') {
+                  const polosConvertidos = cData.polos.map((nomePolo, index) => ({
+                      id: `legacy_${index}`,
+                      name: nomePolo,
+                      sigla: nomePolo.substring(0, 3).toUpperCase(), // Cria uma sigla provisória
+                      color: 'bg-slate-800'
+                  }));
+                  setPolosList(polosConvertidos);
+              } else {
+                  // Se já for o formato novo (com Sigla e Cor), carrega perfeitamente
+                  setPolosList(cData.polos);
+              }
+              
+              // Nota: A linha setPolosText foi deletada propositalmente! 🗑️
+          }
+
+          // 👇 LENDO A LISTA DA NOSSA CAMPANHA EXPRESSA 👇
+          setCampanhaItens(cData.campanhaItens || []);
+      }
+  });
   
     // Função de Limpeza: Desliga tudo se o usuário sair
     return () => { unsubProducts(); unsubOrders(); unsubUsers(); unsubConfig(); };
@@ -4483,13 +4502,11 @@ const handleAddToEditCart = () => {
       const handleSaveSettings = async (e) => {
         e.preventDefault();
         try {
-            // Converte o texto separado por vírgulas em uma lista de verdade
-            const polosArray = polosText.split(',').map(p => p.trim()).filter(Boolean);
-
+            // A MÁGICA: Em vez de quebrar texto por vírgula, enviamos a lista rica (Nome, Sigla, Cor)
             await setDoc(doc(db, "settings", "global"), { 
                 sysConfig: sysConfig,
-                polos: polosArray,
-                campanhaItens: campanhaItens // 👉 AQUI ESTÁ A MÁGICA: Salvamos o array de produtos no banco!
+                polos: polosList, 
+                campanhaItens: campanhaItens 
             }, { merge: true });
             
             showToast('Configurações Salvas com Sucesso!');
@@ -4652,24 +4669,104 @@ const handleAddToEditCart = () => {
                        </div>
                    </div>
 
-                    {/* BLOCO 3: GESTÃO DE UNIDADES (POLOS) */}
+                    {/* BLOCO 3: GESTÃO DE UNIDADES (POLOS) - LISTA DINÂMICA */}
                     <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-200 relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-6 border-b border-gray-100 pb-4 relative z-10">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 border-b border-gray-100 pb-4 relative z-10 gap-4">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center shrink-0"><MapPin className="w-5 h-5"/></div>
                                 <div>
                                     <h3 className="font-black text-slate-800 text-lg">Unidades da Franquia (Polos)</h3>
-                                    <p className="text-xs text-gray-500 font-medium">Digite os nomes dos JCs separados por vírgula.</p>
+                                    <p className="text-xs text-gray-500 font-medium">Gerencie os polos, siglas e cores para expedição.</p>
                                 </div>
                             </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setPolosList([...polosList, { id: Date.now().toString(), name: '', sigla: '', color: 'bg-slate-800' }])}
+                                className="bg-purple-100 text-purple-700 hover:bg-purple-200 font-bold text-xs px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shrink-0"
+                            >
+                                + Adicionar Polo
+                            </button>
                         </div>
-                        <div>
-                            <textarea 
-                                value={polosText} 
-                                onChange={e => setPolosText(e.target.value)} 
-                                className="w-full p-4 bg-slate-50 border border-gray-200 rounded-xl outline-none focus:border-purple-500 font-bold text-slate-700 text-sm min-h-[100px]" 
-                                placeholder="Ex: Sede, Centro, Norte..."
-                            />
+                        
+                        <div className="space-y-3">
+                            {polosList.map((polo, index) => (
+                                <div key={polo.id} className="flex flex-col sm:flex-row gap-3 items-center bg-slate-50 p-3 rounded-xl border border-gray-200 animate-in fade-in duration-200">
+                                    <div className="flex-1 w-full">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Nome do Polo</label>
+                                        <input 
+                                            type="text" 
+                                            value={polo.name}
+                                            onChange={(e) => {
+                                                const newList = [...polosList];
+                                                newList[index].name = e.target.value;
+                                                setPolosList(newList);
+                                            }}
+                                            placeholder="Ex: São José dos Campos" 
+                                            className="w-full p-2.5 bg-white border border-gray-200 rounded-lg outline-none text-sm font-bold focus:border-purple-500" 
+                                            required 
+                                        />
+                                    </div>
+                                    <div className="w-full sm:w-28">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Sigla (ID)</label>
+                                        <input 
+                                            type="text" 
+                                            value={polo.sigla}
+                                            onChange={(e) => {
+                                                const newList = [...polosList];
+                                                // Força ser maiúsculo e limita a 4 caracteres
+                                                newList[index].sigla = e.target.value.toUpperCase().substring(0, 4);
+                                                setPolosList(newList);
+                                            }}
+                                            placeholder="Ex: SJC" 
+                                            className="w-full p-2.5 bg-white border border-gray-200 rounded-lg outline-none text-sm font-black text-center focus:border-purple-500" 
+                                            maxLength={4}
+                                            required 
+                                        />
+                                    </div>
+                                    <div className="w-full sm:w-36">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase ml-1 mb-1 block">Cor de Rota</label>
+                                        <select 
+                                            value={polo.color}
+                                            onChange={(e) => {
+                                                const newList = [...polosList];
+                                                newList[index].color = e.target.value;
+                                                setPolosList(newList);
+                                            }}
+                                            className={`w-full p-2.5 border border-transparent rounded-lg outline-none text-sm font-bold text-white shadow-sm ${polo.color}`}
+                                        >
+                                            <option value="bg-slate-800" className="bg-slate-800 text-white">Preto Padrão</option>
+                                            <option value="bg-blue-600" className="bg-blue-600 text-white">🔵 Azul</option>
+                                            <option value="bg-red-600" className="bg-red-600 text-white">🔴 Vermelho</option>
+                                            <option value="bg-emerald-600" className="bg-emerald-600 text-white">🟢 Verde</option>
+                                            <option value="bg-orange-500" className="bg-orange-500 text-white">🟠 Laranja</option>
+                                            <option value="bg-purple-600" className="bg-purple-600 text-white">🟣 Roxo</option>
+                                        </select>
+                                    </div>
+                                    <div className="pt-5 flex items-center justify-center">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                if(window.confirm('Remover este polo?')) {
+                                                    setPolosList(polosList.filter(p => p.id !== polo.id));
+                                                }
+                                            }}
+                                            className="p-2.5 bg-white border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 rounded-lg transition-colors shadow-sm"
+                                            title="Remover Polo"
+                                        >
+                                            <X className="w-4 h-4"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {polosList.length === 0 && (
+                                <div className="text-center py-8 text-gray-400 text-sm font-medium border-2 border-dashed border-gray-200 rounded-xl">
+                                    Nenhum polo configurado ainda. <br/>Clique no botão roxo acima para adicionar.
+                                </div>
+                            )}
+                            
+                            {/* 🧠 TRUQUE DE ENGENHARIA: Esconde a lista JSON para o formulário salvar tudo de uma vez */}
+                            <input type="hidden" name="polos" value={JSON.stringify(polosList)} />
                         </div>
                     </div>
 
