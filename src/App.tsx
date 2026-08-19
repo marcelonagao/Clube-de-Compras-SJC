@@ -137,6 +137,25 @@ export default function App() {
   const [valorRecebido, setValorRecebido] = useState('');
   const [campanhaItens, setCampanhaItens] = useState([]); // A lista de produtos
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState(''); // O campo de digitar o nome
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [estoqueSearch, setEstoqueSearch] = useState('');
+  const [pedidosPendentes, setPedidosPendentes] = useState([]);
+  const [pedidoEmConferencia, setPedidoEmConferencia] = useState(null);
+  const [codigoBipado, setCodigoBipado] = useState('');
+  const [qtdBipada, setQtdBipada] = useState('');
+
+  // 📡 Radar: Fica escutando os Pedidos da Mesa de Compras que estão a caminho
+  useEffect(() => {
+      const q = query(collection(db, "pedidos_fornecedor"), where("status", "==", "AGUARDANDO_RECEBIMENTO"));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+          const peds = [];
+          snapshot.forEach((doc) => peds.push({ id: doc.id, ...doc.data() }));
+          // Ordena do mais antigo para o mais novo
+          peds.sort((a,b) => new Date(a.dataPedido) - new Date(b.dataPedido));
+          setPedidosPendentes(peds);
+      });
+      return () => unsubscribe();
+  }, []);
   // --- MOTOR DA MINI-LOJA (CAMPANHA EXPRESSA) ---
   const [isCampanhaModalOpen, setIsCampanhaModalOpen] = useState(false); // Controla se a janelinha está aberta
   const [campaignCart, setCampaignCart] = useState([]); // O carrinho isolado
@@ -865,34 +884,70 @@ useEffect(() => {
     // 👇 1. DESCOBRE QUEM É A SEDE (HUB) DINAMICAMENTE
     const { hub } = getRotasLogisticas(polos);
 
+    // 👇 [NOVO] PREPARA O DOCUMENTO DO PEDIDO PARA O BANCO DE DADOS (Shadow Mode)
+    const novoPedidoFornecedor = {
+        dataPedido: new Date().toISOString(),
+        status: 'AGUARDANDO_RECEBIMENTO',
+        itens: []
+    };
+
     for (const item of purchasePlan) {
+        // --- 🧠 INTELIGÊNCIA: SALVANDO PARA CONFERÊNCIA FUTURA ---
+        // Calcula quantas caixas desse produto foram pedidas no total (Cross-docking + HUB)
+        const caixasCross = item.demandCross ? item.demandCross.reduce((acc, cd) => acc + cd.boxes, 0) : 0;
+        const totalCaixasPedidas = (item.boxesToBuy || 0) + caixasCross;
+
+        if (totalCaixasPedidas > 0) {
+            novoPedidoFornecedor.itens.push({
+                idProduto: item.id,
+                sku: item.sku,
+                supplierCode: item.supplierCode || item.sku, // O De/Para automático!
+                name: item.name,
+                caixasPedidas: totalCaixasPedidas,
+                unidadesPorCaixa: item.minBox || 1,
+                totalUnidadesEsperadas: totalCaixasPedidas * (item.minBox || 1)
+            });
+        }
+        // -----------------------------------------------------------
+
         // As caixas inteiras vão direto para as Rotas agrupadas (Pinda cai em Taubaté)
-        item.demandCross.forEach(cd => {
-            rows.push([cd.planilha, item.sku, item.name, cd.boxes, '-', '-']);
-        });
+        if (item.demandCross) {
+            item.demandCross.forEach(cd => {
+                rows.push([cd.planilha, item.sku, item.name, cd.boxes, '-', '-']);
+            });
+        }
 
         // Calcula a Nova Sobra após as edições manuais
-        const newStock = (item.stock + (item.boxesToBuy * item.minBox)) - item.demandSede;
+        const newStock = (item.stock + ((item.boxesToBuy || 0) * (item.minBox || 1))) - (item.demandSede || 0);
 
         // 👇 2. AQUI ESTÁ A SUBSTITUIÇÃO! Usamos a variável hub em vez de "SEDE SJC"
-        if (item.boxesToBuy > 0 || item.demandSede > 0) {
-            rows.push([`${hub.toUpperCase()} (HUB)`, item.sku, item.name, item.boxesToBuy, item.demandSede, newStock]);
+        if ((item.boxesToBuy || 0) > 0 || (item.demandSede || 0) > 0) {
+            rows.push([`${hub.toUpperCase()} (HUB)`, item.sku, item.name, item.boxesToBuy || 0, item.demandSede || 0, newStock]);
         }
         
         // MÁGICA: Atualiza o catálogo automaticamente com a sobra nova!
-        if (item.stock !== newStock) {
-           try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 });
-           } catch (e) {}
-        }
+        // if (item.stock !== newStock) {
+        //    try { await updateDoc(doc(db, "products", item.id), { stock: newStock > 0 ? newStock : 0 });
+        //    } catch (e) {}
+        // }
     }
     
+    // 👇 [NOVO] GRAVA O PEDIDO OFICIAL NO FIREBASE
+    if (novoPedidoFornecedor.itens.length > 0) {
+        try {
+            await addDoc(collection(db, "pedidos_fornecedor"), novoPedidoFornecedor);
+        } catch (err) {
+            console.error("Erro ao gravar pedido para conferência", err);
+        }
+    }
+
     const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
     const link = document.createElement("a");
     link.href = encodeURI(csvContent);
     link.download = `Pedido_Fornecedor_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
     link.click();
     
-    showToast('CSV Exportado e Estoque Atualizado!');
+    showToast('CSV Exportado e Pedido Salvo no Sistema!');
     setPurchasePlan(null); 
   };
 
@@ -3508,6 +3563,317 @@ const handleAddToEditCart = () => {
       );
     }
 
+    {/* ========================================================= */}
+      {/* 📋 NOVA TELA: CONFERÊNCIA DE RECEBIMENTO (3-WAY MATCH) 📋 */}
+      {/* ========================================================= */}
+      if (adminTab === 'recebimento') {
+
+        const handleBiparItem = (e) => {
+            e.preventDefault();
+            if (!codigoBipado || !qtdBipada) return;
+
+            const qtd = parseInt(qtdBipada);
+            const novoPedido = JSON.parse(JSON.stringify(pedidoEmConferencia)); // Faz uma cópia limpa
+            
+            // 🧠 INTELIGÊNCIA DE BUSCA: Procura pelo código da NF ou pelo SKU interno
+            const itemIndex = novoPedido.itens.findIndex(i => 
+                (i.supplierCode || '').toLowerCase() === codigoBipado.toLowerCase() ||
+                (i.sku || '').toLowerCase() === codigoBipado.toLowerCase()
+            );
+
+            if (itemIndex >= 0) {
+                novoPedido.itens[itemIndex].caixasRecebidas = (novoPedido.itens[itemIndex].caixasRecebidas || 0) + qtd;
+                setPedidoEmConferencia(novoPedido);
+                setCodigoBipado('');
+                setQtdBipada('');
+                showToast('✅ Item conferido e adicionado!');
+            } else {
+                showToast('❌ Produto não encontrado neste pedido!', 'error');
+            }
+        };
+
+        const handleFinalizarRecebimento = async () => {
+            if (!window.confirm('Finalizar conferência? O estoque será atualizado com as quantidades recebidas.')) return;
+
+            try {
+                // 1. Atualiza o estoque oficial de cada produto que chegou
+                for (const item of pedidoEmConferencia.itens) {
+                    const recebido = item.caixasRecebidas || 0;
+                    if (recebido > 0) {
+                        const prodRef = doc(db, "products", item.idProduto);
+                        // Acha o estoque atual na memória do aplicativo
+                        const productState = products.find(p => p.id === item.idProduto);
+                        if (productState) {
+                            const novoEstoque = (productState.stock || 0) + (recebido * (item.unidadesPorCaixa || 1));
+                            await updateDoc(prodRef, { stock: novoEstoque });
+                        }
+                    }
+                }
+
+                // 2. Arquiva o pedido (Muda o status)
+                await updateDoc(doc(db, "pedidos_fornecedor", pedidoEmConferencia.id), {
+                    status: 'CONCLUIDO',
+                    dataRecebimento: new Date().toISOString(),
+                    itens: pedidoEmConferencia.itens 
+                });
+
+                showToast('Carga recebida com Sucesso!');
+                setPedidoEmConferencia(null);
+            } catch (error) {
+                showToast('Erro ao dar entrada no estoque', 'error');
+            }
+        };
+
+        return (
+            <div className="space-y-6 text-left max-w-4xl mx-auto">
+                <div className="mb-6">
+                    <h2 className="text-2xl font-black text-slate-800">Conferência de Carga</h2>
+                    <p className="text-xs font-bold text-gray-500 mt-1">Valide os itens físicos contra o planejamento da Mesa de Compras.</p>
+                </div>
+
+                {!pedidoEmConferencia ? (
+                    // --- TELA 1: LISTA DE CAMINHÕES ESPERADOS ---
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                        <h3 className="font-black text-slate-800 mb-4 uppercase tracking-widest text-xs">Cargas Aguardando Recebimento</h3>
+                        {pedidosPendentes.length === 0 ? (
+                            <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-gray-200">
+                                <p className="text-gray-500 font-bold text-sm">Nenhum pedido da Mesa de Compras pendente.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {pedidosPendentes.map(ped => (
+                                    <div key={ped.id} onClick={() => setPedidoEmConferencia(ped)} className="border border-blue-200 bg-blue-50 hover:bg-blue-100 p-5 rounded-xl cursor-pointer transition-colors shadow-sm">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md shadow-sm">Em Trânsito</span>
+                                            <span className="text-xs font-bold text-blue-800">{new Date(ped.dataPedido).toLocaleDateString('pt-BR')}</span>
+                                        </div>
+                                        <p className="font-black text-slate-800 text-lg mt-2">{ped.itens.length} Produtos</p>
+                                        <p className="text-xs text-blue-600 font-medium">Toque para iniciar a conferência física</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    // --- TELA 2: MESA DE CONFERÊNCIA ATIVA ---
+                    <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                        <button onClick={() => setPedidoEmConferencia(null)} className="text-sm font-bold text-gray-500 hover:text-slate-800 transition-colors flex items-center">
+                            ← Voltar para lista de cargas
+                        </button>
+                        
+                        {/* O BIPADOR (Leitor ou Digitação Manual) */}
+                        <div className="bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-900">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Leitor de DANFE (Nota Fiscal)</p>
+                            <form onSubmit={handleBiparItem} className="flex flex-col sm:flex-row gap-3">
+                                <div className="flex-1">
+                                    <input autoFocus value={codigoBipado} onChange={e=>setCodigoBipado(e.target.value)} placeholder="Digite o Cód. Fornecedor ou SKU..." className="w-full p-4 rounded-xl outline-none font-bold text-slate-800 focus:ring-4 ring-emerald-500/30" />
+                                </div>
+                                <div className="w-full sm:w-32">
+                                    <input type="number" min="1" value={qtdBipada} onChange={e=>setQtdBipada(e.target.value)} placeholder="Caixas" className="w-full p-4 rounded-xl outline-none font-black text-center text-slate-800 focus:ring-4 ring-emerald-500/30" />
+                                </div>
+                                <button type="submit" className="bg-emerald-500 hover:bg-emerald-400 text-white font-black px-6 py-4 rounded-xl transition-colors shrink-0">
+                                    CONFERIR
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* LISTA DO QUE FOI PEDIDO VS RECEBIDO */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                <div className="col-span-6">Produto Esperado</div>
+                                <div className="col-span-2 text-center">Caixas Pedidas</div>
+                                <div className="col-span-2 text-center">Cxs Recebidas</div>
+                                <div className="col-span-2 text-center">Status</div>
+                            </div>
+
+                            <div className="divide-y divide-gray-100">
+                                {pedidoEmConferencia.itens.map((item, idx) => {
+                                    const pedidas = item.caixasPedidas || 0;
+                                    const recebidas = item.caixasRecebidas || 0;
+                                    
+                                    let rowStyle = "";
+                                    let statusBadge = <span className="bg-gray-100 text-gray-500 px-2 py-1 rounded text-[9px] font-black">PENDENTE</span>;
+
+                                    if (recebidas === pedidas) {
+                                        rowStyle = "bg-emerald-50/50";
+                                        statusBadge = <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[9px] font-black border border-emerald-200">BATEU ✅</span>;
+                                    } else if (recebidas > 0 && recebidas < pedidas) {
+                                        rowStyle = "bg-orange-50/50";
+                                        statusBadge = <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-[9px] font-black border border-orange-200">FALTOU 🚨</span>;
+                                    } else if (recebidas > pedidas) {
+                                        rowStyle = "bg-red-50";
+                                        statusBadge = <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[9px] font-black border border-red-200">A MAIS 🛑</span>;
+                                    }
+
+                                    return (
+                                        <div key={idx} className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 p-4 items-center ${rowStyle}`}>
+                                            <div className="md:col-span-6">
+                                                <p className="font-bold text-slate-800 text-sm">{item.name}</p>
+                                                <p className="text-[10px] font-medium text-gray-500 mt-0.5">NF: <span className="font-black text-slate-600">{item.supplierCode}</span> | SKU: {item.sku}</p>
+                                            </div>
+                                            <div className="md:col-span-2 flex justify-between md:justify-center items-center">
+                                                <span className="text-[10px] font-bold text-gray-400 md:hidden">Pedidas:</span>
+                                                <span className="font-black text-slate-400 text-lg">{pedidas}</span>
+                                            </div>
+                                            <div className="md:col-span-2 flex justify-between md:justify-center items-center">
+                                                <span className="text-[10px] font-bold text-gray-400 md:hidden">Recebidas:</span>
+                                                <span className={`font-black text-xl ${recebidas > 0 ? 'text-slate-800' : 'text-slate-300'}`}>{recebidas}</span>
+                                            </div>
+                                            <div className="md:col-span-2 text-right md:text-center mt-2 md:mt-0">
+                                                {statusBadge}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* BOTÃO FINALIZAR */}
+                        <div className="flex justify-end pt-4">
+                            <button onClick={handleFinalizarRecebimento} className="bg-blue-600 hover:bg-blue-700 text-white font-black text-sm px-8 py-4 rounded-xl shadow-md transition-colors w-full sm:w-auto">
+                                ✔️ FINALIZAR E ATUALIZAR ESTOQUE
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    {/* ========================================================= */}
+      {/* 📦 NOVA TELA: MONITOR DE ESTOQUE (RÁPIDO) 📦 */}
+      {/* ========================================================= */}
+      if (adminTab === 'estoque') {
+        // Filtra os produtos ativos e a busca
+        const produtosAtivos = products.filter(p => !p.pausado);
+        
+        const filteredEstoque = produtosAtivos.filter(p => 
+            (p.name || '').toLowerCase().includes((estoqueSearch || '').toLowerCase()) ||
+            (p.sku || '').toLowerCase().includes((estoqueSearch || '').toLowerCase())
+        ).sort((a, b) => {
+            // Ordena primeiro os que têm MENOS estoque (para chamar sua atenção)
+            if ((a.stock || 0) === (b.stock || 0)) return (a.name || '').localeCompare(b.name || '');
+            return (a.stock || 0) - (b.stock || 0);
+        });
+
+        // Métricas do Topo
+        const totalPecas = produtosAtivos.reduce((sum, p) => sum + (p.stock || 0), 0);
+        const capitalImobilizado = produtosAtivos.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
+        const esgotados = produtosAtivos.filter(p => (p.stock || 0) <= 0).length;
+
+        // Função rápida para atualizar o estoque sem abrir modal
+        const handleQuickStockUpdate = async (id, currentStock, mudanca) => {
+            const novoEstoque = Math.max(0, currentStock + mudanca);
+            try {
+                await updateDoc(doc(db, "products", id), { stock: novoEstoque });
+            } catch (e) {
+                showToast('Erro ao atualizar estoque', 'error');
+            }
+        };
+
+        return (
+            <div className="space-y-6 text-left max-w-6xl mx-auto">
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+                    <div>
+                        <h2 className="text-2xl font-black text-slate-800">Monitor de Estoque</h2>
+                        <p className="text-xs font-bold text-gray-500 mt-1">Dê entrada em mercadorias ou faça auditoria física rápida.</p>
+                    </div>
+                    <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                        <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar produto ou SKU..." 
+                            value={estoqueSearch}
+                            onChange={(e) => setEstoqueSearch(e.target.value)}
+                            className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                        />
+                        {estoqueSearch && <button onClick={() => setEstoqueSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                    </div>
+                </div>
+
+                {/* CARTÕES DE MÉTRICAS */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-slate-800 text-white p-5 rounded-2xl shadow-sm border border-slate-700">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total de Peças</p>
+                        <h1 className="text-3xl font-black">{totalPecas} <span className="text-sm font-medium text-slate-400">unid.</span></h1>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-2xl shadow-sm">
+                        <p className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest mb-1">Capital Imobilizado</p>
+                        <h1 className="text-3xl font-black text-emerald-700">R$ {capitalImobilizado.toFixed(2).replace('.', ',')}</h1>
+                    </div>
+                    <div className={`p-5 rounded-2xl shadow-sm border ${esgotados > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${esgotados > 0 ? 'text-red-800' : 'text-gray-500'}`}>Itens Esgotados</p>
+                        <h1 className={`text-3xl font-black ${esgotados > 0 ? 'text-red-600' : 'text-gray-700'}`}>{esgotados} <span className="text-sm font-medium opacity-70">produtos</span></h1>
+                    </div>
+                </div>
+
+                {/* LISTA DE AUDITORIA */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                        <div className="col-span-1">Status</div>
+                        <div className="col-span-5">Produto & SKU</div>
+                        <div className="col-span-3 text-center">Valor Retido</div>
+                        <div className="col-span-3 text-right">Ajuste Rápido</div>
+                    </div>
+
+                    <div className="divide-y divide-gray-100 max-h-[65vh] overflow-y-auto">
+                        {filteredEstoque.length === 0 ? (
+                            <div className="text-center py-10">
+                                <Package className="w-10 h-10 mx-auto text-gray-200 mb-3"/>
+                                <p className="text-gray-500 font-medium text-sm">Nenhum produto encontrado.</p>
+                            </div>
+                        ) : (
+                            filteredEstoque.map(p => {
+                                const estoqueAtual = p.stock || 0;
+                                const minimo = p.minBox || 1;
+                                const valorRetido = estoqueAtual * (p.cost || 0);
+
+                                let statusColor = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                                let statusText = 'OK';
+                                if (estoqueAtual === 0) {
+                                    statusColor = 'bg-red-100 text-red-700 border-red-200';
+                                    statusText = 'ZERADO';
+                                } else if (estoqueAtual <= minimo) {
+                                    statusColor = 'bg-orange-100 text-orange-700 border-orange-200';
+                                    statusText = 'BAIXO';
+                                }
+
+                                return (
+                                    <div key={p.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 items-center hover:bg-slate-50 transition-colors">
+                                        
+                                        <div className="md:col-span-1 flex items-center">
+                                            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${statusColor}`}>
+                                                {statusText}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="md:col-span-5">
+                                            <p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p>
+                                            <p className="text-[10px] text-gray-500 mt-0.5 font-medium">SKU: {p.sku}</p>
+                                        </div>
+                                        
+                                        <div className="md:col-span-3 flex md:flex-col justify-between md:justify-center items-center">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest md:hidden">Retido:</span>
+                                            <span className="font-black text-slate-700 text-sm">R$ {valorRetido.toFixed(2).replace('.', ',')}</span>
+                                        </div>
+                                        
+                                        <div className="md:col-span-3 flex items-center justify-end gap-2 mt-2 md:mt-0">
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm h-9">
+                                                <button onClick={() => handleQuickStockUpdate(p.id, estoqueAtual, -1)} className="w-10 h-full flex items-center justify-center text-red-500 hover:bg-red-50 font-black transition-colors">-</button>
+                                                <span className="w-10 text-center font-black text-slate-800 text-sm bg-white border-x border-gray-100 h-full flex items-center justify-center">{estoqueAtual}</span>
+                                                <button onClick={() => handleQuickStockUpdate(p.id, estoqueAtual, 1)} className="w-10 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black transition-colors">+</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
           let csvContent = "data:text/csv;charset=utf-8,\ufeffSKU;NOME_DO_PRODUTO;CATEGORIA;PRECO_VENDA;CUSTO_COMPRA;QTD_CAIXA\n";
@@ -3546,7 +3912,12 @@ const handleAddToEditCart = () => {
       };
 
       // 1. INTELIGÊNCIA: Agrupa os produtos por Categoria automaticamente
-      const productsByCategory = products.reduce((acc, p) => {
+      const filteredCatalogProducts = products.filter(p => 
+        (p.name || '').toLowerCase().includes((catalogSearch || '').toLowerCase()) ||
+        (p.sku || '').toLowerCase().includes((catalogSearch || '').toLowerCase())
+    );
+
+    const productsByCategory = filteredCatalogProducts.reduce((acc, p) => {
         const cat = p.category || 'Geral';
         if (!acc[cat]) acc[cat] = [];
         acc[cat].push(p);
@@ -3593,25 +3964,24 @@ const handleAddToEditCart = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
-              {/* LADO ESQUERDO: FORMULÁRIO */}
+              {/* LADO ESQUERDO: APENAS NOVO PRODUTO */}
               <div className="w-full lg:col-span-5 lg:sticky lg:top-20 bg-transparent">
                   <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-                      <h3 className="font-black text-slate-800 text-lg mb-4 flex items-center justify-between">
-                          {editingProduct ? '✏️ Editando Produto' : '✨ Novo Produto'}
-                          {editingProduct && <button onClick={() => setEditingProduct(null)} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded hover:bg-gray-200">Cancelar</button>}
-                      </h3>
+                      <h3 className="font-black text-slate-800 text-lg mb-4">✨ Novo Produto</h3>
                       
-                      <form key={editingProduct?.id || 'new'} onSubmit={async(e) => {
+                      <form onSubmit={async(e) => {
                         e.preventDefault();
                         const fd = new FormData(e.target);
                         const np = { 
-                         name: fd.get('name'), sku: fd.get('sku'), category: fd.get('category'), 
+                         name: fd.get('name'), 
+                         sku: fd.get('sku'), 
+                         supplierCode: fd.get('supplierCode') || fd.get('sku'), // 🧠 Inteligência: Se deixar em branco, copia o SKU
+                         category: fd.get('category'), 
                          price: parseFloat(fd.get('price').replace(',','.')), 
                          promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
                          cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
                          stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
-                         image: editingProduct?.image || '📦',
-                         pausado: editingProduct?.pausado || false
+                         image: '📦', pausado: false
                         };
                         const fileInput = e.target.querySelector('input[type="file"]');
                         if (fileInput.files[0]) { 
@@ -3622,44 +3992,47 @@ const handleAddToEditCart = () => {
                             np.image = await getDownloadURL(imageRef);
                         }
                         try { 
-                           if(editingProduct) await updateDoc(doc(db,"products",editingProduct.id), np);
-                           else await addDoc(collection(db,"products"), np); 
-                           setEditingProduct(null); e.target.reset(); showToast('Salvo!');
+                           await addDoc(collection(db,"products"), np); 
+                           e.target.reset(); showToast('Produto Cadastrado!');
                         } catch(er){ showToast('Erro', 'error'); }
                       }} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                         
                          <div className="flex flex-col gap-3">
                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200">
                               <div className="w-12 h-12 bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                 {editingProduct?.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
+                                 <ImageIcon className="w-5 h-5 text-gray-400"/>
                               </div>
                               <label className="bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-emerald-100">Escolher Foto <input type="file" accept="image/*" className="hidden" /></label>
                            </div>
+                           <input name="name" placeholder="Nome do Produto" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
                            
-                           <input name="name" defaultValue={editingProduct?.name} placeholder="Nome do Produto" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                           
+                           {/* 👇 NOVA ÁREA DO SKU E CÓD. FORNECEDOR 👇 */}
                            <div className="grid grid-cols-2 gap-3">
-                               <input name="sku" defaultValue={editingProduct?.sku} placeholder="SKU (Código)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                               <input name="category" defaultValue={editingProduct?.category} placeholder="Selecione ou Digite..." list="categories-datalist" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium bg-white" />
-                               <datalist id="categories-datalist">
-                                   {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                               </datalist>
-                           </div>
-
-                           <div className="grid grid-cols-2 gap-3">
-                               <input name="price" defaultValue={editingProduct?.price} placeholder="Preço (R$)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
-                               <input name="promotionalPrice" defaultValue={editingProduct?.promotionalPrice || ''} placeholder="Promoção (R$)" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
+                               <div>
+                                   <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">SKU Interno</label>
+                                   <input name="sku" placeholder="SKU (Seu Código)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                               </div>
+                               <div>
+                                   <label className="text-[10px] font-bold text-emerald-600 uppercase ml-1">Cód. Fornecedor (NF)</label>
+                                   <input name="supplierCode" placeholder="Opcional" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800 placeholder-emerald-300" title="Deixe em branco se for igual ao seu SKU" />
+                               </div>
                            </div>
                            
-                           <input name="cost" defaultValue={editingProduct?.cost || ''} placeholder="Custo de Compra (R$)" required className="w-full p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
-                           
+                           <input name="category" placeholder="Categoria (Selecione ou Digite...)" list="categories-datalist" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium bg-white" />
+                           <datalist id="categories-datalist">
+                               {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                           </datalist>
+                           <div className="grid grid-cols-2 gap-3">
+                               <input name="price" placeholder="Preço (R$)" required className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" />
+                               <input name="promotionalPrice" placeholder="Promoção (R$)" className="w-full p-3 rounded-lg border border-emerald-200 bg-emerald-50 outline-none text-sm font-bold text-emerald-800" />
+                           </div>
+                           <input name="cost" placeholder="Custo de Compra (R$)" required className="w-full p-3 rounded-lg border border-red-200 bg-red-50 outline-none text-sm font-bold text-red-800" />
                            <div className="grid grid-cols-2 gap-3 items-end">
-                              <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1 truncate">Itens por Caixa</label><input name="minBox" defaultValue={editingProduct?.minBox||'1'} className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
-                              <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1 truncate">Estoque Local</label><input name="stock" defaultValue={editingProduct?.stock||'0'} className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
+                              <div><label className="text-[10px] font-bold ml-1 block text-gray-500 mb-1">Itens por Caixa</label><input name="minBox" defaultValue="1" className="w-full p-3 rounded-lg border border-gray-200 outline-none text-sm font-medium" /></div>
+                              <div><label className="text-[10px] font-bold text-orange-600 ml-1 block mb-1">Estoque Local</label><input name="stock" defaultValue="0" className="w-full p-3 rounded-lg border border-orange-200 bg-orange-50 outline-none text-sm font-bold text-orange-800" /></div>
                            </div>
-                           
                            <button type="submit" className="w-full bg-slate-800 text-white font-black py-4 rounded-xl shadow mt-2 text-sm hover:bg-slate-900 transition-colors">
-                               {editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}
+                               Cadastrar Produto
                            </button>
                          </div>
                       </form>
@@ -3668,7 +4041,20 @@ const handleAddToEditCart = () => {
 
               {/* LADO DIREITO: LISTA DE PRODUTOS ORGANIZADA POR CATEGORIAS COLAPSÁVEIS */}
               <div className="lg:col-span-7 space-y-3">
-                  <h3 className="font-black text-slate-800 text-lg mb-4">Produtos Cadastrados ({products.length})</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                      <h3 className="font-black text-slate-800 text-lg">Catálogo ({filteredCatalogProducts.length})</h3>
+                      <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                          <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                          <input 
+                              type="text" 
+                              placeholder="Buscar por nome ou SKU..." 
+                              value={catalogSearch}
+                              onChange={(e) => setCatalogSearch(e.target.value)}
+                              className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                          />
+                          {catalogSearch && <button onClick={() => setCatalogSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                      </div>
+                  </div>
                   
                   {Object.entries(productsByCategory).sort((a, b) => a[0].localeCompare(b[0])).map(([categoryName, catProducts]) => {
                       const isCatExpanded = expandedCatalogCats[categoryName];
@@ -3759,6 +4145,80 @@ const handleAddToEditCart = () => {
         </div>
       );
      }
+
+     {/* 👇 MODAL DE EDIÇÃO DE PRODUTO 👇 */}
+     {editingProduct && (
+      <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-5 border-b border-gray-100 pb-4">
+                  <div>
+                      <h3 className="font-black text-slate-800 text-lg">Editar Produto</h3>
+                      <p className="text-xs text-gray-500 font-medium">SKU: {editingProduct.sku}</p>
+                  </div>
+                  <button onClick={() => setEditingProduct(null)} className="p-1.5 bg-gray-100 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"><X className="w-5 h-5"/></button>
+              </div>
+              
+              <form onSubmit={async(e) => {
+                          e.preventDefault();
+                          const fd = new FormData(e.target);
+                          const np = { 
+                              name: fd.get('name'), 
+                              sku: fd.get('sku'), 
+                              supplierCode: fd.get('supplierCode') || fd.get('sku'), // 🧠 Inteligência
+                              category: fd.get('category'), 
+                              price: parseFloat(fd.get('price').replace(',','.')), 
+                              promotionalPrice: parseFloat(fd.get('promotionalPrice').replace(',','.')) || 0, 
+                              cost: parseFloat(fd.get('cost').replace(',','.')) || 0,
+                              stock: parseInt(fd.get('stock')||'0'), minBox: parseInt(fd.get('minBox')||'1'), 
+                          };
+                  const fileInput = e.target.querySelector('input[type="file"]');
+                  if (fileInput.files[0]) { 
+                      const imageBlob = await compressImage(fileInput.files[0]);
+                      const imageName = `produtos/${Date.now()}_${fileInput.files[0].name}`;
+                      const imageRef = ref(storage, imageName);
+                      await uploadBytes(imageRef, imageBlob);
+                      np.image = await getDownloadURL(imageRef);
+                  }
+                  try { 
+                      await updateDoc(doc(db,"products",editingProduct.id), np);
+                      setEditingProduct(null); showToast('Produto Atualizado!');
+                  } catch(er){ showToast('Erro ao atualizar', 'error'); }
+              }} className="space-y-4">
+                  
+                  <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-gray-200">
+                      <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center overflow-hidden shrink-0 border border-gray-100">
+                          {editingProduct.image?.length > 50 ? <img src={editingProduct.image} className="w-full h-full object-cover"/> : <ImageIcon className="w-5 h-5 text-gray-400"/>}
+                      </div>
+                      <label className="bg-white border border-gray-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold cursor-pointer text-xs transition-colors hover:bg-gray-50 shadow-sm">
+                          Trocar Foto <input type="file" accept="image/*" className="hidden" />
+                      </label>
+                  </div>
+                  
+                  <div><label className="text-[10px] font-bold text-gray-500 uppercase">Nome</label><input name="name" defaultValue={editingProduct.name} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                              <div><label className="text-[10px] font-bold text-gray-500 uppercase">SKU Interno</label><input name="sku" defaultValue={editingProduct.sku} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                              <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Cód. NF (Fornecedor)</label><input name="supplierCode" defaultValue={editingProduct.supplierCode !== editingProduct.sku ? editingProduct.supplierCode : ''} placeholder="Opcional" className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800 placeholder-emerald-300 focus:border-emerald-500" /></div>
+                          </div>
+                          <div><label className="text-[10px] font-bold text-gray-500 uppercase">Categoria</label><input name="category" defaultValue={editingProduct.category} required list="categories-datalist" className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Preço (R$)</label><input name="price" defaultValue={editingProduct.price} required className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-bold text-emerald-600 uppercase">Promo (R$)</label><input name="promotionalPrice" defaultValue={editingProduct.promotionalPrice || ''} className="w-full p-3 bg-emerald-50 border border-emerald-200 rounded-xl outline-none text-sm font-bold text-emerald-800" /></div>
+                  </div>
+                  <div><label className="text-[10px] font-bold text-red-600 uppercase">Custo Compra (R$)</label><input name="cost" defaultValue={editingProduct.cost || ''} required className="w-full p-3 bg-red-50 border border-red-200 rounded-xl outline-none text-sm font-bold text-red-800" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <div><label className="text-[10px] font-bold text-gray-500 uppercase">Unidades/Caixa</label><input name="minBox" defaultValue={editingProduct.minBox} className="w-full p-3 bg-slate-50 border border-gray-200 rounded-xl outline-none text-sm font-medium focus:border-emerald-500" /></div>
+                      <div><label className="text-[10px] font-bold text-orange-600 uppercase">Estoque Físico</label><input name="stock" defaultValue={editingProduct.stock} className="w-full p-3 bg-orange-50 border border-orange-200 rounded-xl outline-none text-sm font-bold text-orange-800" /></div>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-gray-100 flex gap-3">
+                      <button type="button" onClick={() => setEditingProduct(null)} className="flex-1 bg-gray-100 text-slate-600 font-bold py-3.5 rounded-xl hover:bg-gray-200 text-sm transition-colors">Cancelar</button>
+                      <button type="submit" className="flex-1 bg-blue-600 text-white font-black py-3.5 rounded-xl shadow-md hover:bg-blue-700 text-sm flex justify-center items-center transition-colors">Salvar Edição</button>
+                  </div>
+              </form>
+          </div>
+      </div>
+  )}
+  {/* 👆 FIM DO MODAL DE EDIÇÃO 👇 */}
 
      if (adminTab === 'clientes') {
       // 1. Aplica a Busca, o Filtro por Cargo e Ordena Alfabeticamente
@@ -4016,224 +4476,6 @@ const handleAddToEditCart = () => {
           );
       };
 
-        // 🛠️ FUNÇÃO DE MIGRAÇÃO: OVOS 20 UN (OVOS20U) ➔ OVOS 30 UN (OVOS30U) NAS UNIDADES ESPECÍFICAS
-        const handleMigrarOvos = async () => {
-          // 1. Busca os IDs corretos através dos SKUs
-          const produtoAntigo = products.find(p => String(p.sku) === 'OVOS20U');
-          const produtoNovo = products.find(p => String(p.sku) === 'OVOS30U');
-
-          if (!produtoAntigo || !produtoNovo) {
-              return showToast('Erro: Verifique se os produtos com SKUs OVOS20U e OVOS30U existem no catálogo!', 'error');
-          }
-
-          // Calcula o preço da nova bandeja (considerando se está em promo)
-          const isPromo = produtoNovo.promotionalPrice > 0 && produtoNovo.promotionalPrice < produtoNovo.price;
-          const novoPrecoUnitario = isPromo ? produtoNovo.promotionalPrice : produtoNovo.price;
-
-          // Lista estrita de polos que sofrerão a alteração
-          const polosAlvo = ['Caçapava', 'Jacareí', 'Caraguatatuba', 'Cruzeiro', 'Guaratinguetá', 'São José dos Campos (Sede)'];
-
-          showConfirm(
-              'Atualizar Pedidos de Ovos',
-              `Isto trocará "${produtoAntigo.name}" por "${produtoNovo.name}" apenas para os polos de satélite e sede. O valor passará a ser R$ ${novoPrecoUnitario.toFixed(2).replace('.', ',')}. Deseja continuar?`,
-              async () => {
-                  try {
-                      // Filtro Duplo: Mês Vigente E Unidades Alvo
-                      const pedidosDoCiclo = orders.filter(o => {
-                          const ciclo = o.cicloFinanceiro || 'Julho/2026';
-                          return ciclo === sysConfig.mesReferencia && polosAlvo.includes(o.polo);
-                      });
-
-                      let pedidosAtualizados = 0;
-
-                      for (const pedido of pedidosDoCiclo) {
-                          let teveAlteracao = false;
-                          let novoTotalItens = 0;
-
-                          const novosItens = (pedido.items || []).map(item => {
-                              // Encontrou a bandeja antiga? Substitui pela nova!
-                              if (String(item.id) === String(produtoAntigo.id)) {
-                                  teveAlteracao = true;
-                                  
-                                  const quantidade = item.qtd || item.qty || 1;
-                                  novoTotalItens += (novoPrecoUnitario * quantidade);
-
-                                  return {
-                                      ...item,
-                                      id: produtoNovo.id,
-                                      name: produtoNovo.name,
-                                      price: novoPrecoUnitario
-                                      // Diferente do fígado, aqui a quantidade não é multiplicada
-                                  };
-                              } else {
-                                  const quantidade = item.qtd || item.qty || 1;
-                                  novoTotalItens += ((item.price || 0) * quantidade);
-                                  return item;
-                              }
-                          });
-
-                          if (teveAlteracao) {
-                              // Abate eventuais cortes
-                              const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
-                              const totalFinal = Math.max(0, novoTotalItens - totalFaltas);
-
-                              await updateDoc(doc(db, "orders", pedido.id), {
-                                  items: novosItens,
-                                  total: totalFinal
-                              });
-                              pedidosAtualizados++;
-                          }
-                      }
-
-                      showToast(`Sucesso! ${pedidosAtualizados} pedido(s) foram atualizados para a Bandeja de 30.`, 'success');
-                  } catch (err) {
-                      console.error("Erro na atualização em lote:", err);
-                      showToast('Erro ao atualizar pedidos no banco de dados.', 'error');
-                  }
-              },
-              'warning'
-          );
-      };
-        
-        // 🛠️ FUNÇÃO DE MIGRAÇÃO: FÍGADO ANTIGO (1kg) ➔ Figado Bp Bd 600 (SKU 1414) COM DOBRA DE QTD
-        const handleMigrarFigadoAgosto = async () => {
-          const produtoNovo = products.find(p => String(p.sku) === '1414');
-
-          if (!produtoNovo) {
-              return showToast('Produto SKU 1414 não encontrado no catálogo! Verifique o cadastro.', 'error');
-          }
-
-          const isPromo = produtoNovo.promotionalPrice > 0 && produtoNovo.promotionalPrice < produtoNovo.price;
-          const novoPrecoUnitario = isPromo ? produtoNovo.promotionalPrice : produtoNovo.price;
-
-          showConfirm(
-              'Atualizar Pedidos de Fígado',
-              `Isto trocará o Fígado antigo pelo "${produtoNovo.name}" (SKU 1414) a R$ ${novoPrecoUnitario.toFixed(2).replace('.', ',')} e DOBRARÁ a quantidade pedida (ex: quem pediu 1kg leva 2x 600g). Afeta apenas o ciclo ${sysConfig.mesReferencia}. Continuar?`,
-              async () => {
-                  try {
-                      // O filtro perfeito que você mencionou: Blinda os outros meses!
-                      const pedidosDoCiclo = orders.filter(o => {
-                          const ciclo = o.cicloFinanceiro || 'Julho/2026';
-                          return ciclo === sysConfig.mesReferencia;
-                      });
-
-                      let pedidosAtualizados = 0;
-
-                      for (const pedido of pedidosDoCiclo) {
-                          let teveAlteracao = false;
-                          let novoTotalItens = 0;
-
-                          const novosItens = (pedido.items || []).map(item => {
-                              const nomeItemLower = (item.name || '').toLowerCase();
-                              const ehFigadoAntigo = nomeItemLower.includes('fígado') || nomeItemLower.includes('figado');
-
-                              if (ehFigadoAntigo && String(item.id) !== String(produtoNovo.id)) {
-                                  teveAlteracao = true;
-                                  
-                                  // 👇 A MÁGICA DA QUANTIDADE DOBRADA 👇
-                                  const quantidadeOriginal = item.qtd || item.qty || 1;
-                                  const novaQuantidade = quantidadeOriginal * 2; 
-                                  
-                                  novoTotalItens += (novoPrecoUnitario * novaQuantidade);
-
-                                  return {
-                                      ...item,
-                                      id: produtoNovo.id,         
-                                      name: produtoNovo.name,     
-                                      price: novoPrecoUnitario,   
-                                      qtd: novaQuantidade,     // Salva a nova quantidade (x2)
-                                      qty: novaQuantidade      // Salva a nova quantidade (x2)
-                                  };
-                              } else {
-                                  const quantidade = item.qtd || item.qty || 1;
-                                  novoTotalItens += ((item.price || 0) * quantidade);
-                                  return item;
-                              }
-                          });
-
-                          if (teveAlteracao) {
-                              const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
-                              const totalFinal = Math.max(0, novoTotalItens - totalFaltas);
-
-                              await updateDoc(doc(db, "orders", pedido.id), {
-                                  items: novosItens,
-                                  total: totalFinal
-                              });
-                              pedidosAtualizados++;
-                          }
-                      }
-
-                      showToast(`Sucesso! ${pedidosAtualizados} pedido(s) atualizados com o dobro de quantidade.`, 'success');
-                  } catch (err) {
-                      console.error("Erro na atualização em lote:", err);
-                      showToast('Erro ao atualizar pedidos no banco de dados.', 'error');
-                  }
-              },
-              'warning'
-          );
-      };
-
-
-        // 👇 NOVA FUNÇÃO: O BOTÃO MÁGICO DE CORREÇÃO 👇
-        const handleCorrigirPrecosAntigos = async () => {
-          if (!window.confirm('Isto fará uma varredura nos pedidos deste ciclo e atualizará os valores com os preços promocionais atuais do catálogo. Deseja continuar?')) return;
-          
-          try {
-              // Pega todos os pedidos que pertencem ao ciclo atual
-              const pedidosDesteCiclo = orders.filter(o => {
-                  const ciclo = o.cicloFinanceiro || 'Julho/2026';
-                  return ciclo === sysConfig.mesReferencia;
-              });
-
-              let pedidosCorrigidos = 0;
-
-              for (const pedido of pedidosDesteCiclo) {
-                  let precisaAtualizar = false;
-                  let novoTotalItens = 0;
-                  const novosItens = [];
-
-                  // Analisa item por item do pedido
-                  for (const item of (pedido.items || [])) {
-                      const prodCatalogo = products.find(p => String(p.id) === String(item.id));
-                      let precoCorreto = item.price; // Começa com o preço que já estava
-
-                      if (prodCatalogo) {
-                          // Verifica se o produto tem promoção ativa hoje
-                          const isPromo = prodCatalogo.promotionalPrice > 0 && prodCatalogo.promotionalPrice < prodCatalogo.price;
-                          precoCorreto = isPromo ? prodCatalogo.promotionalPrice : prodCatalogo.price;
-                      }
-
-                      // Se o preço do catálogo estiver diferente do salvo no pedido, marca para atualizar
-                      if (precoCorreto !== item.price) {
-                          precisaAtualizar = true;
-                      }
-
-                      novosItens.push({ ...item, price: precoCorreto });
-                      const quantidade = item.qtd || item.qty || 1;
-                      novoTotalItens += (precoCorreto * quantidade);
-                  }
-
-                  // Se encontrou alguma diferença de preço, atualiza o banco de dados
-                  if (precisaAtualizar) {
-                      // Deduz as faltas (se houver) do novo total
-                      const totalFaltas = (pedido.faltas || []).reduce((sum, f) => sum + (f.value || f.refundValue || 0), 0);
-                      const totalFinalizado = Math.max(0, novoTotalItens - totalFaltas);
-
-                      await updateDoc(doc(db, "orders", pedido.id), {
-                          items: novosItens,
-                          total: totalFinalizado
-                      });
-                      pedidosCorrigidos++;
-                  }
-              }
-
-              showToast(`Varredura concluída! ${pedidosCorrigidos} pedidos foram corrigidos.`, 'success');
-          } catch (err) {
-              console.error(err);
-              showToast('Erro ao corrigir pedidos.', 'error');
-          }
-      };
-      // 👆 FIM DA NOVA FUNÇÃO 👆
       const handleSaveSettings = async (e) => {
         e.preventDefault();
         try {
@@ -4284,19 +4526,7 @@ const handleAddToEditCart = () => {
                            </div>
                        </div>
                        <div className="flex flex-col gap-3">
-                           <button type="button" onClick={handleCorrigirPrecosAntigos} className="w-full bg-white text-orange-600 border-2 border-orange-300 font-black py-3 rounded-xl hover:bg-orange-100 transition-colors text-sm shadow-sm">
-                               🔄 Recalcular Preços de Pedidos Manuais Antigos
-                           </button>
-                           
-                           {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DO FÍGADO 👇 */}
-                           <button type="button" onClick={handleMigrarFigadoAgosto} className="w-full bg-orange-600 text-white font-black py-3 rounded-xl hover:bg-orange-700 transition-colors text-sm shadow-sm">
-                               🥩 Converter Fígado 1kg ➔ Fígado 600g nos Pedidos de Agosto
-                           </button>
-                           {/* 👇 NOVO BOTÃO DE ATUALIZAÇÃO DOS OVOS 👇 */}
-                           <button type="button" onClick={handleMigrarOvos} className="w-full bg-emerald-600 text-white font-black py-3 rounded-xl hover:bg-emerald-700 transition-colors text-sm shadow-sm">
-                               🥚 Converter OVOS 20un ➔ OVOS 30un (Sede e Satélites)
-                           </button>
-                            {/* 👇 NOVO BOTÃO DE ESTORNO DE FALTA 👇 */}
+                           {/* 👇 NOVO BOTÃO DE ESTORNO DE FALTA 👇 */}
                            <button type="button" onClick={handleEstornarFaltaGlobal} className="w-full bg-red-50 text-red-600 border-2 border-red-200 font-black py-3 rounded-xl hover:bg-red-100 transition-colors text-sm shadow-sm flex items-center justify-center">
                                <AlertTriangle className="w-4 h-4 mr-2"/> Desfazer Falta Global de um Produto (Por SKU)
                            </button>
@@ -4367,14 +4597,17 @@ const handleAddToEditCart = () => {
         onChange={(e) => setProdutoSelecionadoId(e.target.value)}
       >
         <option value="">Selecione um produto...</option>
-        {products.map(p => {
+        {/* 👇 A MÁGICA DA ORDEM ALFABÉTICA ENTRA AQUI 👇 */}
+        {[...products]
+          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+          .map(p => {
            // Calcula o preço que vai aparecer na listinha
            const isPromo = p.promotionalPrice > 0 && p.promotionalPrice < p.price;
            const precoExibicao = isPromo ? p.promotionalPrice : p.price;
            
            return (
              <option key={p.id} value={p.id}>
-               {p.name} - R$ {precoExibicao.toFixed(2).replace('.', ',')}
+               {p.name} - R$ {(precoExibicao || 0).toFixed(2).replace('.', ',')}
              </option>
            );
         })}
@@ -4495,6 +4728,14 @@ const handleAddToEditCart = () => {
             <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
             <button onClick={() => {setAdminTab('logistica'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='logistica'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
                 <Truck className="w-4 h-4"/> Logística de Transferência
+            </button>
+            {/* 👇 NOVO BOTÃO DO MONITOR DE ESTOQUE 👇 */}
+            <button onClick={() => {setAdminTab('estoque'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='estoque'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
+                <Package className="w-4 h-4"/> Monitor de Estoque
+            </button>
+            {/* 👇 NOVO BOTÃO DE RECEBIMENTO DE CARGA 👇 */}
+            <button onClick={() => {setAdminTab('recebimento'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='recebimento'?'bg-blue-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
+                📋 Recebimento de NF
             </button>
             <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
             <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
