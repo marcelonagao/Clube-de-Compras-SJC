@@ -138,6 +138,7 @@ export default function App() {
   const [campanhaItens, setCampanhaItens] = useState([]); // A lista de produtos
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState(''); // O campo de digitar o nome
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [editingProduct, setEditingProduct] = useState(null);
   const [estoqueSearch, setEstoqueSearch] = useState('');
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [pedidoEmConferencia, setPedidoEmConferencia] = useState(null);
@@ -4118,10 +4119,14 @@ const handleAddToEditCart = () => {
                                                           {p.pausado ? '▶ Ativar' : '⏸ Pausar'}
                                                       </button>
                                                       <button 
-                                                          onClick={() => { setEditingProduct(p); setTimeout(() => document.getElementById('topo-catalogo')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150); }} 
-                                                          className="bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-md hover:bg-blue-100 transition-colors flex items-center text-[10px] font-bold"
+                                                          type="button"
+                                                          onClick={(e) => {
+                                                              e.preventDefault(); // 🛡️ A MÁGICA: Impede a tela de pular para o topo!
+                                                              setEditingProduct(p);
+                                                          }} 
+                                                          className="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors shadow-sm"
                                                       >
-                                                          <Edit2 className="w-3 h-3 mr-1"/> Editar
+                                                          Editar
                                                       </button>
                                                       <button 
                                                           onClick={() => { showConfirm('Excluir Produto', 'Tem certeza que deseja remover este produto do catálogo da loja?', async () => { await deleteDoc(doc(db,"products",p.id)); }, 'danger'); }} 
