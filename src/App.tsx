@@ -5358,9 +5358,17 @@ const handleAddToEditCart = () => {
                        <input type="tel" placeholder="WhatsApp (DDD+Num)" value={loginWhatsapp} onChange={e=>setLoginWhatsapp(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
                        
                        <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
-                           <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
-                             {polos.map(p => <option key={p} value={p}>Unidade: {p}</option>)}
-                           </select>
+                       <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
+  {polos.map((p, index) => {
+      // Extrai o nome independente de ser o formato velho (texto) ou novo (objeto)
+      const nomeDoPolo = typeof p === 'object' ? p.name : p;
+      return (
+          <option key={index} value={nomeDoPolo}>
+              Unidade: {nomeDoPolo}
+          </option>
+      );
+  })}
+</select>
                        </div>
                        
                        <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
@@ -5390,9 +5398,17 @@ const handleAddToEditCart = () => {
                            <input type="text" placeholder="Nome Completo" value={loginName} onChange={e=>setLoginName(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
                            <input type="tel" placeholder="WhatsApp (DDD+Num)" value={loginWhatsapp} onChange={e=>setLoginWhatsapp(e.target.value)} required className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg outline-none focus:border-emerald-500 font-medium text-sm text-slate-800" />
                            <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
-                             <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
-                               {polos.map(p => <option key={p} value={p}>Unidade: {p}</option>)}
-                             </select>
+                           <select value={selectedPolo} onChange={e=>setSelectedPolo(e.target.value)} className="w-full bg-transparent p-2 outline-none font-bold text-sm text-slate-800 cursor-pointer">
+                            {polos.map((p, index) => {
+                                // Extrai o nome independente de ser o formato velho (texto) ou novo (objeto)
+                                const nomeDoPolo = typeof p === 'object' ? p.name : p;
+                                return (
+                                    <option key={index} value={nomeDoPolo}>
+                                        Unidade: {nomeDoPolo}
+                                    </option>
+                                );
+                            })}
+                            </select>
                            </div>
                            <div className="bg-slate-50 border border-gray-200 rounded-lg p-0.5 focus-within:border-emerald-500">
                              <select value={registerRole} onChange={e=>setRegisterRole(e.target.value)} className="w-full bg-transparent p-2 outline-none font-black text-sm text-emerald-700 cursor-pointer">
