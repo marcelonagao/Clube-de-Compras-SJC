@@ -110,6 +110,7 @@ export default function App() {
   const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, type: 'warning' });
   const showConfirm = (title, message, onConfirm, type = 'warning') => setConfirmDialog({ open: true, title, message, onConfirm, type });
   const [shortageSelectedProduct, setShortageSelectedProduct] = useState('');
+  const [shortageSelectedLote, setShortageSelectedLote] = useState('Todos');
   const [shortagePreview, setShortagePreview] = useState<{ product: any, impact: any[] } | null>(null);
   const [expandedMonths, setExpandedMonths] = useState({});
   const [purchasePlan, setPurchasePlan] = useState(null);
@@ -677,18 +678,19 @@ useEffect(() => {
   const analyzeFaltaGlobal = () => {
     if (!shortageSelectedProduct) return showToast('Selecione um produto.', 'error');
     
-    // Filtro travado no ciclo financeiro atual
+    // O Novo Filtro: Agora ele olha o Mês e o Lote!
     const ordersToUpdate = orders.filter(o => {
        const ciclo = o.cicloFinanceiro || 'Julho/2026';
        const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+       const lotePedido = o.deliveryDate || 'Ciclo Mensal';
+       const matchLote = shortageSelectedLote === 'Todos' || lotePedido === shortageSelectedLote;
        
-       return ehDoCicloAtual && 
+       return ehDoCicloAtual && matchLote && 
               ['confirmado', 'pago_polo', 'pago'].includes(o.status) && 
               (o.items || []).some(i => String(i.id) === String(shortageSelectedProduct));
     });
     
-    if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste ciclo contém este item.', 'error');
-    
+    if (ordersToUpdate.length === 0) return showToast('Nenhum pedido deste lote contém este item.', 'error');
     const impact = ordersToUpdate.map(order => {
        const item = order.items.find(i => String(i.id) === String(shortageSelectedProduct));
        const quantidade = item.qtd || item.qty;
@@ -5186,27 +5188,51 @@ const handleAddToEditCart = () => {
              </div>
              {!shortagePreview ? (
                <div className="space-y-4">
-                 <div className="bg-slate-50 p-1.5 rounded-lg border border-gray-200">
-                 <select 
-                    value={shortageSelectedProduct} 
-                    onChange={(e) => setShortageSelectedProduct(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500"
-                  >
-                    <option value="">Selecione o produto ausente...</option>
-                    {products
-                      .filter(p => orders.some(order => {
-                         // 👇 MÁGICA: O dropdown também só vai mostrar produtos pedidos neste ciclo 👇
-                         const ciclo = order.cicloFinanceiro || 'Julho/2026';
-                         const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+                 <div className="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                   {/* 1. SELETOR DE LOTE */}
+                   <div>
+                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Qual Lote de Entrega falhou?</label>
+                     <select 
+                        value={shortageSelectedLote} 
+                        onChange={(e) => {
+                            setShortageSelectedLote(e.target.value);
+                            setShortageSelectedProduct(''); // Limpa o produto se trocar de lote
+                        }}
+                        className="w-full bg-white border border-gray-300 p-3 rounded-lg text-sm font-bold text-emerald-800 outline-none cursor-pointer focus:border-emerald-500 shadow-sm"
+                      >
+                        <option value="Todos">⚠️ Todos os Lotes (Misturado)</option>
+                        {[...new Set(orders.filter(o => (o.cicloFinanceiro || 'Julho/2026') === sysConfig.mesReferencia).map(o => o.deliveryDate || 'Ciclo Mensal'))].sort().map(l => (
+                            <option key={l} value={l}>Lote: {l}</option>
+                        ))}
+                      </select>
+                   </div>
 
-                         return ehDoCicloAtual && 
-                                ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
-                                (order.items || []).some(item => String(item.id) === String(p.id));
-                      }))
-                      .map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
+                   {/* 2. SELETOR DE PRODUTO */}
+                   <div>
+                     <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Produto em Falta</label>
+                     <select 
+                        value={shortageSelectedProduct} 
+                        onChange={(e) => setShortageSelectedProduct(e.target.value)}
+                        className="w-full bg-white border border-gray-300 p-3 rounded-lg text-sm font-bold text-slate-800 outline-none cursor-pointer focus:border-emerald-500 shadow-sm"
+                      >
+                        <option value="">Selecione o produto ausente...</option>
+                        {products
+                          .filter(p => orders.some(order => {
+                             const ciclo = order.cicloFinanceiro || 'Julho/2026';
+                             const ehDoCicloAtual = ciclo === sysConfig.mesReferencia;
+                             const lotePedido = order.deliveryDate || 'Ciclo Mensal';
+                             const matchLote = shortageSelectedLote === 'Todos' || lotePedido === shortageSelectedLote;
+
+                             return ehDoCicloAtual && matchLote &&
+                                    ['confirmado', 'pago_polo', 'pago'].includes(order.status) && 
+                                    (order.items || []).some(item => String(item.id) === String(p.id));
+                          }))
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                   </div>
                  </div>
                  <button onClick={analyzeFaltaGlobal} className="w-full bg-slate-800 text-white font-bold py-3 rounded-lg shadow text-sm">Analisar Impacto</button>
                </div>
