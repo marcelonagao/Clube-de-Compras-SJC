@@ -139,6 +139,10 @@ export default function App() {
   const [produtoSelecionadoId, setProdutoSelecionadoId] = useState(''); // O campo de digitar o nome
   const [catalogSearch, setCatalogSearch] = useState('');
   const [estoqueSearch, setEstoqueSearch] = useState('');
+  
+  // 👇 AS DUAS NOVAS MEMÓRIAS DA NOSSA TELA DE ESTOQUE 👇
+  const [draftStock, setDraftStock] = useState({}); 
+  const [estoqueSort, setEstoqueSort] = useState({ key: 'name', dir: 'asc' });
   const [pedidosPendentes, setPedidosPendentes] = useState([]);
   const [pedidoEmConferencia, setPedidoEmConferencia] = useState(null);
   const [codigoBipado, setCodigoBipado] = useState('');
@@ -3858,32 +3862,72 @@ const handleAddToEditCart = () => {
     {/* ========================================================= */}
       {/* 📦 NOVA TELA: MONITOR DE ESTOQUE (RÁPIDO) 📦 */}
       {/* ========================================================= */}
+      {/* ========================================================= */}
+      {/* 📦 TELA: MONITOR DE ESTOQUE (COM RASCUNHO E ORDENAÇÃO) 📦 */}
+      {/* ========================================================= */}
       if (adminTab === 'estoque') {
-        // Filtra os produtos ativos e a busca
         const produtosAtivos = products.filter(p => !p.pausado);
         
+        // Aplica a busca e a ORDENAÇÃO DINÂMICA
         const filteredEstoque = produtosAtivos.filter(p => 
             (p.name || '').toLowerCase().includes((estoqueSearch || '').toLowerCase()) ||
             (p.sku || '').toLowerCase().includes((estoqueSearch || '').toLowerCase())
         ).sort((a, b) => {
-            // Ordena primeiro os que têm MENOS estoque (para chamar sua atenção)
-            if ((a.stock || 0) === (b.stock || 0)) return (a.name || '').localeCompare(b.name || '');
-            return (a.stock || 0) - (b.stock || 0);
+            // A Inteligência: Se a pessoa mexeu, usa o número novo para ordenar, senão usa o do banco
+            const stockA = draftStock[a.id] !== undefined ? draftStock[a.id] : (a.stock || 0);
+            const stockB = draftStock[b.id] !== undefined ? draftStock[b.id] : (b.stock || 0);
+
+            if (estoqueSort.key === 'stock') {
+                return estoqueSort.dir === 'asc' ? stockA - stockB : stockB - stockA;
+            } 
+            if (estoqueSort.key === 'status') {
+                // Lógica Numérica: Zerado (0) < Baixo (1) < OK (2)
+                const getStatus = (p, stock) => stock === 0 ? 0 : (stock <= (p.minBox || 1) ? 1 : 2);
+                const statA = getStatus(a, stockA);
+                const statB = getStatus(b, stockB);
+                return estoqueSort.dir === 'asc' ? statA - statB : statB - statA;
+            }
+            // Padrão: Nome Alfabético
+            return estoqueSort.dir === 'asc' ? (a.name || '').localeCompare(b.name || '') : (b.name || '').localeCompare(a.name || '');
         });
 
-        // Métricas do Topo
+        // Métricas Globais
         const totalPecas = produtosAtivos.reduce((sum, p) => sum + (p.stock || 0), 0);
         const capitalImobilizado = produtosAtivos.reduce((sum, p) => sum + ((p.stock || 0) * (p.cost || 0)), 0);
         const esgotados = produtosAtivos.filter(p => (p.stock || 0) <= 0).length;
 
-        // Função rápida para atualizar o estoque sem abrir modal
-        const handleQuickStockUpdate = async (id, currentStock, mudanca) => {
-            const novoEstoque = Math.max(0, currentStock + mudanca);
+        // Verifica se tem algum rascunho guardado na memória
+        const temAlteracoesPendentes = Object.keys(draftStock).length > 0;
+
+        // 1. Atualiza apenas a Memória Local (Não gasta Firebase e permite desfazer)
+        const handleDraftStockUpdate = (id, currentVal, mudanca) => {
+            const novoEstoque = Math.max(0, currentVal + mudanca);
+            setDraftStock(prev => ({ ...prev, [id]: novoEstoque }));
+        };
+
+        // 2. O Grande Botão de Salvar: Manda tudo para o Firebase de uma só vez
+        const handleSaveAllDrafts = async () => {
+            const alteracoes = Object.entries(draftStock);
+            if (alteracoes.length === 0) return;
+
             try {
-                await updateDoc(doc(db, "products", id), { stock: novoEstoque });
-            } catch (e) {
-                showToast('Erro ao atualizar estoque', 'error');
+                // Salva todos os itens editados simultaneamente
+                for (const [id, newStock] of alteracoes) {
+                    await updateDoc(doc(db, "products", id), { stock: newStock });
+                }
+                showToast(`${alteracoes.length} produtos atualizados no estoque!`);
+                setDraftStock({}); // Limpa a memória para os botões sumirem
+            } catch (error) {
+                showToast('Erro ao salvar estoque.', 'error');
             }
+        };
+
+        // 3. O Inversor das Colunas (A-Z ou Z-A)
+        const toggleSort = (key) => {
+            setEstoqueSort(prev => ({
+                key,
+                dir: prev.key === key && prev.dir === 'asc' ? 'desc' : 'asc'
+            }));
         };
 
         return (
@@ -3893,16 +3937,32 @@ const handleAddToEditCart = () => {
                         <h2 className="text-2xl font-black text-slate-800">Monitor de Estoque</h2>
                         <p className="text-xs font-bold text-gray-500 mt-1">Dê entrada em mercadorias ou faça auditoria física rápida.</p>
                     </div>
-                    <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
-                        <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar produto ou SKU..." 
-                            value={estoqueSearch}
-                            onChange={(e) => setEstoqueSearch(e.target.value)}
-                            className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
-                        />
-                        {estoqueSearch && <button onClick={() => setEstoqueSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                    
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        
+                        {/* 👇 A MÁGICA DE UX: OS BOTÕES SÓ APARECEM SE VOCÊ MEXER EM ALGO 👇 */}
+                        {temAlteracoesPendentes && (
+                            <div className="flex gap-2 animate-in slide-in-from-right-4">
+                                <button onClick={() => setDraftStock({})} className="bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-xl font-bold shadow-sm hover:bg-gray-50 transition text-sm">
+                                    Desfazer Tudo
+                                </button>
+                                <button onClick={handleSaveAllDrafts} className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-black shadow-md hover:bg-emerald-700 transition text-sm flex items-center">
+                                    <CheckCircle className="w-4 h-4 mr-2"/> Salvar Alterações
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
+                            <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar produto ou SKU..." 
+                                value={estoqueSearch}
+                                onChange={(e) => setEstoqueSearch(e.target.value)}
+                                className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                            />
+                            {estoqueSearch && <button onClick={() => setEstoqueSearch('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
+                        </div>
                     </div>
                 </div>
 
@@ -3924,11 +3984,19 @@ const handleAddToEditCart = () => {
 
                 {/* LISTA DE AUDITORIA */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                        <div className="col-span-1">Status</div>
-                        <div className="col-span-5">Produto & SKU</div>
-                        <div className="col-span-3 text-center">Valor Retido</div>
-                        <div className="col-span-3 text-right">Ajuste Rápido</div>
+                    
+                    {/* 👇 CABEÇALHOS CLICÁVEIS PARA ORDENAR A TABELA 👇 */}
+                    <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest select-none">
+                        <div onClick={() => toggleSort('status')} className="col-span-2 cursor-pointer hover:text-slate-800 flex items-center transition-colors">
+                            Status {estoqueSort.key === 'status' && (estoqueSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                        </div>
+                        <div onClick={() => toggleSort('name')} className="col-span-5 cursor-pointer hover:text-slate-800 flex items-center transition-colors">
+                            Produto & SKU {estoqueSort.key === 'name' && (estoqueSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                        </div>
+                        <div className="col-span-2 text-center">Valor Retido</div>
+                        <div onClick={() => toggleSort('stock')} className="col-span-3 cursor-pointer hover:text-slate-800 flex items-center justify-end transition-colors">
+                            Ajuste Rápido {estoqueSort.key === 'stock' && (estoqueSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                        </div>
                     </div>
 
                     <div className="divide-y divide-gray-100 max-h-[65vh] overflow-y-auto">
@@ -3939,7 +4007,10 @@ const handleAddToEditCart = () => {
                             </div>
                         ) : (
                             filteredEstoque.map(p => {
-                                const estoqueAtual = p.stock || 0;
+                                // MÁGICA: O número exibido vem do rascunho. Se não tiver rascunho, vem do banco.
+                                const estoqueAtual = draftStock[p.id] !== undefined ? draftStock[p.id] : (p.stock || 0);
+                                const isEdited = draftStock[p.id] !== undefined && draftStock[p.id] !== (p.stock || 0);
+                                
                                 const minimo = p.minBox || 1;
                                 const valorRetido = estoqueAtual * (p.cost || 0);
 
@@ -3954,29 +4025,34 @@ const handleAddToEditCart = () => {
                                 }
 
                                 return (
-                                    <div key={p.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 items-center hover:bg-slate-50 transition-colors">
+                                    <div key={p.id} className={`grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 items-center transition-colors ${isEdited ? 'bg-emerald-50/50' : 'hover:bg-slate-50'}`}>
                                         
-                                        <div className="md:col-span-1 flex items-center">
+                                        <div className="md:col-span-2 flex items-center">
                                             <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border ${statusColor}`}>
                                                 {statusText}
                                             </span>
                                         </div>
                                         
                                         <div className="md:col-span-5">
-                                            <p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p>
+                                            <p className="font-bold text-slate-800 text-sm leading-tight">
+                                                {p.name}
+                                                {isEdited && <span className="ml-2 text-[8px] bg-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded uppercase font-black">A Salvar</span>}
+                                            </p>
                                             <p className="text-[10px] text-gray-500 mt-0.5 font-medium">SKU: {p.sku}</p>
                                         </div>
                                         
-                                        <div className="md:col-span-3 flex md:flex-col justify-between md:justify-center items-center">
+                                        <div className="md:col-span-2 flex md:flex-col justify-between md:justify-center items-center">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest md:hidden">Retido:</span>
                                             <span className="font-black text-slate-700 text-sm">R$ {valorRetido.toFixed(2).replace('.', ',')}</span>
                                         </div>
                                         
                                         <div className="md:col-span-3 flex items-center justify-end gap-2 mt-2 md:mt-0">
-                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm h-9">
-                                                <button onClick={() => handleQuickStockUpdate(p.id, estoqueAtual, -1)} className="w-10 h-full flex items-center justify-center text-red-500 hover:bg-red-50 font-black transition-colors">-</button>
-                                                <span className="w-10 text-center font-black text-slate-800 text-sm bg-white border-x border-gray-100 h-full flex items-center justify-center">{estoqueAtual}</span>
-                                                <button onClick={() => handleQuickStockUpdate(p.id, estoqueAtual, 1)} className="w-10 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black transition-colors">+</button>
+                                            <div className={`flex items-center border rounded-xl overflow-hidden shadow-sm h-10 ${isEdited ? 'border-emerald-400 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+                                                <button onClick={() => handleDraftStockUpdate(p.id, estoqueAtual, -1)} className="w-10 h-full flex items-center justify-center text-red-500 hover:bg-red-50 font-black text-lg transition-colors">-</button>
+                                                <span className={`w-10 text-center font-black text-sm border-x h-full flex items-center justify-center ${isEdited ? 'bg-emerald-100 text-emerald-900 border-emerald-200' : 'bg-white text-slate-800 border-gray-100'}`}>
+                                                    {estoqueAtual}
+                                                </span>
+                                                <button onClick={() => handleDraftStockUpdate(p.id, estoqueAtual, 1)} className="w-10 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 font-black text-lg transition-colors">+</button>
                                             </div>
                                         </div>
                                     </div>
@@ -3987,7 +4063,7 @@ const handleAddToEditCart = () => {
                 </div>
             </div>
         );
-    }
+      }
 
      if (adminTab === 'catalogo') {
       const baixarModeloCSV = () => {
