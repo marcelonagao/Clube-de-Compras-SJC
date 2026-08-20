@@ -1110,22 +1110,30 @@ useEffect(() => {
               </div>
             )}
 
-            {storeMode === 'estoque' && (
-               <div className="bg-white border-l-4 border-orange-500 p-4 rounded-lg mb-6 shadow-sm flex items-start gap-3">
-                  <Package className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                     <h4 className="font-semibold text-slate-800 text-sm mb-0.5">Pronta Entrega Ativada</h4>
-                     <p className="text-xs text-gray-500 font-normal leading-snug">Mostrando apenas itens disponíveis no estoque local para retirada imediata.</p>
+{storeMode === 'estoque' && (
+               <div className="bg-orange-50/80 border border-orange-200 px-4 py-3 rounded-xl mb-6 shadow-sm flex items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center shrink-0">
+                          <Package className="w-4 h-4" />
+                      </div>
+                      <div>
+                         <h4 className="font-black text-orange-900 text-sm leading-tight">Pronta Entrega Ativada</h4>
+                         <p className="text-xs text-orange-700 font-medium">Itens de estoque local para retirada imediata.</p>
+                      </div>
                   </div>
                </div>
             )}
 
             {storeMode === 'pausado' && (
-               <div className="bg-white border-l-4 border-red-500 p-4 rounded-lg mb-6 shadow-sm flex items-start gap-3">
-                  <Clock className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <div>
-                     <h4 className="font-semibold text-slate-800 text-sm mb-0.5">Vitrine Fechada</h4>
-                     <p className="text-xs text-gray-500 font-normal leading-snug">Estamos em balanço. Prepare sua lista para o próximo ciclo de encomendas.</p>
+               <div className="bg-red-50/80 border border-red-200 px-4 py-3 rounded-xl mb-6 shadow-sm flex items-center justify-between gap-3 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shrink-0">
+                          <Clock className="w-4 h-4" />
+                      </div>
+                      <div>
+                         <h4 className="font-black text-red-900 text-sm leading-tight">Vitrine Fechada</h4>
+                         <p className="text-xs text-red-700 font-medium">Estamos em balanço. Prepare sua lista para o próximo ciclo.</p>
+                      </div>
                   </div>
                </div>
             )}
@@ -1187,47 +1195,52 @@ useEffect(() => {
                 const cartItem = cart.find(i => i.id === p.id);
                 
                 return (
-                  <div key={p.id} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow flex flex-col overflow-hidden border border-gray-100/80 ${(isOutOfStock && !cartItem) ? 'opacity-60' : ''}`}>
-                    <div className="aspect-square bg-white flex items-center justify-center p-3 relative shrink-0 border-b border-gray-50">
-                      {isPromo && <span className="absolute top-2 left-2 bg-emerald-100 text-emerald-700 text-[9px] font-semibold px-1.5 py-0.5 rounded z-10">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
-                      {p.image?.length > 50 ? <img src={p.image} className="h-full w-full object-contain mix-blend-multiply" alt=""/> : <span className="text-3xl text-gray-200">📦</span>}
+                    <div key={p.id} className={`bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden border border-gray-100/60 group ${(isOutOfStock && !cartItem) ? 'opacity-50 grayscale-[20%]' : ''}`}>
+                    {/* FOTO MAIOR E SEM BORDAS FORTES */}
+                    <div className="aspect-square bg-slate-50 flex items-center justify-center p-0 relative shrink-0 overflow-hidden">
+                      {isPromo && <span className="absolute top-2 left-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg z-10 shadow-md">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>}
+                      {p.image?.length > 50 ? (
+                          <img src={p.image} className="h-full w-full object-cover mix-blend-multiply group-hover:scale-105 transition-transform duration-500" alt={p.name}/>
+                      ) : (
+                          <span className="text-4xl text-gray-300">📦</span>
+                      )}
                     </div>
                     
-                    <div className="p-3 flex flex-col flex-grow">
+                    <div className="p-4 flex flex-col flex-grow relative">
+                      {/* Título mais limpo e legível */}
+                      <h3 className="text-xs sm:text-[13px] text-slate-600 font-bold leading-snug mb-2 flex-grow line-clamp-2">{p.name}</h3>
+
+                      {storeMode === 'estoque' && (p.stock > 0) && (
+                          <p className="text-[9px] font-black uppercase tracking-widest text-orange-500 mb-2 leading-none">Restam {p.stock} un</p>
+                      )}
+                      
                       {/* Preço e Desconto em Destaque */}
-                      <div className="flex flex-col mb-1 shrink-0">
+                      <div className="flex flex-col mb-4 shrink-0">
                           {isPromo ? (
                             <>
-                               <span className="text-[10px] text-gray-400 line-through font-normal leading-none mb-0.5">R$ {p.price.toFixed(2)}</span>
-                               <div className="flex items-center gap-1.5">
-                                   <span className="text-xl text-slate-800 font-medium leading-none">R$ {activePrice.toFixed(2)}</span>
-                                   <span className="text-[10px] font-medium text-emerald-500 leading-none">{Math.round((1 - (p.promotionalPrice / p.price)) * 100)}% OFF</span>
-                               </div>
+                               <span className="text-[10px] text-gray-400 line-through font-bold leading-none mb-0.5">De: R$ {p.price.toFixed(2).replace('.',',')}</span>
+                               <span className="text-xl sm:text-2xl text-emerald-700 font-black leading-none tracking-tight">R$ {activePrice.toFixed(2).replace('.',',')}</span>
                             </>
                           ) : (
-                            <span className="text-xl text-slate-800 font-medium leading-none">R$ {activePrice.toFixed(2)}</span>
+                            <span className="text-xl sm:text-2xl text-slate-800 font-black leading-none tracking-tight">R$ {activePrice.toFixed(2).replace('.',',')}</span>
                           )}
                       </div>
                       
-                      {storeMode === 'estoque' && (p.stock > 0) && (
-                          <p className="text-[10px] font-medium text-emerald-600 mb-1 leading-none">Disponível no Polo</p>
-                      )}
-
-                      {/* Nome do Produto Menos Destacado */}
-                      <h3 className="text-[13px] text-gray-600 font-normal leading-tight mb-3 flex-grow line-clamp-2">{p.name}</h3>
-                      
+                      {/* Botão de Ação Mais Encorpado */}
                       {isPaused ? (
-                          <button disabled className="w-full bg-gray-100 text-gray-400 py-2 rounded font-semibold text-[11px] cursor-not-allowed mt-auto uppercase tracking-wider">Pausado</button>
+                          <button disabled className="w-full bg-gray-50 text-gray-400 py-2.5 rounded-xl font-black text-[11px] cursor-not-allowed mt-auto uppercase tracking-widest border border-gray-200">Pausado</button>
                       ) : (isOutOfStock && !cartItem) ? (
-                          <button disabled className="w-full bg-red-50 text-red-500 py-2 rounded font-semibold text-[11px] cursor-not-allowed mt-auto uppercase tracking-wider">Esgotado</button>
+                          <button disabled className="w-full bg-red-50 text-red-500 py-2.5 rounded-xl font-black text-[11px] cursor-not-allowed mt-auto uppercase tracking-widest border border-red-100">Esgotado</button>
                       ) : cartItem ? (
-                          <div className="flex items-center justify-between bg-white border border-emerald-500 rounded overflow-hidden mt-auto h-[34px] shadow-sm">
-                             <button onClick={() => handleDecreaseFromCart(p.id)} className="w-10 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors font-medium text-lg leading-none">-</button>
-                             <span className="font-semibold text-slate-800 text-xs">{cartItem.qtd}</span>
-                             <button onClick={() => handleAddToCart(p)} className="w-10 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 transition-colors font-medium text-lg leading-none">+</button>
+                          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-500 rounded-xl overflow-hidden mt-auto h-10 shadow-sm">
+                             <button onClick={() => handleDecreaseFromCart(p.id)} className="w-12 h-full flex items-center justify-center text-emerald-700 hover:bg-emerald-100 transition-colors font-black text-xl leading-none">-</button>
+                             <span className="font-black text-emerald-900 text-sm">{cartItem.qtd}</span>
+                             <button onClick={() => handleAddToCart(p)} className="w-12 h-full flex items-center justify-center text-emerald-700 hover:bg-emerald-100 transition-colors font-black text-xl leading-none">+</button>
                           </div>
                       ) : (
-                          <button onClick={() => handleAddToCart(p)} className="w-full bg-emerald-100 text-emerald-800 py-2 rounded font-semibold text-[11px] hover:bg-emerald-200 transition-colors mt-auto shadow-sm">Adicionar</button>
+                          <button onClick={() => handleAddToCart(p)} className="w-full bg-slate-800 text-white py-2.5 rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-slate-900 transition-colors mt-auto shadow-md flex items-center justify-center">
+                              Comprar
+                          </button>
                       )}
                     </div>
                   </div>
@@ -5314,14 +5327,25 @@ const handleAddToEditCart = () => {
                  <span className="font-black text-white text-xl tracking-tight leading-none">Clube de Compras</span>
                </div>
                
-               <div className="hidden md:flex items-center gap-2 mx-auto">
-                    <button onClick={() => setCurrentScreen('shop')} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'shop' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><Home className="w-4 h-4 mr-2"/> Loja</button>
-                    <button onClick={() => setCurrentScreen('my_orders')} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'my_orders' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><Package className="w-4 h-4 mr-2"/> Pedidos</button>
+               <div className="hidden md:flex items-center gap-1.5 mx-auto bg-emerald-900/40 p-1.5 rounded-2xl border border-emerald-700/50 shadow-inner">
+                    <button onClick={() => setCurrentScreen('shop')} className={`flex items-center font-bold text-sm px-5 py-2 rounded-xl transition-all duration-300 ${currentScreen === 'shop' ? 'bg-white text-emerald-900 shadow-md transform scale-[1.02]' : 'text-emerald-100 hover:text-white hover:bg-emerald-800/50'}`}>
+                        <Home className={`w-4 h-4 mr-2 ${currentScreen === 'shop' ? 'text-emerald-600' : 'opacity-70'}`}/> Loja
+                    </button>
+                    
+                    <button onClick={() => setCurrentScreen('my_orders')} className={`flex items-center font-bold text-sm px-5 py-2 rounded-xl transition-all duration-300 ${currentScreen === 'my_orders' ? 'bg-white text-emerald-900 shadow-md transform scale-[1.02]' : 'text-emerald-100 hover:text-white hover:bg-emerald-800/50'}`}>
+                        <Package className={`w-4 h-4 mr-2 ${currentScreen === 'my_orders' ? 'text-emerald-600' : 'opacity-70'}`}/> Pedidos
+                    </button>
+                    
                     {isAdminOrRep && (
-                         <button onClick={() => setCurrentScreen('dashboard_rep')} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'dashboard_rep' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><Truck className="w-4 h-4 mr-2"/> Logística</button>
+                         <button onClick={() => setCurrentScreen('dashboard_rep')} className={`flex items-center font-bold text-sm px-5 py-2 rounded-xl transition-all duration-300 ${currentScreen === 'dashboard_rep' ? 'bg-white text-emerald-900 shadow-md transform scale-[1.02]' : 'text-emerald-100 hover:text-white hover:bg-emerald-800/50'}`}>
+                             <Truck className={`w-4 h-4 mr-2 ${currentScreen === 'dashboard_rep' ? 'text-emerald-600' : 'opacity-70'}`}/> Logística
+                         </button>
                     )}
+                    
                     {isGestor && (
-                         <button onClick={() => { setCurrentScreen('dashboard_admin'); setIsSidebarOpen(true); }} className={`flex items-center font-bold text-sm px-4 py-2 rounded-xl transition-colors ${currentScreen === 'dashboard_admin' ? 'bg-emerald-900 text-white' : 'text-emerald-100 hover:bg-emerald-700'}`}><LayoutDashboard className="w-4 h-4 mr-2"/> Gestão</button>
+                         <button onClick={() => { setCurrentScreen('dashboard_admin'); setIsSidebarOpen(true); }} className={`flex items-center font-bold text-sm px-5 py-2 rounded-xl transition-all duration-300 ${currentScreen === 'dashboard_admin' ? 'bg-white text-emerald-900 shadow-md transform scale-[1.02]' : 'text-emerald-100 hover:text-white hover:bg-emerald-800/50'}`}>
+                             <LayoutDashboard className={`w-4 h-4 mr-2 ${currentScreen === 'dashboard_admin' ? 'text-emerald-600' : 'opacity-70'}`}/> Gestão
+                         </button>
                     )}
                </div>
 
