@@ -367,9 +367,35 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-  // 2. MOTOR DE DADOS EM TEMPO REAL (O que estanca as milhares de leituras)
+  // 1. CARREGAMENTO ABERTO (Carrega Polos e Configurações GLOBAIS mesmo sem login)
   useEffect(() => {
-    if (!user) return; // Só abre o canal com o banco se o usuário estiver logado
+    const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+        if(docSnap.exists()) {
+            const cData = docSnap.data();
+            if(cData.storeMode) setStoreMode(cData.storeMode);
+            if(cData.sysConfig) setSysConfig(cData.sysConfig); 
+            
+            if(cData.polos) {
+                setPolos(cData.polos);
+                if (typeof cData.polos[0] === 'string') {
+                    const polosConvertidos = cData.polos.map((nomePolo, index) => ({
+                        id: `legacy_${index}`, name: nomePolo,
+                        sigla: nomePolo.substring(0, 3).toUpperCase(), color: 'bg-slate-800'
+                    }));
+                    setPolosList(polosConvertidos);
+                } else {
+                    setPolosList(cData.polos);
+                }
+            }
+            setCampanhaItens(cData.campanhaItens || []);
+        }
+    });
+    return () => unsubConfig();
+  }, []); // 👈 A mágica: Array vazio faz ele rodar na mesma hora que abre a tela de login!
+
+  // 2. CARREGAMENTO PROTEGIDO (Só carrega Pedidos, Produtos e Usuários se estiver logado)
+  useEffect(() => {
+    if (!user) return; 
   
     const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
         setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -383,41 +409,7 @@ useEffect(() => {
         setAllUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   
-    const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-      if(docSnap.exists()) {
-          const cData = docSnap.data();
-          if(cData.storeMode) setStoreMode(cData.storeMode);
-          if(cData.sysConfig) setSysConfig(cData.sysConfig); 
-          
-          // 👇 NOVA MÁGICA: MIGRAÇÃO INTELIGENTE DE POLOS 👇
-          if(cData.polos) {
-              // Mantemos o setPolos para não quebrar a Mesa de Compras antiga
-              setPolos(cData.polos);
-              
-              // Verifica se o banco de dados ainda tem o formato antigo (apenas texto)
-              if (typeof cData.polos[0] === 'string') {
-                  const polosConvertidos = cData.polos.map((nomePolo, index) => ({
-                      id: `legacy_${index}`,
-                      name: nomePolo,
-                      sigla: nomePolo.substring(0, 3).toUpperCase(), // Cria uma sigla provisória
-                      color: 'bg-slate-800'
-                  }));
-                  setPolosList(polosConvertidos);
-              } else {
-                  // Se já for o formato novo (com Sigla e Cor), carrega perfeitamente
-                  setPolosList(cData.polos);
-              }
-              
-              // Nota: A linha setPolosText foi deletada propositalmente! 🗑️
-          }
-
-          // 👇 LENDO A LISTA DA NOSSA CAMPANHA EXPRESSA 👇
-          setCampanhaItens(cData.campanhaItens || []);
-      }
-  });
-  
-    // Função de Limpeza: Desliga tudo se o usuário sair
-    return () => { unsubProducts(); unsubOrders(); unsubUsers(); unsubConfig(); };
+    return () => { unsubProducts(); unsubOrders(); unsubUsers(); };
   }, [user]);
 
   const showToast = (msg, type = 'success') => {
