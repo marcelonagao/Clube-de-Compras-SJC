@@ -1407,38 +1407,53 @@ useEffect(() => {
   const renderMyOrders = () => {
     const myOrders = orders.filter(o => o.customer === user?.name && o.email === user?.email);
     return (
-      <div className="p-4 max-w-2xl mx-auto pt-6 pb-24 font-sans">
-        <div className="flex items-center justify-between mb-6">
-          <button onClick={() => setCurrentScreen('shop')} className="flex items-center text-slate-600 bg-white border border-gray-200 px-3 py-1.5 rounded-lg font-bold text-xs shadow-sm hover:bg-gray-50"><ArrowLeft className="w-3 h-3 mr-1.5" /> Loja</button>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">As Minhas Encomendas</h2>
+      <div className="p-4 max-w-3xl mx-auto pt-6 pb-24 font-sans">
+        
+        {/* CABEÇALHO ALINHADO E ELEGANTE */}
+        <div className="flex items-center gap-4 mb-8">
+          <button onClick={() => setCurrentScreen('shop')} className="w-10 h-10 flex items-center justify-center text-slate-600 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 transition-colors shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight leading-none">Meus Pedidos</h2>
+              <p className="text-xs font-bold text-gray-500 mt-1">Acompanhe o status das suas encomendas</p>
+          </div>
         </div>
         
+        {/* AVISO DE SALDO (Se houver) */}
         {(user?.walletBalance > 0) && (
           <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-200 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm relative overflow-hidden">
             <div className="absolute left-0 top-0 w-1.5 h-full bg-emerald-500"></div>
             <div className="flex items-center gap-4">
               <div className="bg-white p-3 rounded-xl shadow-sm border border-emerald-100 shrink-0"><Wallet className="w-6 h-6 text-emerald-600"/></div>
               <div>
-                <h3 className="font-black text-emerald-900 text-lg mb-0.5">Crédito Disponível: R$ {user.walletBalance.toFixed(2)}</h3>
+                <h3 className="font-black text-emerald-900 text-lg mb-0.5">Crédito Disponível: R$ {user.walletBalance.toFixed(2).replace('.', ',')}</h3>
                 <p className="text-xs font-medium text-emerald-800 leading-snug">Um item faltou na última encomenda. Valor garantido para a próxima cesta!</p>
               </div>
             </div>
-            <button onClick={() => setPixRefundModal({ open: true, key: user.cpf || user.whatsapp || '' })} className="bg-white text-emerald-800 border-2 border-emerald-200 px-4 py-2.5 rounded-xl font-black text-xs hover:bg-emerald-100 shadow-sm whitespace-nowrap w-full sm:w-auto">Prefere receber via PIX?</button>
+            <button onClick={() => setPixRefundModal({ open: true, key: user.cpf || user.whatsapp || '' })} className="bg-white text-emerald-800 border border-emerald-200 px-4 py-2.5 rounded-xl font-black text-xs hover:bg-emerald-100 shadow-sm whitespace-nowrap w-full sm:w-auto">Prefere receber via PIX?</button>
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {myOrders.slice().reverse().map((order) => (
-            <div key={order.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden">
+            <div key={order.id} className="bg-white p-5 sm:p-6 rounded-3xl shadow-sm border border-gray-200 relative overflow-hidden">
+              {/* Barrinha de cor na esquerda */}
               <div className={`absolute top-0 left-0 w-1.5 h-full ${order.status === 'aguardando_pagamento' ? 'bg-orange-400' : 'bg-emerald-500'}`}></div>
-              <div className="flex justify-between items-start mb-4 border-b border-gray-50 pb-4">
+              
+              {/* CABEÇALHO DO RECIBO */}
+              <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-5">
                 <div>
-                  <p className="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-1">{order.date ? new Date(order.date).toLocaleDateString() : 'N/D'}</p>
-                  <p className="font-black text-slate-800 text-lg">Pedido <span className="text-emerald-700">#{order.id.slice(0, 5)}</span></p>
+                  <p className="font-black text-gray-400 text-[10px] uppercase tracking-widest mb-1.5">{order.date ? new Date(order.date).toLocaleDateString('pt-BR') : 'N/D'}</p>
+                  <div className="flex items-center gap-2">
+                      <p className="font-black text-slate-800 text-xl tracking-tight">Pedido</p>
+                      <span className="font-mono text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md font-bold text-sm">#{order.id.slice(0, 5).toUpperCase()}</span>
+                  </div>
                 </div>
-                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black shadow-sm uppercase tracking-wider flex items-center ${order.status === 'pago' || order.status === 'pago_polo' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-orange-50 text-orange-700 border border-orange-100'}`}>
+                
+                <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center shadow-sm ${order.status === 'pago' || order.status === 'pago_polo' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-orange-50 text-orange-700 border border-orange-200'}`}>
                    {order.status === 'pago' || order.status === 'pago_polo' ? (
-                       <><CheckCircle className="w-3 h-3 mr-1"/> Pago</>
+                       <><CheckCircle className="w-3.5 h-3.5 mr-1.5"/> Pago</>
                    ) : CONFIG_APENAS_COLETA ? (
                        'Pagar na Retirada'
                    ) : (
@@ -1447,52 +1462,56 @@ useEffect(() => {
                 </span>
               </div>
 
+              {/* AVISO DE FALTA NO PEDIDO */}
               {order.faltas && order.faltas.length > 0 && (
-                 <div className="bg-orange-50 p-3 rounded-xl text-xs font-medium text-orange-800 mb-4 border border-orange-200 flex items-start">
+                 <div className="bg-orange-50 p-4 rounded-2xl text-xs font-medium text-orange-800 mb-6 border border-orange-200 flex items-start">
                     {CONFIG_APENAS_COLETA ? (
                         <>
-                            <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
+                            <AlertTriangle className="w-5 h-5 mr-3 mt-0.5 shrink-0 text-orange-600"/>
                             <div>
-                                <p className="font-black text-orange-900 mb-0.5">Pedido Atualizado</p>
-                                {/* CORREÇÃO DO BUG R$ NaN APLICADA AQUI */}
-                                <p>Um item faltou no fornecedor. O valor que você pagará na retirada já foi reduzido em R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)}.</p>
+                                <p className="font-black text-orange-900 mb-1 text-sm">Pedido Atualizado</p>
+                                <p>Um item faltou no fornecedor. O valor que você pagará na retirada já foi reduzido em R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2).replace('.', ',')}.</p>
                             </div>
                         </>
                     ) : (user?.pendingPixRefund > 0 || user?.walletBalance > 0 ? (
                         <>
-                            <AlertTriangle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-orange-600"/>
+                            <AlertTriangle className="w-5 h-5 mr-3 mt-0.5 shrink-0 text-orange-600"/>
                             <div>
-                                <p className="font-black text-orange-900 mb-0.5">Atenção ao seu pedido</p>
-                                <p>Um item faltou. O crédito de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)} já está na sua carteira.</p>
+                                <p className="font-black text-orange-900 mb-1 text-sm">Atenção ao seu pedido</p>
+                                <p>Um item faltou. O crédito de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2).replace('.', ',')} já está na sua carteira.</p>
                             </div>
                         </>
                     ) : (
                         <>
-                            <CheckCircle className="w-4 h-4 mr-2 mt-0.5 shrink-0 text-emerald-600"/>
+                            <CheckCircle className="w-5 h-5 mr-3 mt-0.5 shrink-0 text-emerald-600"/>
                             <div className="text-emerald-800">
-                                <p className="font-black text-emerald-900 mb-0.5">Estorno Realizado</p>
-                                <p>O valor de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2)} foi reembolsado via PIX.</p>
+                                <p className="font-black text-emerald-900 mb-1 text-sm">Estorno Realizado</p>
+                                <p>O valor de R$ {order.faltas.reduce((s,f)=>s+(f.value || f.refundValue || 0),0).toFixed(2).replace('.', ',')} foi reembolsado via PIX.</p>
                             </div>
                         </>
                     ))}
                  </div>
               )}
 
-<div className="space-y-3 mb-5">
-                {/* ITENS QUE O CLIENTE VAI RECEBER (Ativos) */}
+              {/* LISTA DE ITENS COM LINHA PONTILHADA */}
+              <div className="space-y-3 mb-6">
                 {(order.items || []).map((item, idx) => {
                   const quantidade = item.qtd || item.qty || 1;
                   const totalDoItem = (item.price || 0) * quantidade;
                   
                   return (
-                    <div key={`item-${idx}`} className="flex items-center justify-between text-sm font-medium transition-all text-slate-700">
-                      <div className="flex items-center truncate">
-                          <span className="w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 bg-emerald-50 text-emerald-800 border-emerald-100">
+                    <div key={`item-${idx}`} className="flex items-end justify-between text-sm font-medium text-slate-700">
+                      <div className="flex items-center gap-3 shrink-0">
+                          <span className="w-6 h-6 font-black text-[10px] rounded-md flex items-center justify-center border bg-slate-50 text-slate-600 border-gray-200">
                             {quantidade}x
                           </span>
-                          <span className="truncate">{item.name}</span>
+                          <span className="font-bold">{item.name}</span>
                       </div>
-                      <span className="shrink-0 ml-3 font-black">R$ {totalDoItem.toFixed(2)}</span>
+                      
+                      {/* O TRUQUE DE UX: A linha pontilhada que guia o olho */}
+                      <div className="flex-grow border-b-[2px] border-dotted border-gray-200 mx-3 relative top-[-6px]"></div>
+                      
+                      <span className="shrink-0 font-black text-slate-800">R$ {totalDoItem.toFixed(2).replace('.', ',')}</span>
                     </div>
                   );
                 })}
@@ -1500,33 +1519,37 @@ useEffect(() => {
                 {/* ITENS QUE FALTARAM (Cortados) */}
                 {(order.faltas || []).map((falta, idx) => {
                   return (
-                    <div key={`falta-${idx}`} className="flex items-center justify-between text-sm font-medium transition-all text-red-400 opacity-80">
-                      <div className="flex items-center truncate line-through">
-                          <span className="w-6 h-6 font-black text-[10px] rounded flex items-center justify-center mr-3 border shrink-0 bg-red-50 text-red-700 border-red-100">
+                    <div key={`falta-${idx}`} className="flex items-end justify-between text-sm font-medium text-red-400 opacity-80 pt-2">
+                      <div className="flex items-center gap-3 shrink-0 line-through">
+                          <span className="w-6 h-6 font-black text-[10px] rounded-md flex items-center justify-center border bg-red-50 text-red-700 border-red-100">
                             {falta.qtyMissing || 1}x
                           </span>
-                          <span className="truncate">{falta.name} <span className="text-[9px] ml-1 uppercase">(Falta)</span></span>
+                          <span className="font-bold">{falta.name} <span className="text-[9px] ml-1 uppercase">(Falta)</span></span>
                       </div>
-                      <span className="shrink-0 ml-3 font-black line-through">- R$ {(falta.value || falta.refundValue || 0).toFixed(2)}</span>
+                      
+                      <div className="flex-grow border-b-[2px] border-dotted border-red-100 mx-3 relative top-[-6px]"></div>
+                      
+                      <span className="shrink-0 font-black line-through">- R$ {(falta.value || falta.refundValue || 0).toFixed(2).replace('.', ',')}</span>
                     </div>
                   );
                 })}
               </div>
               
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+              {/* TOTAL (Estilo Recibo Perfurado) */}
+              <div className="bg-slate-50 p-4 rounded-xl border-2 border-dashed border-gray-200 flex justify-between items-center mt-2">
                 <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                   {CONFIG_APENAS_COLETA ? 'Total a Pagar' : 'Total Pago'}
+                   {CONFIG_APENAS_COLETA ? 'Total a Pagar na Retirada' : 'Total Pago'}
                 </span>
                 <div className="text-right">
-                  <span className="font-black text-xl text-emerald-800">R$ {(order.total || 0).toFixed(2)}</span>
+                  <span className="font-black text-2xl text-emerald-800 tracking-tight">R$ {(order.total || 0).toFixed(2).replace('.', ',')}</span>
                 </div>
               </div>
             </div>
           ))}
           {myOrders.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 border-dashed">
+            <div className="text-center py-16 bg-white rounded-3xl border border-gray-200 border-dashed">
                <Package className="w-12 h-12 mx-auto text-gray-200 mb-3"/>
-               <p className="text-gray-500 font-medium text-sm">Nenhuma encomenda encontrada.</p>
+               <p className="text-gray-500 font-medium text-sm">Você ainda não possui encomendas.</p>
             </div>
           )}
         </div>
@@ -1759,16 +1782,21 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
             </div>
             {/* 👆 FIM DOS CARTÕES 👆 */}
 
-            {/* 👇 BOTÕES DE AÇÃO (GRID COMPACTO NO MOBILE) 👇 */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 mb-4">
-                <button onClick={() => setShowMassNotify(true)} className="col-span-2 sm:col-span-1 sm:flex-1 bg-blue-600 text-white font-black py-2.5 sm:py-3 rounded-xl shadow hover:bg-blue-700 transition text-sm flex items-center justify-center">
-                    <BellRing className="w-4 h-4 sm:w-5 sm:h-5 mr-2"/> 🚨 Avisar Chegada
+           {/* 👇 BOTÕES DE AÇÃO (HIERARQUIA VISUAL CORRIGIDA) 👇 */}
+           <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3 mb-6">
+                
+                {/* AÇÃO PRINCIPAL: Pedido Manual (Sólido e Forte) */}
+                <button onClick={() => setShowManualOrder(!showManualOrder)} className="col-span-2 sm:col-span-1 sm:flex-1 bg-slate-800 text-white font-black py-3 sm:py-3.5 rounded-xl shadow-md hover:bg-slate-900 transition-all text-xs sm:text-sm flex items-center justify-center">
+                    ➕ Novo Pedido Manual
                 </button>
-                <button onClick={() => setIsPrintMode(true)} className="sm:flex-1 bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold py-2.5 sm:py-3 rounded-xl shadow-sm hover:bg-emerald-200 transition text-[11px] sm:text-sm flex items-center justify-center">
-                    <Printer className="w-4 h-4 mr-1.5 sm:mr-2"/> Imprimir
+                
+                {/* AÇÕES SECUNDÁRIAS: Avisos e Impressão (Fundo Branco, Borda Colorida) */}
+                <button onClick={() => setShowMassNotify(true)} className="sm:flex-1 bg-white text-blue-600 border-2 border-blue-100 font-bold py-3 rounded-xl shadow-sm hover:bg-blue-50 transition-colors text-[11px] sm:text-xs flex items-center justify-center">
+                    <BellRing className="w-4 h-4 sm:w-4 sm:h-4 mr-2 text-blue-500"/> Notificar Chegada
                 </button>
-                <button onClick={() => setShowManualOrder(!showManualOrder)} className="sm:flex-1 bg-slate-800 text-white font-bold py-2.5 sm:py-3 rounded-xl shadow hover:bg-slate-900 transition text-[11px] sm:text-sm flex items-center justify-center">
-                    ➕ Pedido Manual
+                
+                <button onClick={() => setIsPrintMode(true)} className="sm:flex-1 bg-white text-emerald-700 border-2 border-emerald-100 font-bold py-3 rounded-xl shadow-sm hover:bg-emerald-50 transition-colors text-[11px] sm:text-xs flex items-center justify-center">
+                    <Printer className="w-4 h-4 mr-1.5 sm:mr-2 text-emerald-500"/> Imprimir Romaneio
                 </button>
             </div>
             {/* 👆 FIM DOS BOTÕES 👆 */}
@@ -1934,10 +1962,28 @@ const aba3Entregues = poloOrdersFiltered.filter(o => isOrderEntregue(o));
         </div>
 
        {/* CONTROLE DE ABAS: ESTEIRA LOGÍSTICA */}
-       <div className="flex gap-2 mb-6 bg-slate-200 p-1.5 rounded-2xl shadow-inner overflow-x-auto scrollbar-hide">
-            <button onClick={() => setRepTab('separar')} className={`flex-1 min-w-[110px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all ${repTab === 'separar' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>📦 1. A Separar ({aba1Aseparar.length})</button>
-            <button onClick={() => setRepTab('retirada')} className={`flex-1 min-w-[110px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all ${repTab === 'retirada' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>🛍️ 2. Prontos ({aba2Retirada.length})</button>
-            <button onClick={() => setRepTab('historico')} className={`flex-1 min-w-[110px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all ${repTab === 'historico' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>✅ 3. Entregues ({aba3Entregues.length})</button>
+       {/* CONTROLE DE ABAS: ESTEIRA LOGÍSTICA (EFEITO SEGMENTED CONTROL) */}
+       <div className="flex gap-2 mb-6 bg-slate-200/70 p-1.5 rounded-2xl shadow-inner overflow-x-auto scrollbar-hide border border-slate-300/50">
+            <button 
+                onClick={() => setRepTab('separar')} 
+                className={`flex-1 min-w-[120px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 ${repTab === 'separar' ? 'bg-white text-orange-600 shadow-[0_4px_10px_rgba(0,0,0,0.05)] scale-[1.02]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+            >
+                📦 1. A Separar ({aba1Aseparar.length})
+            </button>
+            
+            <button 
+                onClick={() => setRepTab('retirada')} 
+                className={`flex-1 min-w-[120px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 ${repTab === 'retirada' ? 'bg-white text-blue-600 shadow-[0_4px_10px_rgba(0,0,0,0.05)] scale-[1.02]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+            >
+                🛍️ 2. Prontos ({aba2Retirada.length})
+            </button>
+            
+            <button 
+                onClick={() => setRepTab('historico')} 
+                className={`flex-1 min-w-[120px] py-3 rounded-xl font-black text-[10px] sm:text-xs transition-all duration-300 ${repTab === 'historico' ? 'bg-white text-emerald-600 shadow-[0_4px_10px_rgba(0,0,0,0.05)] scale-[1.02]' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'}`}
+            >
+                ✅ 3. Entregues ({aba3Entregues.length})
+            </button>
         </div>
 
         {/* LISTAGEM DOS PEDIDOS DA ABA ATIVA */}
@@ -4914,47 +4960,79 @@ const handleAddToEditCart = () => {
     return (
       <div className="min-h-screen bg-slate-50 flex relative font-sans pb-20 md:pb-0">
         
-        {/* MENU LATERAL (HAMBÚRGUER) */}
-        <div className={`fixed inset-y-0 left-0 z-[70] w-64 bg-slate-900 text-white flex flex-col transform transition-transform duration-300 overflow-y-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="p-5 flex items-center justify-between border-b border-white/10 shrink-0">
-             <span className="font-black tracking-tight text-lg">Torre de Controle</span>
-             <button onClick={() => setIsSidebarOpen(false)} className="p-1"><X className="w-5 h-5 text-gray-400"/></button>
+        {/* MENU LATERAL (FIXO NO DESKTOP, OFF-CANVAS NO MOBILE) */}
+        <div className={`fixed inset-y-0 left-0 z-[70] w-64 bg-[#0f172a] text-white flex flex-col transition-transform duration-300 overflow-hidden shadow-2xl 
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+            ${currentScreen === 'dashboard_admin' ? 'md:translate-x-0 md:static' : ''}
+        `}>
+          
+          {/* TOPO: LOGO E IDENTIFICAÇÃO */}
+          <div className="p-6 flex flex-col items-center justify-center border-b border-slate-800 shrink-0 bg-[#0b1121]">
+             <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-emerald-500/20">
+                 <LayoutDashboard className="w-6 h-6 text-white"/>
+             </div>
+             <span className="font-black tracking-wide text-lg text-white">Torre de Controle</span>
+             <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Painel Executivo</span>
           </div>
-          <div className="flex-1 p-3 flex flex-col gap-1 overflow-y-auto">
-            <button onClick={() => {setAdminTab('dashboard'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='dashboard'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Dashboard</button>
-            <button onClick={() => {setAdminTab('vendas'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='vendas'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Vendas (Histórico)</button>
-            <button onClick={() => {setAdminTab('itens_vendidos'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='itens_vendidos'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Saídas por Produto</button>
-            <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='compras'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Compras & Logística</button>
-            <button onClick={() => {setAdminTab('logistica'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='logistica'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
-                <Truck className="w-4 h-4"/> Logística de Transferência
+
+          {/* CORPO: NAVEGAÇÃO CATEGORIZADA */}
+          <div className="flex-1 p-4 flex flex-col gap-5 overflow-y-auto scrollbar-hide">
+
+            {/* BOTÃO DE VOLTAR PARA LOJA */}
+            <button onClick={() => {setCurrentScreen('shop'); setIsSidebarOpen(false);}} className="w-full bg-emerald-500/10 text-emerald-400 font-bold text-xs p-3 rounded-xl border border-emerald-500/20 hover:bg-emerald-500 hover:text-white flex justify-center items-center transition-colors">
+                <Home className="w-4 h-4 mr-2"/> Voltar para a Loja
             </button>
-            {/* 👇 NOVO BOTÃO DO MONITOR DE ESTOQUE 👇 */}
-            <button onClick={() => {setAdminTab('estoque'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='estoque'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
-                <Package className="w-4 h-4"/> Monitor de Estoque
-            </button>
-            {/* 👇 NOVO BOTÃO DE RECEBIMENTO DE CARGA 👇 */}
-            <button onClick={() => {setAdminTab('recebimento'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors flex items-center gap-2 ${adminTab==='recebimento'?'bg-blue-600 text-white':'text-gray-400 hover:bg-white/5'}`}>
-                📋 Recebimento de NF
-            </button>
-            <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='catalogo'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Catálogo de Produtos</button>
-            <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='clientes'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Base de Clientes</button>
-            <button onClick={() => {setAdminTab('config'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='config'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>⚙️ Configurações Globais</button>
-            {!CONFIG_APENAS_COLETA && (
-               <button onClick={() => {setAdminTab('financeiro'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-3 rounded-lg font-bold text-xs transition-colors ${adminTab==='financeiro'?'bg-emerald-600 text-white':'text-gray-400 hover:bg-white/5'}`}>Financeiro (Estornos)</button>
-            )}            
-            <div className="mt-6 pt-4 border-t border-white/10 shrink-0">
-               <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest px-3 mb-2">Acesso Rápido</p>
-               <button onClick={() => {setCurrentScreen('shop'); setIsSidebarOpen(false);}} className="w-full text-left px-3 py-2.5 rounded-lg font-bold text-xs text-emerald-400 hover:bg-white/5 flex items-center"><Home className="w-3.5 h-3.5 mr-2"/> Loja (Comprar)</button>
-               <button onClick={() => {setCurrentScreen('dashboard_rep'); setIsSidebarOpen(false);}} className="w-full text-left px-3 py-2.5 rounded-lg font-bold text-xs text-emerald-400 hover:bg-white/5 flex items-center"><Truck className="w-3.5 h-3.5 mr-2"/> Logística (Polos)</button>
+
+            {/* GRUPO: VISÃO GERAL */}
+            <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-2">Inteligência</p>
+                <div className="flex flex-col gap-1">
+                    <button onClick={() => {setAdminTab('dashboard'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='dashboard'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><LineChart className="w-4 h-4"/> DRE & Dashboard</button>
+                    <button onClick={() => {setAdminTab('vendas'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='vendas'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><FileSpreadsheet className="w-4 h-4"/> Vendas (Histórico)</button>
+                    <button onClick={() => {setAdminTab('itens_vendidos'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='itens_vendidos'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><ShoppingCart className="w-4 h-4"/> Saídas por Produto</button>
+                    {!CONFIG_APENAS_COLETA && (
+                       <button onClick={() => {setAdminTab('financeiro'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='financeiro'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Wallet className="w-4 h-4"/> Financeiro (PIX)</button>
+                    )}
+                </div>
             </div>
 
-            <div className="mt-4 shrink-0 pb-4">
-               <button onClick={() => {setFaltaGlobalModal(true); setIsSidebarOpen(false);}} className="w-full bg-red-500/10 text-red-400 font-bold text-xs p-3 rounded-lg border border-red-500/30 hover:bg-red-500 hover:text-white flex justify-start items-center"><AlertTriangle className="w-4 h-4 mr-2"/> Informar Falta Global</button>
+            {/* GRUPO: LOGÍSTICA E ESTOQUE */}
+            <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-2">Operação</p>
+                <div className="flex flex-col gap-1">
+                    <button onClick={() => {setAdminTab('compras'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='compras'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Package className="w-4 h-4"/> Mesa de Compras</button>
+                    <button onClick={() => {setAdminTab('recebimento'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='recebimento'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><CheckCircle className="w-4 h-4"/> Recebimento NF</button>
+                    <button onClick={() => {setAdminTab('logistica'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='logistica'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Truck className="w-4 h-4"/> Cross-Docking</button>
+                    <button onClick={() => {setAdminTab('estoque'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='estoque'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Eye className="w-4 h-4"/> Monitor de Estoque</button>
+                </div>
             </div>
+
+            {/* GRUPO: SISTEMA */}
+            <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 px-2">Sistema</p>
+                <div className="flex flex-col gap-1">
+                    <button onClick={() => {setAdminTab('catalogo'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='catalogo'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Edit2 className="w-4 h-4"/> Catálogo</button>
+                    <button onClick={() => {setAdminTab('clientes'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='clientes'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Users className="w-4 h-4"/> CRM (Clientes)</button>
+                    <button onClick={() => {setAdminTab('config'); setIsSidebarOpen(false);}} className={`w-full text-left px-3 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-3 ${adminTab==='config'?'bg-emerald-500 text-white shadow-md':'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}>⚙️ Configurações</button>
+                </div>
+            </div>
+
+          </div>
+
+          {/* RODAPÉ DO MENU LATERAL (SAIR) */}
+          <div className="p-4 border-t border-slate-800 shrink-0 bg-[#0b1121]">
+               <button onClick={() => {setFaltaGlobalModal(true); setIsSidebarOpen(false);}} className="w-full bg-red-500/10 text-red-400 font-bold text-xs p-3 rounded-xl border border-red-500/20 hover:bg-red-500 hover:text-white flex justify-center items-center transition-colors mb-3">
+                   <AlertTriangle className="w-4 h-4 mr-2"/> Lançar Falta Global
+               </button>
+               
+               <button onClick={() => {signOut(auth); setCart([]);}} className="w-full bg-slate-800 text-slate-300 font-bold text-xs p-3 rounded-xl hover:bg-slate-700 transition-colors flex justify-center items-center">
+                   <LogOut className="w-4 h-4 mr-2"/> Sair do Sistema
+               </button>
           </div>
         </div>
 
-        {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-[65] backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>}
+        {/* OVERLAY APENAS PARA MOBILE (Escondido no Desktop) */}
+        {isSidebarOpen && <div className={`fixed inset-0 bg-black/60 z-[65] backdrop-blur-sm transition-opacity ${currentScreen === 'dashboard_admin' ? 'md:hidden' : ''}`} onClick={() => setIsSidebarOpen(false)}></div>}
 
         <div className="flex-1 w-full flex flex-col h-screen overflow-hidden">
           <div className="h-16 bg-white border-b border-gray-200 flex items-center px-4 shadow-sm z-10 justify-between shrink-0">
