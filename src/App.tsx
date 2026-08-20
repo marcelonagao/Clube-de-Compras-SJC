@@ -147,16 +147,21 @@ export default function App() {
 
   // 📡 Radar: Fica escutando os Pedidos da Mesa de Compras que estão a caminho
   useEffect(() => {
-      const q = query(collection(db, "pedidos_fornecedor"), where("status", "==", "AGUARDANDO_RECEBIMENTO"));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          const peds = [];
-          snapshot.forEach((doc) => peds.push({ id: doc.id, ...doc.data() }));
-          // Ordena do mais antigo para o mais novo
-          peds.sort((a,b) => new Date(a.dataPedido) - new Date(b.dataPedido));
-          setPedidosPendentes(peds);
-      });
-      return () => unsubscribe();
-  }, []);
+    // 🛡️ TRAVA DE SEGURANÇA: Só escuta o banco de dados se estiver logado!
+    if (!user) return; 
+
+    const q = query(collection(db, "pedidos_fornecedor"), where("status", "==", "AGUARDANDO_RECEBIMENTO"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const peds = [];
+        snapshot.forEach((doc) => peds.push({ id: doc.id, ...doc.data() }));
+        // Ordena do mais antigo para o mais novo
+        peds.sort((a,b) => new Date(a.dataPedido) - new Date(b.dataPedido));
+        setPedidosPendentes(peds);
+    });
+    return () => unsubscribe();
+}, [user]); // 👈 Passa a escutar o 'user'
+
+
   // --- MOTOR DA MINI-LOJA (CAMPANHA EXPRESSA) ---
   const [isCampanhaModalOpen, setIsCampanhaModalOpen] = useState(false); // Controla se a janelinha está aberta
   const [campaignCart, setCampaignCart] = useState([]); // O carrinho isolado
