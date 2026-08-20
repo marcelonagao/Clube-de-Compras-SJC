@@ -3065,61 +3065,68 @@ const handleAddToEditCart = () => {
 
         return (
           <div className="space-y-6 text-left max-w-6xl mx-auto">
-            {/* CABEÇALHO E FILTROS */}
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
+           {/* CABEÇALHO E FILTROS */}
+           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800">Histórico de Vendas</h2>
-                    <button 
-    onClick={() => {
-        // ATENÇÃO: Substitua 'orders' pelo nome da variável que guarda a lista de pedidos na sua tela atual
-        const pedidosValidos = orders.filter(p => p.status === 'pago'); // Filtra só quem pagou
-        if(pedidosValidos.length === 0) {
-            showToast('Nenhum pedido pago encontrado.', 'error');
-            return;
-        }
-        if(window.confirm(`Gerar numeração para ${pedidosValidos.length} pedidos?`)) {
-            gerarShortCodesExpedicao(pedidosValidos);
-        }
-    }}
-    className="bg-slate-800 hover:bg-slate-900 text-white font-black text-xs px-4 py-2 rounded-xl transition-colors shadow-md border border-slate-700 uppercase tracking-widest"
->
-    🔢 Gerar Short Codes
-</button>
                     <p className="text-xs font-bold text-gray-500 mt-1">
-                        Mostrando <span className="text-emerald-600">{filteredVendas.length} pedidos</span> • Total: R$ {totalFiltrado.toFixed(2)}
+                        Mostrando <span className="text-emerald-600">{filteredVendas.length} pedidos</span> • Total: R$ {totalFiltrado.toFixed(2).replace('.', ',')}
                     </p>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                    
+                    {/* 👇 O NOVO BOTÃO INTELIGENTE DE NUMERAÇÃO LOGÍSTICA 👇 */}
+                    <button 
+                        onClick={() => {
+                            // Ele usa a lista 'filteredVendas' em vez da base inteira!
+                            const pedidosParaNumerar = filteredVendas.filter(p => ['pago', 'confirmado', 'pago_polo'].includes(p.status));
+                            
+                            if(pedidosParaNumerar.length === 0) {
+                                return showToast('Nenhum pedido válido (pago/confirmado) na lista atual.', 'error');
+                            }
+
+                            showConfirm(
+                                'Numeração Logística (Short Codes)', 
+                                `Isso vai gerar etiquetas curtas (Ex: SJC-01, CAÇ-02) para os ${pedidosParaNumerar.length} pedidos que estão filtrados nesta tela. Deseja continuar?`, 
+                                () => gerarShortCodesExpedicao(pedidosParaNumerar)
+                            );
+                        }}
+                        className="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center border border-slate-700"
+                        title="Gera códigos sequenciais por Polo para facilitar a separação"
+                    >
+                        <Package className="w-4 h-4 mr-2 text-emerald-400"/> Numerar Lote Atual
+                    </button>
+
                     {/* FILTRO DE DATAS */}
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-emerald-500 transition-colors">
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm focus-within:border-emerald-500 transition-colors w-full sm:w-auto">
                         <input 
                             type="date" 
                             value={vendasStartDate} 
                             onChange={e => setVendasStartDate(e.target.value)} 
-                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer" 
+                            className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer" 
                         />
                         <span className="text-[10px] font-black text-gray-400 uppercase">ATÉ</span>
                         <input 
                             type="date" 
                             value={vendasEndDate} 
                             onChange={e => setVendasEndDate(e.target.value)} 
-                            className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer" 
+                            className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer" 
                         />
                         {(vendasStartDate || vendasEndDate) && (
                             <button onClick={() => {setVendasStartDate(''); setVendasEndDate('');}} className="text-gray-400 hover:text-red-500 ml-1 bg-gray-100 p-1 rounded-md"><X className="w-3 h-3"/></button>
                         )}
                     </div>
                     
-                    {/* BARRA DE BUSCA (Texto) */}
+                    {/* BARRA DE BUSCA */}
                     <div className="flex items-center bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm w-full sm:w-64 focus-within:border-emerald-500 transition-colors">
                         <Search className="w-4 h-4 text-gray-400 mr-2 shrink-0"/>
                         <input 
                             type="text" 
-                            placeholder="Buscar cliente ou #PED..." 
+                            placeholder="Buscar cliente, Polo ou #PED..." 
                             value={vendasSearchTerm}
                             onChange={(e) => setVendasSearchTerm(e.target.value)}
-                            className="bg-transparent outline-none w-full text-sm font-medium text-slate-700"
+                            className="bg-transparent outline-none w-full text-xs font-medium text-slate-700"
                         />
                         {vendasSearchTerm && <button onClick={() => setVendasSearchTerm('')} className="text-gray-400 hover:text-red-500"><X className="w-4 h-4"/></button>}
                     </div>
@@ -3128,7 +3135,6 @@ const handleAddToEditCart = () => {
 
             {/* TABELA LINHA A LINHA */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                {/* Títulos da Tabela (Some no celular, aparece no PC) */}
                 <div className="hidden md:grid grid-cols-12 gap-4 p-4 bg-slate-50 border-b border-gray-100 text-[10px] font-black text-gray-500 uppercase tracking-widest">
                     <div className="col-span-3">Data / Pedido</div>
                     <div className="col-span-3">Cliente</div>
@@ -3147,10 +3153,20 @@ const handleAddToEditCart = () => {
                         {filteredVendas.map(o => (
                             <div key={o.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 items-center hover:bg-slate-50/50 transition-colors">
                                 
-                                {/* COLUNA 1: Data e ID */}
+                                {/* 👇 COLUNA 1: Data, ID e O NOVO SHORT CODE 👇 */}
                                 <div className="md:col-span-3 flex flex-row md:flex-col justify-between md:justify-start items-center md:items-start">
                                     <span className="text-xs font-bold text-slate-500">{new Date(o.date).toLocaleString('pt-BR')}</span>
-                                    <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-600 border border-gray-200 px-1.5 py-0.5 rounded w-fit md:mt-1">#{o.id.slice(0,5).toUpperCase()}</span>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        {/* Mostra o Short Code destacado se ele existir */}
+                                        {o.shortCode && (
+                                            <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded w-fit uppercase tracking-widest">
+                                                {o.shortCode}
+                                            </span>
+                                        )}
+                                        <span className="text-[10px] font-mono font-bold bg-gray-100 text-gray-400 border border-gray-200 px-1.5 py-0.5 rounded w-fit">
+                                            #{o.id.slice(0,5).toUpperCase()}
+                                        </span>
+                                    </div>
                                 </div>
                                 
                                 {/* COLUNA 2: Nome do Cliente */}
