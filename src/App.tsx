@@ -367,8 +367,8 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-  // 1. CARREGAMENTO ABERTO (Carrega Polos e Configurações GLOBAIS mesmo sem login)
-  useEffect(() => {
+ // 1. CARREGAMENTO ABERTO (Carrega Polos e Configurações GLOBAIS mesmo sem login)
+ useEffect(() => {
     const unsubConfig = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
         if(docSnap.exists()) {
             const cData = docSnap.data();
@@ -376,22 +376,28 @@ useEffect(() => {
             if(cData.sysConfig) setSysConfig(cData.sysConfig); 
             
             if(cData.polos) {
-                setPolos(cData.polos);
+                // 👇 A CORREÇÃO MESTRA (BALA DE PRATA) ESTÁ AQUI 👇
                 if (typeof cData.polos[0] === 'string') {
+                    // Se o banco for antigo, carrega os textos
+                    setPolos(cData.polos);
+                    
                     const polosConvertidos = cData.polos.map((nomePolo, index) => ({
                         id: `legacy_${index}`, name: nomePolo,
                         sigla: nomePolo.substring(0, 3).toUpperCase(), color: 'bg-slate-800'
                     }));
                     setPolosList(polosConvertidos);
                 } else {
+                    // Se o banco for NOVO, guarda a lista rica para os PDFs coloridos...
                     setPolosList(cData.polos);
+                    // ...e extrai APENAS OS NOMES em texto para não quebrar as telas antigas!
+                    setPolos(cData.polos.map(p => p.name));
                 }
             }
             setCampanhaItens(cData.campanhaItens || []);
         }
     });
     return () => unsubConfig();
-  }, []); // 👈 A mágica: Array vazio faz ele rodar na mesma hora que abre a tela de login!
+  }, []);
 
   // 2. CARREGAMENTO PROTEGIDO (Só carrega Pedidos, Produtos e Usuários se estiver logado)
   useEffect(() => {
